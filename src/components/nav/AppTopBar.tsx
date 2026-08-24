@@ -29,7 +29,7 @@ export default function AppTopBar({ userName }: { userName: string }) {
             >
               <MenuIcon className="w-5 h-5" />
             </button>
-            <p className="font-bold text-gray-800 text-sm">حساب‌کن</p>
+            <p className="font-bold text-gray-800 text-sm">دارا</p>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setShowSearch(true)}

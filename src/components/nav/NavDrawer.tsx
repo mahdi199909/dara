@@ -32,9 +32,9 @@ export default function NavDrawer({
       <aside className="absolute top-0 right-0 h-full w-72 max-w-[85vw] bg-white shadow-xl flex flex-col animate-in">
         <div className="flex items-center justify-between px-5 py-5 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 flex items-center justify-center rounded-xl bg-brand-600 text-white font-bold">ح</div>
+            <div className="h-9 w-9 flex items-center justify-center rounded-xl bg-brand-600 text-white font-bold">د</div>
             <div>
-              <p className="font-bold text-gray-800 text-sm leading-none">حساب‌کن</p>
+              <p className="font-bold text-gray-800 text-sm leading-none">دارا</p>
               <p className="text-xs text-gray-400 mt-1">{userName}</p>
             </div>
           </div>

@@ -15,7 +15,7 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "حساب‌کن",
+  title: "دارا",
   description: "سیستم‌عامل شخصی برای مدیریت زمان، وظایف و مالی",
   manifest: "/manifest.json",
 };

@@ -54,7 +54,7 @@ function PrintReportContent() {
       </div>
 
       <header className="mb-8 pb-4 border-b-2 border-brand-800">
-        <h1 className="text-2xl font-bold text-brand-900">حساب‌کن — گزارش {label}</h1>
+        <h1 className="text-2xl font-bold text-brand-900">دارا — گزارش {label}</h1>
         <p className="text-xs text-gray-400 mt-1">تاریخ تولید گزارش: {formatJalali(generatedAt, { withTime: true })}</p>
       </header>
 
