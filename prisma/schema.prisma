@@ -1,0 +1,610 @@
+// Hesabkon (حساب‌کن) — Personal Operating System
+// Database schema. Money is stored as integer Toman (no floating point).
+// Time durations are stored as integer minutes.
+// Dates are stored as UTC DateTime; Jalali/Persian presentation happens in the app layer.
+//
+// NOTE: "enum-like" fields are plain String columns (not Prisma `enum`) because
+// SQLite has no native enum type. The allowed values are enforced with Zod at
+// the API boundary and typed as TS unions in src/lib/types.ts. Switching the
+// datasource provider to "postgresql" later can optionally promote these back
+// to native Prisma enums.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// User & Settings
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  settings            Settings?
+  categories          Category[]
+  projects            Project[]
+  tasks               Task[]
+  activities          Activity[]
+  events              Event[]
+  reminders           Reminder[]
+  accounts            FinanceAccount[]
+  transactions        Transaction[]
+  installmentPlans    InstallmentPlan[]
+  assets              Asset[]
+  virtualAssetEntries VirtualAssetEntry[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  habits              Habit[]
+}
+
+model Settings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  timezone            String  @default("Asia/Tehran")
+  currency            String  @default("IRT")
+  // Display/input scale for every Toman amount shown or typed across the app — RIAL |
+  // TOMAN | THOUSAND_TOMAN (see lib/money.ts). Purely a presentation preference: all money
+  // is still stored as integer Toman everywhere else in the schema; this only controls how
+  // it's formatted and how typed input is converted back to Toman.
+  currencyDisplayUnit String  @default("TOMAN")
+  calendarType        String  @default("jalali") // jalali | gregorian
+  monthlyIncome       Int?
+  workingHoursMonth   Int?
+  hourlyValueOverride Int?
+  dashboardCardPrefs  String? // JSON: which dashboard cards are hidden
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
+
+model Category {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  icon      String?
+  color     String  @default("#3a8d80")
+  kind      String  @default("NEUTRAL") // PRODUCTIVE | NEUTRAL | WASTE
+  valueType String  @default("EXPENSE") // EXPENSE | ASSET — drives the Expense/Asset toggle default in Quick Capture
+  isActive  Boolean @default(true)
+
+  // Virtual asset generation rule for this category (section 10)
+  generatesVirtualAsset   Boolean @default(false)
+  virtualAssetValuePerHour Int?
+
+  // Auto-created alongside a Project (same name, valueType defaults to ASSET) so project
+  // work naturally categorizes without the user managing two parallel lists — see
+  // src/lib/projectCategorySync.ts.
+  projectId String?  @unique
+  project   Project? @relation("ProjectCategory", fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tasks        Task[]
+  activities   Activity[]
+  events       Event[]
+  transactions Transaction[]
+  habits       Habit[]
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+model Project {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  status      String    @default("ACTIVE") // ACTIVE | COMPLETED | ARCHIVED
+  color       String    @default("#3a8d80")
+  completedAt DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tasks             Task[]
+  activities        Activity[]
+  transactions      Transaction[]
+  events            Event[]
+  category          Category?          @relation("ProjectCategory")
+  virtualAssetEntry VirtualAssetEntry?
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+model Task {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  status      String  @default("TODO") // TODO | IN_PROGRESS | DONE | CANCELLED
+  dueDate     DateTime?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id])
+
+  estimatedCost Int?
+  completedAt   DateTime?
+
+  // Lightweight "when did I actually do this" logging from the unified Quick Capture
+  // form (§ Home redesign) — a simpler alternative to the full Activity/TimeEntry model
+  // for a task that doesn't need multi-segment timer tracking.
+  valueType    String    @default("EXPENSE") // EXPENSE | ASSET
+  directCost   Int       @default(0) // Toman, synced to a linked EXPENSE Transaction — see lib/directCostSync.ts
+  incomeAmount Int       @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
+  startAt      DateTime?
+  endAt        DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  activities        Activity[]
+  transactions      Transaction[]
+  virtualAssetEntry VirtualAssetEntry?
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Activities & Time Tracking
+// ---------------------------------------------------------------------------
+
+model Activity {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title String
+  notes String?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  taskId     String?
+  task       Task?     @relation(fields: [taskId], references: [id])
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id])
+
+  totalDurationMin Int @default(0) // denormalized sum of timeEntries
+  directCost       Int @default(0) // Toman, optional direct expense tied to this activity
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  timeEntries       TimeEntry[]
+  virtualAssetEntry VirtualAssetEntry?
+  transactions      Transaction[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([projectId])
+  @@index([taskId])
+}
+
+model TimeEntry {
+  id         String   @id @default(cuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  startAt     DateTime
+  endAt       DateTime?
+  durationMin Int?
+  isRunning   Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([activityId])
+  @@index([isRunning])
+}
+
+// ---------------------------------------------------------------------------
+// Calendar: Events & Reminders
+// ---------------------------------------------------------------------------
+
+model Event {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  startAt     DateTime
+  endAt       DateTime
+  allDay      Boolean  @default(false)
+  location    String?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id])
+
+  valueType    String @default("EXPENSE") // EXPENSE | ASSET
+  directCost   Int    @default(0) // Toman, synced to a linked EXPENSE Transaction — see lib/directCostSync.ts
+  incomeAmount Int    @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
+
+  recurrenceFreq     String   @default("NONE") // NONE | DAILY | WEEKLY | MONTHLY | YEARLY
+  recurrenceInterval Int      @default(1)
+  recurrenceUntil    DateTime? // end condition A: stop after this date
+  recurrenceCount    Int? // end condition B: stop after N occurrences (mutually exclusive with recurrenceUntil; UI only offers one)
+  recurrenceParentId String?
+  recurrenceParent   Event?   @relation("Recurrence", fields: [recurrenceParentId], references: [id], onDelete: Cascade)
+  recurrenceChildren Event[]  @relation("Recurrence")
+  isCancelled        Boolean  @default(false) // for a single cancelled occurrence
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  reminders    Reminder[]
+  transactions Transaction[]
+  completions  EventCompletion[]
+
+  @@index([userId])
+  @@index([startAt])
+}
+
+// A recurring Event has no per-occurrence database row (occurrences are expanded virtually
+// at query time — see lib/recurrence.ts), so "did this happen" is tracked here instead: one
+// row per completed occurrence, keyed by the occurrence's own start time. A non-recurring
+// Event just ends up with at most one completion row.
+model EventCompletion {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  occurrenceDate DateTime // the specific occurrence's startAt
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, occurrenceDate])
+  @@index([eventId])
+}
+
+model Reminder {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  targetType    String // EVENT | INSTALLMENT | CUSTOM
+  eventId       String?
+  event         Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  installmentId String?
+  installment   Installment? @relation(fields: [installmentId], references: [id], onDelete: Cascade)
+
+  title         String
+  offsetMinutes Int // minutes before target time (0 for custom absolute)
+  remindAt      DateTime // absolute computed time
+  notified      Boolean  @default(false)
+  dismissed     Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([remindAt])
+}
+
+// ---------------------------------------------------------------------------
+// Finance: Accounts & Transactions
+// ---------------------------------------------------------------------------
+
+model FinanceAccount {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name           String
+  type           String  @default("BANK_ACCOUNT") // BANK_CARD | BANK_ACCOUNT | CASH | WALLET | INVESTMENT
+  initialBalance Int     @default(0)
+  isActive       Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  transactions           Transaction[] @relation("AccountTransactions")
+  transferInTransactions Transaction[] @relation("TransferTo")
+
+  @@index([userId])
+}
+
+model Transaction {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String // INCOME | EXPENSE | TRANSFER
+  amount      Int // always positive; sign determined by type
+  date        DateTime
+  description String?
+
+  accountId           String
+  account             FinanceAccount  @relation("AccountTransactions", fields: [accountId], references: [id])
+  transferToAccountId String?
+  transferToAccount   FinanceAccount? @relation("TransferTo", fields: [transferToAccountId], references: [id])
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  taskId     String?
+  task       Task?     @relation(fields: [taskId], references: [id])
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id])
+  assetId    String?
+  asset      Asset?    @relation(fields: [assetId], references: [id])
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id])
+  eventId    String?
+  event      Event?    @relation(fields: [eventId], references: [id])
+
+  installmentId String?      @unique
+  installment   Installment? @relation(fields: [installmentId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([date])
+  @@index([accountId])
+  @@index([type])
+}
+
+// ---------------------------------------------------------------------------
+// Installments / Debt
+// ---------------------------------------------------------------------------
+
+model InstallmentPlan {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title                String
+  totalAmount          Int
+  installmentAmount    Int
+  numberOfInstallments Int
+  dueDay               Int // day of month, 1-28 to avoid month-length issues
+  startDate            DateTime
+  notes                String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  installments Installment[]
+
+  @@index([userId])
+}
+
+model Installment {
+  id     String          @id @default(cuid())
+  planId String
+  plan   InstallmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  index   Int
+  dueDate DateTime
+  amount  Int
+  status  String    @default("PENDING") // PENDING | PAID | OVERDUE
+  paidAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction Transaction?
+  reminders   Reminder[]
+
+  @@index([planId])
+  @@index([dueDate])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Assets (real) & Virtual Assets
+// ---------------------------------------------------------------------------
+
+model Asset {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  category      String?
+  purchasePrice Int
+  purchaseDate  DateTime
+  currentValue  Int
+  notes         String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  transactions      Transaction[]
+  assetTransactions AssetTransaction[]
+
+  @@index([userId])
+}
+
+model AssetTransaction {
+  id      String @id @default(cuid())
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  type   String // VALUE_UPDATE | EXPENSE | SALE
+  amount Int
+  date   DateTime
+  notes  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+}
+
+model VirtualAssetEntry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Exactly one of activityId/taskId/projectId/habitCheckInId is set — an entry is generated
+  // from an Activity's TimeEntries (recalcActivityDuration), a Task's startAt/endAt
+  // (syncTaskVirtualAsset), a completed Project (syncProjectCompletionAsset), or a Habit
+  // check-in (syncHabitCheckInVirtualAsset).
+  activityId     String?       @unique
+  activity       Activity?     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  taskId         String?       @unique
+  task           Task?         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  projectId      String?       @unique
+  project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  habitCheckInId String?       @unique
+  habitCheckIn   HabitCheckIn? @relation(fields: [habitCheckInId], references: [id], onDelete: Cascade)
+  categoryId   String?
+  durationMin  Int
+  valuePerHour Int
+  totalValue   Int
+  date         DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// Habit Tracker
+// ---------------------------------------------------------------------------
+
+model Habit {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  icon        String?
+  color       String  @default("#3a8d80")
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  // Toman value credited toward the "digital asset" total for each day this habit is
+  // checked in — the habit-tracker equivalent of an Activity/Task's virtual asset value.
+  virtualAssetValuePerCheckIn Int @default(0)
+
+  isActive  Boolean   @default(true)
+  // Guards the "come back to this habit" nudge notification from re-firing every time
+  // /api/notifications is polled — see lib/habitStreak.ts / the notifications route.
+  lastNudgeSentAt DateTime?
+
+  // BJ Fogg's "Tiny Habits" trial flow: a new habit starts as a 3-day trial built around a
+  // cue ("after I ...") and an immediate celebration, kept deliberately out of the main
+  // streak/adherence system (see habitStreak.ts) so testing something new never risks an
+  // existing streak. After 3 days the user decides to keep it (isTrial flips to false) or
+  // discard it (soft-deleted like any other habit) — see /habits and TrialHabitCard.
+  isTrial        Boolean   @default(false)
+  cue            String? // the anchor/prompt, e.g. "بعد از اینکه دندونامو مسواک زدم"
+  celebration    String? // the immediate reward, e.g. "با خودم می‌گم آفرین!"
+  trialStartDate DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  checkIns HabitCheckIn[]
+
+  @@index([userId])
+}
+
+// One row per day the habit was marked done. Presence of a row = done; no row = not done.
+// Streak/adherence are computed on read from this history (see lib/habitStreak.ts) rather
+// than stored as a running counter, so they can never drift out of sync with the log.
+model HabitCheckIn {
+  id      String @id @default(cuid())
+  habitId String
+  habit   Habit  @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  date DateTime // normalized to local midnight of the day checked in
+
+  createdAt DateTime @default(now())
+
+  virtualAssetEntry VirtualAssetEntry?
+
+  @@unique([habitId, date])
+  @@index([habitId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit Log & Notifications
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action     String // e.g. CREATE, UPDATE, DELETE, LOGIN, LOGOUT, TIMER_START, TIMER_STOP, PAYMENT
+  entityType String
+  entityId   String?
+  oldValue   String? // JSON
+  newValue   String? // JSON
+  ipAddress  String?
+  userAgent  String?
+  metadata   String? // JSON
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title       String
+  body        String
+  type        String // reminder | system
+  relatedType String?
+  relatedId   String?
+  isRead      Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+}

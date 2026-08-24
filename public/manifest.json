@@ -1,0 +1,14 @@
+{
+  "name": "حساب‌کن",
+  "short_name": "حساب‌کن",
+  "description": "سیستم‌عامل شخصی برای مدیریت زمان، وظایف و مالی",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8f7",
+  "theme_color": "#2c7166",
+  "dir": "rtl",
+  "lang": "fa",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

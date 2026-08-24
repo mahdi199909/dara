@@ -1,0 +1,23 @@
+import {
+  HomeIcon,
+  CalendarIcon,
+  CheckSquareIcon,
+  WalletIcon,
+  BoxIcon,
+  ChartIcon,
+  FolderIcon,
+  GearIcon,
+  FlameIcon,
+} from "@/components/icons";
+
+export const NAV_ITEMS = [
+  { href: "/", label: "خانه", icon: HomeIcon },
+  { href: "/calendar", label: "تقویم", icon: CalendarIcon },
+  { href: "/tasks", label: "کارها", icon: CheckSquareIcon },
+  { href: "/habits", label: "عادت‌ها", icon: FlameIcon },
+  { href: "/finance", label: "مالی", icon: WalletIcon },
+  { href: "/assets", label: "دارایی‌ها", icon: BoxIcon },
+  { href: "/reports", label: "گزارش‌ها", icon: ChartIcon },
+  { href: "/projects", label: "پروژه‌ها", icon: FolderIcon },
+  { href: "/settings", label: "تنظیمات", icon: GearIcon },
+] as const;
