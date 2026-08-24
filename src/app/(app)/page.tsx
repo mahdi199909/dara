@@ -6,8 +6,10 @@ import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureForm from "@/components/CaptureForm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
+import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { formatTime } from "@/lib/jalali";
+import { formatDuration } from "@/lib/money";
 import { ClockIcon, PlusIcon, XIcon, CheckSquareIcon } from "@/components/icons";
 
 function todayRange() {
@@ -19,6 +21,7 @@ function todayRange() {
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
+  const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
 
   const { data, mutate } = useSWR<{ occurrences: any[] }>(
@@ -103,6 +106,16 @@ export default function HomePage() {
                 </button>
                 <span className="shrink-0">{h.icon || "🔥"}</span>
                 <span className={`flex-1 truncate ${h.checkedInToday ? "text-gray-400 line-through" : "text-gray-800"}`}>{h.title}</span>
+                {h.checkedInToday && (
+                  <button
+                    onClick={() => setDurationHabit(h)}
+                    className="shrink-0 flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600 transition"
+                    aria-label="ثبت زمان عادت"
+                  >
+                    <ClockIcon className="w-3.5 h-3.5" />
+                    {h.todayDurationMin ? formatDuration(h.todayDurationMin) : "زمان"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -136,6 +149,14 @@ export default function HomePage() {
           </>
         )}
       </Card>
+
+      {durationHabit && (
+        <HabitDurationModal
+          habit={durationHabit}
+          onClose={() => setDurationHabit(null)}
+          onSaved={() => { setDurationHabit(null); mutateHabits(); }}
+        />
+      )}
     </div>
   );
 }

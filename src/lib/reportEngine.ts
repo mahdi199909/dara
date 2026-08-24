@@ -33,7 +33,7 @@ export interface TimeAndMoneyReport {
 }
 
 export async function computeTimeAndMoneyReport(userId: string, from: Date, to: Date): Promise<TimeAndMoneyReport> {
-  const [settings, timeEntries, loggedTasks, doneEventCompletions, transactions, virtualAssetEntries, tasksCompleted, eventsCount] =
+  const [settings, timeEntries, loggedTasks, doneEventCompletions, loggedHabitCheckIns, transactions, virtualAssetEntries, tasksCompleted, eventsCount] =
     await Promise.all([
       prisma.settings.findUnique({ where: { userId } }),
       prisma.timeEntry.findMany({
@@ -51,6 +51,12 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
       prisma.eventCompletion.findMany({
         where: { occurrenceDate: { gte: from, lte: to }, event: { userId, deletedAt: null } },
         include: { event: { include: { category: true, project: true } } },
+      }),
+      // Habit check-ins with a logged duration (see HabitCheckIn.durationMin) — an optional
+      // follow-up to checking in, not required, so most check-ins simply won't match this.
+      prisma.habitCheckIn.findMany({
+        where: { habit: { userId, deletedAt: null }, date: { gte: from, lte: to }, durationMin: { not: null } },
+        include: { habit: { include: { category: true } } },
       }),
       prisma.transaction.findMany({
         where: { userId, deletedAt: null, date: { gte: from, lte: to } },
@@ -136,6 +142,23 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
       const entry = byProject.get(event.project.id) ?? { name: event.project.name, minutes: 0 };
       entry.minutes += minutes;
       byProject.set(event.project.id, entry);
+    }
+  }
+
+  for (const checkIn of loggedHabitCheckIns) {
+    const minutes = checkIn.durationMin ?? 0;
+    totalDurationMin += minutes;
+
+    const kind = checkIn.habit.category?.kind ?? "NEUTRAL";
+    if (kind === "PRODUCTIVE") productiveMin += minutes;
+    else if (kind === "WASTE") wasteMin += minutes;
+    else neutralMin += minutes;
+
+    if (checkIn.habit.category) {
+      const cat = checkIn.habit.category;
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      entry.minutes += minutes;
+      byCategory.set(cat.id, entry);
     }
   }
 
@@ -439,13 +462,13 @@ export interface CategoryCalendarStat {
 
 /**
  * Per-category, per-day time totals for [from, to] (a single month, in practice) — powers
- * the Reports "تقویم دسته‌بندی‌ها" tab. Sources the same three places time is ever logged
- * as the main time report (computeTimeAndMoneyReport): Activity TimeEntry, Task
- * startAt/endAt, and completed Event occurrences — so a day's total here always matches
- * what the rest of the app already knows about that day.
+ * the Reports "تقویم دسته‌بندی‌ها" tab. Sources the same four places time is ever logged as
+ * the main time report (computeTimeAndMoneyReport): Activity TimeEntry, Task
+ * startAt/endAt, completed Event occurrences, and habit check-ins with a logged duration —
+ * so a day's total here always matches what the rest of the app already knows about that day.
  */
 export async function computeCategoryCalendar(userId: string, from: Date, to: Date): Promise<CategoryCalendarStat[]> {
-  const [categories, timeEntries, tasks, completions] = await Promise.all([
+  const [categories, timeEntries, tasks, completions, habitCheckIns] = await Promise.all([
     prisma.category.findMany({ where: { userId, deletedAt: null } }),
     prisma.timeEntry.findMany({
       where: { activity: { userId, deletedAt: null }, startAt: { gte: from, lte: to }, durationMin: { not: null } },
@@ -458,6 +481,10 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
     prisma.eventCompletion.findMany({
       where: { occurrenceDate: { gte: from, lte: to }, event: { userId, deletedAt: null } },
       include: { event: { select: { categoryId: true, startAt: true, endAt: true, allDay: true } } },
+    }),
+    prisma.habitCheckIn.findMany({
+      where: { habit: { userId, deletedAt: null }, date: { gte: from, lte: to }, durationMin: { not: null } },
+      include: { habit: { select: { categoryId: true } } },
     }),
   ]);
 
@@ -482,6 +509,9 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
     if (c.event.allDay) continue;
     const minutes = Math.max(0, Math.round((c.event.endAt.getTime() - c.event.startAt.getTime()) / 60000));
     addMinutes(c.event.categoryId, c.occurrenceDate, minutes);
+  }
+  for (const checkIn of habitCheckIns) {
+    addMinutes(checkIn.habit.categoryId, checkIn.date, checkIn.durationMin ?? 0);
   }
 
   return categories.map((cat) => {

@@ -60,3 +60,53 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return handleApiError(err);
   }
 }
+
+const durationBodySchema = z.object({
+  date: z.string().datetime().optional(),
+  durationMin: z.number().int().min(0).max(1440),
+});
+
+/**
+ * Sets (or clears, with durationMin: 0) how long the user spent on a habit that day —
+ * separate from the POST toggle above so checking in stays a single, frictionless tap;
+ * logging time is an optional follow-up action. Implicitly checks the day in if it wasn't
+ * already (a duration only makes sense for a day the habit was actually done), and re-syncs
+ * the day's virtual asset value, which now factors the duration in — see habitSync.ts.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const userId = await requireUserId();
+    const habit = await prisma.habit.findFirst({ where: { id: params.id, userId, deletedAt: null } });
+    if (!habit) throw new ApiError("عادت پیدا نشد.", 404);
+
+    const body = durationBodySchema.parse(await req.json());
+    const date = startOfDay(body.date ? new Date(body.date) : new Date());
+
+    const existing = await prisma.habitCheckIn.findUnique({
+      where: { habitId_date: { habitId: habit.id, date } },
+    });
+
+    const { ipAddress, userAgent } = requestMeta(req);
+    const durationMin = body.durationMin > 0 ? body.durationMin : null;
+
+    const checkIn = existing
+      ? await prisma.habitCheckIn.update({ where: { id: existing.id }, data: { durationMin } })
+      : await prisma.habitCheckIn.create({ data: { habitId: habit.id, date, durationMin } });
+
+    await syncHabitCheckInVirtualAsset(checkIn.id);
+    await writeAuditLog({
+      userId,
+      action: "HABIT_LOG_DURATION",
+      entityType: "HabitCheckIn",
+      entityId: checkIn.id,
+      oldValue: existing,
+      newValue: checkIn,
+      ipAddress,
+      userAgent,
+    });
+
+    return NextResponse.json({ checkIn });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}

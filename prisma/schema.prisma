@@ -558,6 +558,14 @@ model HabitCheckIn {
 
   date DateTime // normalized to local midnight of the day checked in
 
+  // Optional — how long the user actually spent on the habit that day. Checking in stays a
+  // single tap either way; logging a duration is a separate, optional action (see
+  // PATCH /api/habits/[id]/checkin) that feeds this same day into the app's normal
+  // time/cost reporting (computeTimeAndMoneyReport, computeCategoryCalendar) exactly like
+  // Activity/Task/Event time already does, and adds a time-based virtual asset value on top
+  // of the habit's flat per-check-in value when its category has a virtual-asset rate.
+  durationMin Int?
+
   createdAt DateTime @default(now())
 
   virtualAssetEntry VirtualAssetEntry?

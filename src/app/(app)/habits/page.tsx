@@ -8,13 +8,16 @@ import HabitFormModal from "@/components/habits/HabitFormModal";
 import TrialHabitFormModal from "@/components/habits/TrialHabitFormModal";
 import TrialHabitCard from "@/components/habits/TrialHabitCard";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
-import { PlusIcon, EditIcon, CheckSquareIcon } from "@/components/icons";
+import HabitDurationModal from "@/components/habits/HabitDurationModal";
+import { formatDuration } from "@/lib/money";
+import { PlusIcon, EditIcon, CheckSquareIcon, ClockIcon } from "@/components/icons";
 
 export default function HabitsPage() {
   const { habits, series, currentStreak, mutate } = useHabits();
   const [showHabitForm, setShowHabitForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState<any>(null);
   const [showTrialForm, setShowTrialForm] = useState(false);
+  const [durationHabit, setDurationHabit] = useState<any>(null);
 
   const trialHabits = habits.filter((h: any) => h.isTrial);
   const regularHabits = habits.filter((h: any) => !h.isTrial);
@@ -85,6 +88,16 @@ export default function HabitsPage() {
                 </button>
                 <span className="shrink-0">{h.icon || "🔥"}</span>
                 <span className={`flex-1 truncate ${h.checkedInToday ? "text-gray-400 line-through" : "text-gray-800"}`}>{h.title}</span>
+                {h.checkedInToday && (
+                  <button
+                    onClick={() => setDurationHabit(h)}
+                    className="shrink-0 flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600 transition"
+                    aria-label="ثبت زمان عادت"
+                  >
+                    <ClockIcon className="w-3.5 h-3.5" />
+                    {h.todayDurationMin ? formatDuration(h.todayDurationMin) : "زمان"}
+                  </button>
+                )}
                 <button
                   onClick={() => { setEditingHabit(h); setShowHabitForm(true); }}
                   className="text-gray-300 hover:text-gray-500 shrink-0"
@@ -130,6 +143,13 @@ export default function HabitsPage() {
       )}
       {showTrialForm && (
         <TrialHabitFormModal onClose={() => setShowTrialForm(false)} onCreated={() => { setShowTrialForm(false); mutate(); }} />
+      )}
+      {durationHabit && (
+        <HabitDurationModal
+          habit={durationHabit}
+          onClose={() => setDurationHabit(null)}
+          onSaved={() => { setDurationHabit(null); mutate(); }}
+        />
       )}
     </div>
   );

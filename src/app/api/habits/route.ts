@@ -46,13 +46,14 @@ export async function GET() {
     const series = computeAdherenceSeries(habits, checkIns, seriesFrom, today);
     const currentStreak = computeCurrentStreak(series, today);
 
-    const checkedInTodaySet = new Set(
-      checkIns.filter((c) => c.date.getTime() === today.getTime()).map((c) => c.habitId)
-    );
+    const todayCheckIns = checkIns.filter((c) => c.date.getTime() === today.getTime());
+    const checkedInTodaySet = new Set(todayCheckIns.map((c) => c.habitId));
+    const todayDurationByHabit = new Map(todayCheckIns.map((c) => [c.habitId, c.durationMin]));
 
     const habitsWithState = habits.map((h) => ({
       ...h,
       checkedInToday: checkedInTodaySet.has(h.id),
+      todayDurationMin: todayDurationByHabit.get(h.id) ?? null,
       daysSinceLastCheckIn: daysSinceLastCheckIn(
         checkIns.filter((c) => c.habitId === h.id),
         h.createdAt,

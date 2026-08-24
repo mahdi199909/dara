@@ -37,7 +37,10 @@ export default function CaptureForm({ onDone }: { onDone: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const visibleCategories = categories.filter((c: any) => c.isActive && c.valueType === valueType);
+  // A project's auto-generated category is shown regardless of the Expense/Asset tab — a
+  // project can incur both (buying a part is an expense, time spent is an asset), so tying
+  // its category to only one tab would make it impossible to log the other kind against it.
+  const visibleCategories = categories.filter((c: any) => c.isActive && (c.projectId || c.valueType === valueType));
 
   useEffect(() => {
     // Selected category no longer matches the visible (filtered) list — clear it rather
@@ -51,7 +54,10 @@ export default function CaptureForm({ onDone }: { onDone: () => void }) {
 
   function pickCategory(cat: any) {
     setCategoryId(cat.id);
-    setValueType(cat.valueType);
+    // Project categories are visible under both tabs (see visibleCategories above), so
+    // picking one shouldn't force-switch the tab and override the هزینه/دارایی the user
+    // already chose — only a regular, single-purpose category drives the tab from its tag.
+    if (!cat.projectId) setValueType(cat.valueType);
     // A project's auto-generated category carries its projectId — picking it also tags
     // the entry to that project, so it shows up in the project's own cash flow / cost view
     // without a second "which project" step.
