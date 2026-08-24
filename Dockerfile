@@ -27,6 +27,12 @@ RUN npm run build
 
 EXPOSE 3000
 ENV NODE_ENV=production
-ENV PORT=3000
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npm run start"]
+# Explicit `-p 3000` (not just `npm run start` / an ENV PORT default) because the host
+# platform (e.g. Railway) injects its own PORT env var at container runtime — which
+# overrides any ENV PORT baked into the image — and that injected value is NOT stable
+# across redeploys (observed 8080 on one deploy, 3000 on the next). A CLI flag takes
+# precedence over the PORT env var in Next.js's own port resolution, so this pins the
+# app to a fixed, known port regardless of whatever the platform injects, and the
+# platform's public domain just needs to target that same fixed port once.
+CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npx next start -p 3000"]
