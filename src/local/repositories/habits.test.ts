@@ -6,9 +6,9 @@ import { createHabit, updateHabit, deleteHabit, toggleHabitCheckIn, logHabitChec
 const USER_ID = "user_habit_1";
 const now = () => new Date().toISOString();
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "habit@example.com",
@@ -36,8 +36,8 @@ describe("local habits repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a habit with the same defaults as the web route", () => {
-    const db = freshDb();
+  it("creates a habit with the same defaults as the web route", async () => {
+    const db = await freshDb();
     const habit = createHabit(db, USER_ID, { title: "مدیتیشن" });
 
     expect(habit.title).toBe("مدیتیشن");
@@ -49,8 +49,8 @@ describe("local habits repository", () => {
     expect(habit.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("updates fields and resets createdAt when a trial habit is promoted", () => {
-    const db = freshDb();
+  it("updates fields and resets createdAt when a trial habit is promoted", async () => {
+    const db = await freshDb();
     const habit = createHabit(db, USER_ID, { title: "عادت آزمایشی", isTrial: true });
     expect(habit.isTrial).toBe(true);
     expect(habit.trialStartDate).not.toBeNull();
@@ -64,8 +64,8 @@ describe("local habits repository", () => {
     expect(promoted.createdAt).not.toBe(habit.createdAt); // promotion resets createdAt
   });
 
-  it("soft-deletes a habit so it no longer appears in listHabits", () => {
-    const db = freshDb();
+  it("soft-deletes a habit so it no longer appears in listHabits", async () => {
+    const db = await freshDb();
     const habit = createHabit(db, USER_ID, { title: "عادت موقت" });
     deleteHabit(db, USER_ID, habit.id);
 
@@ -73,8 +73,8 @@ describe("local habits repository", () => {
     expect(habits.find((h) => h.id === habit.id)).toBeUndefined();
   });
 
-  it("toggles a check-in on then off for today, cleaning up its virtual asset entry on uncheck", () => {
-    const db = freshDb();
+  it("toggles a check-in on then off for today, cleaning up its virtual asset entry on uncheck", async () => {
+    const db = await freshDb();
     const habit = createHabit(db, USER_ID, { title: "ورزش", virtualAssetValuePerCheckIn: 200 });
 
     expect(toggleHabitCheckIn(db, USER_ID, habit.id)).toEqual({ checkedIn: true });
@@ -90,8 +90,8 @@ describe("local habits repository", () => {
     expect(vaAfterUncheck).toBeUndefined();
   });
 
-  it("logging a duration feeds a VirtualAssetEntry combining the flat and time-based value when the category has an hourly rate", () => {
-    const db = freshDb();
+  it("logging a duration feeds a VirtualAssetEntry combining the flat and time-based value when the category has an hourly rate", async () => {
+    const db = await freshDb();
     db.run(
       `INSERT INTO "Category" ("id","userId","name","generatesVirtualAsset","virtualAssetValuePerHour","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`,
       ["cat_va", USER_ID, "یادگیری", 1, 6000, now(), now()]
@@ -111,8 +111,8 @@ describe("local habits repository", () => {
     expect(entry?.durationMin).toBe(30);
   });
 
-  it("computes the current streak and per-habit adherence across a few days of check-ins", () => {
-    const db = freshDb();
+  it("computes the current streak and per-habit adherence across a few days of check-ins", async () => {
+    const db = await freshDb();
     const habit = createHabit(db, USER_ID, { title: "آب خوردن" });
 
     const today = new Date();
@@ -134,8 +134,8 @@ describe("local habits repository", () => {
     expect(state.daysSinceLastCheckIn).toBe(0);
   });
 
-  it("throws a 404 ApiError for a habit belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for a habit belonging to another user", async () => {
+    const db = await freshDb();
     insertUser(db, "someone_else");
     const habit = createHabit(db, USER_ID, { title: "عادت" });
 

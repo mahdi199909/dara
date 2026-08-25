@@ -6,9 +6,9 @@ import { listVirtualAssets } from "./virtualAssets";
 const USER_ID = "user_va_1";
 const now = () => new Date().toISOString();
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "va@example.com",
@@ -25,8 +25,8 @@ describe("local virtual assets repository", () => {
     resetLocalDbForTests();
   });
 
-  it("groups entries by category, and buckets project/habit entries separately, summing totals", () => {
-    const db = freshDb();
+  it("groups entries by category, and buckets project/habit entries separately, summing totals", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "Category" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["cat_1", USER_ID, "یادگیری", now(), now()]);
     db.run(`INSERT INTO "Project" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["proj_1", USER_ID, "پروژه", now(), now()]);
     db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "عادت", now(), now()]);
@@ -56,8 +56,8 @@ describe("local virtual assets repository", () => {
     expect(result.habitEntries[0].habitCheckIn?.habit?.id).toBe("habit_1");
   });
 
-  it("ignores another user's entries and returns empty groupings when there are none", () => {
-    const db = freshDb();
+  it("ignores another user's entries and returns empty groupings when there are none", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
       "someone_else",
       "o@example.com",

@@ -5,9 +5,9 @@ import { createCategory, deleteCategory, listCategories, updateCategory } from "
 
 const USER_ID = "user_test_1";
 
-function freshDb() {
+async function freshDb() {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "test@example.com",
@@ -24,8 +24,8 @@ describe("local categories repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a category with the same defaults as the web route", () => {
-    const db = freshDb();
+  it("creates a category with the same defaults as the web route", async () => {
+    const db = await freshDb();
     const category = createCategory(db, USER_ID, { name: "خانه" });
 
     expect(category.name).toBe("خانه");
@@ -39,8 +39,8 @@ describe("local categories repository", () => {
     expect(category.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("lists only the calling user's non-deleted categories, ordered like the web route", () => {
-    const db = freshDb();
+  it("lists only the calling user's non-deleted categories, ordered like the web route", async () => {
+    const db = await freshDb();
     const catB = createCategory(db, USER_ID, { name: "دوم" });
     const catA = createCategory(db, USER_ID, { name: "اول" });
     // Force distinct createdAt values so ORDER BY createdAt ASC is deterministic regardless
@@ -63,8 +63,8 @@ describe("local categories repository", () => {
     expect(categories.find((c) => c.id === otherUserCategory.id)).toBeUndefined();
   });
 
-  it("does not filter the list by isActive, matching the web route", () => {
-    const db = freshDb();
+  it("does not filter the list by isActive, matching the web route", async () => {
+    const db = await freshDb();
     const category = createCategory(db, USER_ID, { name: "غیرفعال" });
     updateCategory(db, USER_ID, category.id, { isActive: false });
 
@@ -72,8 +72,8 @@ describe("local categories repository", () => {
     expect(categories.find((c) => c.id === category.id)?.isActive).toBe(false);
   });
 
-  it("updates fields and can clear virtualAssetValuePerHour back to null", () => {
-    const db = freshDb();
+  it("updates fields and can clear virtualAssetValuePerHour back to null", async () => {
+    const db = await freshDb();
     const category = createCategory(db, USER_ID, {
       name: "قدیمی",
       generatesVirtualAsset: true,
@@ -86,16 +86,16 @@ describe("local categories repository", () => {
     expect(updated.virtualAssetValuePerHour).toBeNull();
   });
 
-  it("soft-deletes a category (excluded from the list afterwards)", () => {
-    const db = freshDb();
+  it("soft-deletes a category (excluded from the list afterwards)", async () => {
+    const db = await freshDb();
     const category = createCategory(db, USER_ID, { name: "حذف‌شدنی" });
 
     deleteCategory(db, USER_ID, category.id);
     expect(listCategories(db, USER_ID).find((c) => c.id === category.id)).toBeUndefined();
   });
 
-  it("throws a 404 ApiError for a category belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for a category belonging to another user", async () => {
+    const db = await freshDb();
     const category = createCategory(db, USER_ID, { name: "من" });
     expect(() => updateCategory(db, "someone_else", category.id, { name: "دستکاری" })).toThrow("دسته‌بندی پیدا نشد.");
   });

@@ -6,9 +6,9 @@ import { createInstallmentPlan, deleteInstallmentPlan, getInstallmentPlan, payIn
 const USER_ID = "user_inst_1";
 const now = () => new Date().toISOString();
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [USER_ID, "i@example.com", "hash", "Inst", now(), now()]);
   return db;
 }
@@ -18,8 +18,8 @@ describe("local installments", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a plan with the full generated installment schedule and a summary", () => {
-    const db = freshDb();
+  it("creates a plan with the full generated installment schedule and a summary", async () => {
+    const db = await freshDb();
     const plan = createInstallmentPlan(db, USER_ID, {
       title: "وام خودرو",
       totalAmount: 12000000,
@@ -35,8 +35,8 @@ describe("local installments", () => {
     expect(plan.summary.remainingAmount).toBe(12000000);
   });
 
-  it("creates reminder rows per installment x offset when reminderOffsets are supplied", () => {
-    const db = freshDb();
+  it("creates reminder rows per installment x offset when reminderOffsets are supplied", async () => {
+    const db = await freshDb();
     const plan = createInstallmentPlan(db, USER_ID, {
       title: "وام",
       totalAmount: 2000000,
@@ -51,8 +51,8 @@ describe("local installments", () => {
     expect(reminders.every((r) => r.installmentId && plan.installments.some((i) => i.id === r.installmentId))).toBe(true);
   });
 
-  it("pays an installment, marks it PAID, and creates a linked EXPENSE transaction", () => {
-    const db = freshDb();
+  it("pays an installment, marks it PAID, and creates a linked EXPENSE transaction", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
     const plan = createInstallmentPlan(db, USER_ID, {
       title: "وام",
@@ -70,8 +70,8 @@ describe("local installments", () => {
     expect(() => payInstallment(db, USER_ID, installment.id, { accountId: "acc_1" })).toThrow("این قسط قبلاً پرداخت شده است.");
   });
 
-  it("refuses to delete a plan that has at least one paid installment", () => {
-    const db = freshDb();
+  it("refuses to delete a plan that has at least one paid installment", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
     const plan = createInstallmentPlan(db, USER_ID, {
       title: "وام",
@@ -85,8 +85,8 @@ describe("local installments", () => {
     expect(() => deleteInstallmentPlan(db, USER_ID, plan.id)).toThrow("طرحی که پرداخت انجام‌شده دارد قابل حذف نیست تا صحت گزارش‌ها حفظ شود.");
   });
 
-  it("throws a 404 for another user's plan", () => {
-    const db = freshDb();
+  it("throws a 404 for another user's plan", async () => {
+    const db = await freshDb();
     const plan = createInstallmentPlan(db, USER_ID, { title: "وام", totalAmount: 100, installmentAmount: 100, numberOfInstallments: 1, dueDay: 1 });
     expect(() => getInstallmentPlan(db, "someone_else", plan.id)).toThrow("طرح قسط پیدا نشد.");
   });

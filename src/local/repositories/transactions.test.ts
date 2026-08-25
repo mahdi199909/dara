@@ -7,9 +7,9 @@ import { createTransaction, deleteTransaction, listTransactions, updateTransacti
 const USER_ID = "user_test_1";
 const now = () => new Date().toISOString();
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "test@example.com",
@@ -48,8 +48,8 @@ describe("local transactions repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a transaction with the same defaults as the web route, and returns the bare row (no joins)", () => {
-    const db = freshDb();
+  it("creates a transaction with the same defaults as the web route, and returns the bare row (no joins)", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
 
     const tx = createTransaction(db, USER_ID, { type: "EXPENSE", amount: 5000, accountId: account.id });
@@ -70,16 +70,16 @@ describe("local transactions repository", () => {
     expect("category" in tx).toBe(false);
   });
 
-  it("rejects a create when the source account doesn't belong to the caller", () => {
-    const db = freshDb();
+  it("rejects a create when the source account doesn't belong to the caller", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     expect(() => createTransaction(db, "someone_else", { type: "EXPENSE", amount: 100, accountId: account.id })).toThrow(
       "حساب مبدا پیدا نشد."
     );
   });
 
-  it("requires transferToAccountId for TRANSFER, and validates it belongs to the caller", () => {
-    const db = freshDb();
+  it("requires transferToAccountId for TRANSFER, and validates it belongs to the caller", async () => {
+    const db = await freshDb();
     const source = createAccount(db, USER_ID, { name: "مبدا" });
 
     expect(() => createTransaction(db, USER_ID, { type: "TRANSFER", amount: 100, accountId: source.id })).toThrow(
@@ -90,8 +90,8 @@ describe("local transactions repository", () => {
     ).toThrow("حساب مقصد پیدا نشد.");
   });
 
-  it("persists transferToAccountId for TRANSFER but silently drops it for non-TRANSFER types", () => {
-    const db = freshDb();
+  it("persists transferToAccountId for TRANSFER but silently drops it for non-TRANSFER types", async () => {
+    const db = await freshDb();
     const source = createAccount(db, USER_ID, { name: "مبدا" });
     const destination = createAccount(db, USER_ID, { name: "مقصد" });
 
@@ -113,8 +113,8 @@ describe("local transactions repository", () => {
     expect(expense.transferToAccountId).toBeNull();
   });
 
-  it("lists only the calling user's non-deleted transactions, ordered by date desc", () => {
-    const db = freshDb();
+  it("lists only the calling user's non-deleted transactions, ordered by date desc", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     createTransaction(db, USER_ID, { type: "EXPENSE", amount: 100, accountId: account.id, date: "2026-01-01T00:00:00.000Z" });
     createTransaction(db, USER_ID, { type: "EXPENSE", amount: 200, accountId: account.id, date: "2026-01-03T00:00:00.000Z" });
@@ -136,8 +136,8 @@ describe("local transactions repository", () => {
     expect(transactions.find((t) => t.id === otherTx.id)).toBeUndefined();
   });
 
-  it("joins category, account, project, task, and asset — but not activity/event/installment/transferToAccount", () => {
-    const db = freshDb();
+  it("joins category, account, project, task, and asset — but not activity/event/installment/transferToAccount", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     insertCategory(db, "cat_1");
     insertProject(db, "proj_1");
@@ -167,8 +167,8 @@ describe("local transactions repository", () => {
     expect("transferToAccount" in tx).toBe(false);
   });
 
-  it("filters list by type, accountId, and date range, and caps limit at 500", () => {
-    const db = freshDb();
+  it("filters list by type, accountId, and date range, and caps limit at 500", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     const otherAccount = createAccount(db, USER_ID, { name: "دیگر" });
     createTransaction(db, USER_ID, { type: "INCOME", amount: 100, accountId: account.id, date: "2026-01-05T00:00:00.000Z" });
@@ -183,8 +183,8 @@ describe("local transactions repository", () => {
     expect(listTransactions(db, USER_ID, { limit: 5000 })).toHaveLength(3); // capped at 500 internally, still returns all 3 here
   });
 
-  it("updates amount/date/description/category/project/task and returns the bare row (no joins)", () => {
-    const db = freshDb();
+  it("updates amount/date/description/category/project/task and returns the bare row (no joins)", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     insertCategory(db, "cat_1");
     insertTask(db, "task_1");
@@ -210,8 +210,8 @@ describe("local transactions repository", () => {
     expect("category" in updated).toBe(false);
   });
 
-  it("clears nullable fields when explicitly set to null on update", () => {
-    const db = freshDb();
+  it("clears nullable fields when explicitly set to null on update", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     insertCategory(db, "cat_1");
     const tx = createTransaction(db, USER_ID, { type: "EXPENSE", amount: 100, accountId: account.id, categoryId: "cat_1" });
@@ -221,15 +221,15 @@ describe("local transactions repository", () => {
     expect(updated.categoryId).toBeNull();
   });
 
-  it("throws a 404 ApiError for a transaction belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for a transaction belonging to another user", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     const tx = createTransaction(db, USER_ID, { type: "EXPENSE", amount: 100, accountId: account.id });
     expect(() => updateTransaction(db, "someone_else", tx.id, { amount: 1 })).toThrow("تراکنش پیدا نشد.");
   });
 
-  it("soft-deletes a transaction", () => {
-    const db = freshDb();
+  it("soft-deletes a transaction", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     const tx = createTransaction(db, USER_ID, { type: "EXPENSE", amount: 100, accountId: account.id });
 
@@ -238,8 +238,8 @@ describe("local transactions repository", () => {
     expect(listTransactions(db, USER_ID).find((t) => t.id === tx.id)).toBeUndefined();
   });
 
-  it("blocks update and delete for a transaction linked to an installment", () => {
-    const db = freshDb();
+  it("blocks update and delete for a transaction linked to an installment", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد" });
     db.run(
       `INSERT INTO "InstallmentPlan" ("id","userId","title","totalAmount","installmentAmount","numberOfInstallments","dueDay","startDate","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?,?)`,

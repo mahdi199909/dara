@@ -13,12 +13,6 @@
 FROM node:20-alpine
 WORKDIR /app
 RUN apk add --no-cache openssl
-# python3/make/g++: needed to compile better-sqlite3's native addon during `npm ci`. It's a
-# devDependency (test-only, used by vitest to exercise the on-device local data layer — see
-# src/local/drivers/nodeSqlite.ts) never touched by the actual running app, but `npm ci` still
-# installs+builds all devDependencies, and node-gyp has nothing to compile against on bare
-# node:20-alpine otherwise.
-RUN apk add --no-cache python3 make g++
 
 COPY . .
 # Use the PostgreSQL schema for this image (the default schema.prisma targets SQLite for

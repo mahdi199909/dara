@@ -5,9 +5,9 @@ import { createTask, deleteTask, listTasks, updateTask } from "./tasks";
 
 const USER_ID = "user_test_1";
 
-function freshDb() {
+async function freshDb() {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "test@example.com",
@@ -24,8 +24,8 @@ describe("local tasks repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a task with the same defaults as the web route", () => {
-    const db = freshDb();
+  it("creates a task with the same defaults as the web route", async () => {
+    const db = await freshDb();
     const task = createTask(db, USER_ID, { title: "خرید نان" });
 
     expect(task.title).toBe("خرید نان");
@@ -38,8 +38,8 @@ describe("local tasks repository", () => {
     expect(task.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("lists only the calling user's non-deleted tasks, ordered like the web route", () => {
-    const db = freshDb();
+  it("lists only the calling user's non-deleted tasks, ordered like the web route", async () => {
+    const db = await freshDb();
     createTask(db, USER_ID, { title: "کار دوم", status: "IN_PROGRESS" });
     createTask(db, USER_ID, { title: "کار اول", status: "TODO" });
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
@@ -58,16 +58,16 @@ describe("local tasks repository", () => {
     expect(tasks.find((t) => t.id === otherUserTask.id)).toBeUndefined();
   });
 
-  it("filters by status and projectId", () => {
-    const db = freshDb();
+  it("filters by status and projectId", async () => {
+    const db = await freshDb();
     createTask(db, USER_ID, { title: "الف", status: "DONE" });
     createTask(db, USER_ID, { title: "ب", status: "TODO" });
 
     expect(listTasks(db, USER_ID, { status: "DONE" }).map((t) => t.title)).toEqual(["الف"]);
   });
 
-  it("joins category and project when set", () => {
-    const db = freshDb();
+  it("joins category and project when set", async () => {
+    const db = await freshDb();
     const now = new Date().toISOString();
     db.run(`INSERT INTO "Category" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["cat_1", USER_ID, "خانه", now, now]);
     db.run(`INSERT INTO "Project" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["proj_1", USER_ID, "پروژه‌ی الف", now, now]);
@@ -78,8 +78,8 @@ describe("local tasks repository", () => {
     expect((task.project as any)?.name).toBe("پروژه‌ی الف");
   });
 
-  it("sets completedAt when transitioning to DONE, and soft-deletes correctly", () => {
-    const db = freshDb();
+  it("sets completedAt when transitioning to DONE, and soft-deletes correctly", async () => {
+    const db = await freshDb();
     const task = createTask(db, USER_ID, { title: "کار" });
     expect(task.completedAt).toBeNull();
 
@@ -90,8 +90,8 @@ describe("local tasks repository", () => {
     expect(listTasks(db, USER_ID).find((t) => t.id === task.id)).toBeUndefined();
   });
 
-  it("throws a 404 ApiError for a task belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for a task belonging to another user", async () => {
+    const db = await freshDb();
     const task = createTask(db, USER_ID, { title: "کار" });
     expect(() => updateTask(db, "someone_else", task.id, { title: "دستکاری" })).toThrow("کار پیدا نشد.");
   });

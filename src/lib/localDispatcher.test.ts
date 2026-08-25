@@ -4,9 +4,9 @@ import { createNodeSqliteDriver } from "@/local/drivers/nodeSqlite";
 import { dispatchLocal, setLocalDbDriverForTests } from "./localDispatcher";
 
 describe("localDispatcher", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetLocalDbForTests();
-    setLocalDbDriverForTests(createNodeSqliteDriver(":memory:"));
+    setLocalDbDriverForTests(await createNodeSqliteDriver(":memory:"));
   });
 
   it("creates and lists a task with the same JSON shape the web route returns", () => {

@@ -6,9 +6,9 @@ import { listNotifications, markNotificationRead } from "./notifications";
 const USER_ID = "user_notif_1";
 const now = () => new Date().toISOString();
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [USER_ID, "n@example.com", "hash", "Notif", now(), now()]);
   return db;
 }
@@ -18,8 +18,8 @@ describe("local notifications", () => {
     resetLocalDbForTests();
   });
 
-  it("fires a due, non-dismissed event reminder into a Notification and marks it notified", () => {
-    const db = freshDb();
+  it("fires a due, non-dismissed event reminder into a Notification and marks it notified", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "Event" ("id","userId","title","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
       "event_1",
       USER_ID,
@@ -47,8 +47,8 @@ describe("local notifications", () => {
     expect(second.notifications).toHaveLength(1); // still just the one unread notification, not duplicated
   });
 
-  it("does not fire a reminder whose remindAt is still in the future", () => {
-    const db = freshDb();
+  it("does not fire a reminder whose remindAt is still in the future", async () => {
+    const db = await freshDb();
     const future = new Date(Date.now() + 60 * 60000).toISOString();
     db.run(
       `INSERT INTO "Reminder" ("id","userId","targetType","title","offsetMinutes","remindAt","notified","dismissed","createdAt") VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -57,8 +57,8 @@ describe("local notifications", () => {
     expect(listNotifications(db, USER_ID).notifications).toHaveLength(0);
   });
 
-  it("nudges a neglected active habit and cools down after nudging", () => {
-    const db = freshDb();
+  it("nudges a neglected active habit and cools down after nudging", async () => {
+    const db = await freshDb();
     const fourDaysAgo = new Date(Date.now() - 4 * 86_400_000).toISOString();
     db.run(`INSERT INTO "Habit" ("id","userId","title","isActive","isTrial","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
       "habit_1",
@@ -77,8 +77,8 @@ describe("local notifications", () => {
     expect(habit.lastNudgeSentAt).not.toBeNull();
   });
 
-  it("marks a notification read", () => {
-    const db = freshDb();
+  it("marks a notification read", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "Notification" ("id","userId","title","body","type","isRead","createdAt") VALUES (?,?,?,?,?,?,?)`, [
       "notif_1",
       USER_ID,
@@ -92,8 +92,8 @@ describe("local notifications", () => {
     expect(listNotifications(db, USER_ID).notifications).toHaveLength(0);
   });
 
-  it("throws a 404 for another user's notification", () => {
-    const db = freshDb();
+  it("throws a 404 for another user's notification", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "Notification" ("id","userId","title","body","type","isRead","createdAt") VALUES (?,?,?,?,?,?,?)`, [
       "notif_1",
       USER_ID,

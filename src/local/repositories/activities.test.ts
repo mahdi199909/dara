@@ -15,9 +15,9 @@ import {
 const USER_ID = "user_test_1";
 const OTHER_USER_ID = "user_test_2";
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   const nowIso = new Date().toISOString();
   for (const id of [USER_ID, OTHER_USER_ID]) {
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
@@ -46,8 +46,8 @@ describe("local activities repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates an activity with the same defaults as the web route", () => {
-    const db = freshDb();
+  it("creates an activity with the same defaults as the web route", async () => {
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "مطالعه کتاب" });
 
     expect(activity.title).toBe("مطالعه کتاب");
@@ -60,8 +60,8 @@ describe("local activities repository", () => {
     expect(activity.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("adds a manual time entry (durationMin only) and updates totalDurationMin", () => {
-    const db = freshDb();
+  it("adds a manual time entry (durationMin only) and updates totalDurationMin", async () => {
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "فعالیت" });
 
     const timeEntry = addTimeEntry(db, USER_ID, activity.id, { durationMin: 45 });
@@ -73,8 +73,8 @@ describe("local activities repository", () => {
     expect(fresh.timeEntries).toHaveLength(1);
   });
 
-  it("computes durationMin from an explicit startAt/endAt range", () => {
-    const db = freshDb();
+  it("computes durationMin from an explicit startAt/endAt range", async () => {
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "فعالیت" });
     const startAt = new Date("2026-01-01T10:00:00.000Z");
     const endAt = new Date("2026-01-01T10:30:00.000Z");
@@ -84,16 +84,16 @@ describe("local activities repository", () => {
     expect(getActivity(db, USER_ID, activity.id).totalDurationMin).toBe(30);
   });
 
-  it("requires durationMin or a startAt/endAt range when adding a time entry", () => {
+  it("requires durationMin or a startAt/endAt range when adding a time entry", async () => {
     // Mirrors the web route's manual `if (!body.durationMin && !(body.startAt && body.endAt))`
     // check — this isn't part of the zod schema itself, so it's re-checked here explicitly.
-    const db = freshDb();
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "فعالیت" });
     expect(() => addTimeEntry(db, USER_ID, activity.id, {})).toThrow("مدت زمان یا بازه شروع/پایان را وارد کنید.");
   });
 
-  it("starts then stops a timer, computing duration on stop", () => {
-    const db = freshDb();
+  it("starts then stops a timer, computing duration on stop", async () => {
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "فعالیت" });
 
     const started = startActivityTimer(db, USER_ID, activity.id);
@@ -108,14 +108,14 @@ describe("local activities repository", () => {
     expect(activityAfterStop.totalDurationMin).toBe(stopped.durationMin);
   });
 
-  it("throws a 400 ApiError when stopping a timer that isn't running", () => {
-    const db = freshDb();
+  it("throws a 400 ApiError when stopping a timer that isn't running", async () => {
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "فعالیت" });
     expect(() => stopActivityTimer(db, USER_ID, activity.id)).toThrow("تایمر فعالی برای این فعالیت وجود ندارد.");
   });
 
-  it("starting a second timer force-stops the first one, recalculating its activity's duration", () => {
-    const db = freshDb();
+  it("starting a second timer force-stops the first one, recalculating its activity's duration", async () => {
+    const db = await freshDb();
     const activityA = createActivity(db, USER_ID, { title: "فعالیت الف" });
     const activityB = createActivity(db, USER_ID, { title: "فعالیت ب" });
 
@@ -138,8 +138,8 @@ describe("local activities repository", () => {
     expect(refreshedB.timeEntries[0].isRunning).toBe(1);
   });
 
-  it("creates a virtual asset value when the activity's category generates one, and removes it when the category no longer does", () => {
-    const db = freshDb();
+  it("creates a virtual asset value when the activity's category generates one, and removes it when the category no longer does", async () => {
+    const db = await freshDb();
     insertCategory(db, "cat_va", { generatesVirtualAsset: true, virtualAssetValuePerHour: 600 });
     insertCategory(db, "cat_plain");
 
@@ -159,8 +159,8 @@ describe("local activities repository", () => {
     expect(withoutAsset.virtualAssetEntry).toBeNull();
   });
 
-  it("lists only the calling user's non-deleted activities", () => {
-    const db = freshDb();
+  it("lists only the calling user's non-deleted activities", async () => {
+    const db = await freshDb();
     const mine = createActivity(db, USER_ID, { title: "فعالیت من" });
     createActivity(db, OTHER_USER_ID, { title: "فعالیت غریبه" });
 
@@ -170,8 +170,8 @@ describe("local activities repository", () => {
     expect(listActivities(db, USER_ID)).toEqual([]);
   });
 
-  it("throws a 404 ApiError for an activity belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for an activity belonging to another user", async () => {
+    const db = await freshDb();
     const activity = createActivity(db, USER_ID, { title: "فعالیت" });
 
     expect(() => getActivity(db, OTHER_USER_ID, activity.id)).toThrow("فعالیت پیدا نشد.");

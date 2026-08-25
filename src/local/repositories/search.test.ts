@@ -11,8 +11,8 @@ describe("local search", () => {
     resetLocalDbForTests();
   });
 
-  it("finds matching tasks/projects/categories across entities and ignores other users' data", () => {
-    const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  it("finds matching tasks/projects/categories across entities and ignores other users' data", async () => {
+    const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
       USER_ID,
       "s@example.com",
@@ -38,8 +38,8 @@ describe("local search", () => {
     expect(results.find((r) => r.type === "Task")?.id).toBe("t1");
   });
 
-  it("returns an empty array for an empty/whitespace query", () => {
-    const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  it("returns an empty array for an empty/whitespace query", async () => {
+    const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
     expect(search(db, USER_ID, "")).toEqual([]);
     expect(search(db, USER_ID, "   ")).toEqual([]);
     expect(search(db, USER_ID, undefined)).toEqual([]);

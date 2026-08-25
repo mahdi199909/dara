@@ -5,9 +5,9 @@ import { createAccount, deleteAccount, listAccounts, updateAccount } from "./acc
 
 const USER_ID = "user_test_1";
 
-function freshDb() {
+async function freshDb() {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "test@example.com",
@@ -24,8 +24,8 @@ describe("local accounts repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates an account with the same defaults as the web route", () => {
-    const db = freshDb();
+  it("creates an account with the same defaults as the web route", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "بانک ملی" });
 
     expect(account.name).toBe("بانک ملی");
@@ -36,8 +36,8 @@ describe("local accounts repository", () => {
     expect(account.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it("honors an explicit type and initialBalance on create", () => {
-    const db = freshDb();
+  it("honors an explicit type and initialBalance on create", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "نقد", type: "CASH", initialBalance: 500000 });
 
     expect(account.type).toBe("CASH");
@@ -45,8 +45,8 @@ describe("local accounts repository", () => {
     expect(account.balance).toBe(500000);
   });
 
-  it("lists only the calling user's non-deleted accounts, ordered by createdAt like the web route", () => {
-    const db = freshDb();
+  it("lists only the calling user's non-deleted accounts, ordered by createdAt like the web route", async () => {
+    const db = await freshDb();
     createAccount(db, USER_ID, { name: "اول" });
     createAccount(db, USER_ID, { name: "دوم" });
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
@@ -64,8 +64,8 @@ describe("local accounts repository", () => {
     expect(accounts.find((a) => a.id === otherAccount.id)).toBeUndefined();
   });
 
-  it("computes balance from income, expense, and transfer transactions, ignoring soft-deleted ones", () => {
-    const db = freshDb();
+  it("computes balance from income, expense, and transfer transactions, ignoring soft-deleted ones", async () => {
+    const db = await freshDb();
     const main = createAccount(db, USER_ID, { name: "اصلی", initialBalance: 1000 });
     const other = createAccount(db, USER_ID, { name: "دیگری" });
     const now = new Date().toISOString();
@@ -111,8 +111,8 @@ describe("local accounts repository", () => {
     expect(otherAccount.balance).toBe(300);
   });
 
-  it("updates fields but omits balance from the response, matching the web route's PATCH", () => {
-    const db = freshDb();
+  it("updates fields but omits balance from the response, matching the web route's PATCH", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "اول" });
 
     const updated = updateAccount(db, USER_ID, account.id, { name: "تغییر یافته", isActive: false });
@@ -121,14 +121,14 @@ describe("local accounts repository", () => {
     expect("balance" in updated).toBe(false);
   });
 
-  it("throws a 404 ApiError for an account belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for an account belonging to another user", async () => {
+    const db = await freshDb();
     const account = createAccount(db, USER_ID, { name: "اول" });
     expect(() => updateAccount(db, "someone_else", account.id, { name: "دستکاری" })).toThrow("حساب پیدا نشد.");
   });
 
-  it("blocks deleting an account that has transactions, but allows deleting one that doesn't", () => {
-    const db = freshDb();
+  it("blocks deleting an account that has transactions, but allows deleting one that doesn't", async () => {
+    const db = await freshDb();
     const withTx = createAccount(db, USER_ID, { name: "دارای تراکنش" });
     const now = new Date().toISOString();
     db.run(`INSERT INTO "Transaction" ("id","userId","type","amount","date","accountId","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
@@ -150,11 +150,11 @@ describe("local accounts repository", () => {
     expect(listAccounts(db, USER_ID).find((a) => a.id === empty.id)).toBeUndefined();
   });
 
-  it("does not count a transaction where the account is only the transfer destination toward the delete guard", () => {
+  it("does not count a transaction where the account is only the transfer destination toward the delete guard", async () => {
     // Mirrors the web route's exact (arguably incomplete) guard: it only checks accountId, not
     // transferToAccountId, so an account that's solely a transfer *destination* can still be
     // soft-deleted even though a transaction still references it.
-    const db = freshDb();
+    const db = await freshDb();
     const source = createAccount(db, USER_ID, { name: "مبدا" });
     const destination = createAccount(db, USER_ID, { name: "مقصد" });
     const now = new Date().toISOString();

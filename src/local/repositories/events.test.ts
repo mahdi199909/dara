@@ -1,14 +1,14 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { openLocalDb, resetLocalDbForTests } from "../db";
+import { openLocalDb, resetLocalDbForTests, type LocalDb } from "../db";
 import { createNodeSqliteDriver } from "../drivers/nodeSqlite";
 import { createEvent, createReminder, deleteEvent, deleteReminder, listEvents, toggleEventCompletion, updateEvent } from "./events";
 
 const USER_ID = "user_test_1";
 const OTHER_USER_ID = "someone_else";
 
-function freshDb() {
+async function freshDb() {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   const now = new Date().toISOString();
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
@@ -21,7 +21,7 @@ function freshDb() {
   return db;
 }
 
-function addOtherUser(db: ReturnType<typeof freshDb>) {
+function addOtherUser(db: LocalDb) {
   const now = new Date().toISOString();
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     OTHER_USER_ID,
@@ -38,8 +38,8 @@ describe("local events repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a non-recurring event and lists it in range", () => {
-    const db = freshDb();
+  it("creates a non-recurring event and lists it in range", async () => {
+    const db = await freshDb();
     const event = createEvent(db, USER_ID, {
       title: "قرار دکتر",
       startAt: "2026-03-10T08:00:00.000Z",
@@ -62,8 +62,8 @@ describe("local events repository", () => {
     expect(result.occurrences[0].event.id).toBe(event.id);
   });
 
-  it("lists all events without occurrence expansion when no range is given, scoped to the caller", () => {
-    const db = freshDb();
+  it("lists all events without occurrence expansion when no range is given, scoped to the caller", async () => {
+    const db = await freshDb();
     addOtherUser(db);
     createEvent(db, USER_ID, { title: "دوم", startAt: "2026-04-02T00:00:00.000Z", endAt: "2026-04-02T01:00:00.000Z" });
     createEvent(db, USER_ID, { title: "اول", startAt: "2026-04-01T00:00:00.000Z", endAt: "2026-04-01T01:00:00.000Z" });
@@ -76,8 +76,8 @@ describe("local events repository", () => {
     expect(result.events.map((e: any) => e.title)).toEqual(["اول", "دوم"]);
   });
 
-  it("expands a weekly-recurring event into the right occurrences across a month range", () => {
-    const db = freshDb();
+  it("expands a weekly-recurring event into the right occurrences across a month range", async () => {
+    const db = await freshDb();
     const event = createEvent(db, USER_ID, {
       title: "جلسه هفتگی",
       startAt: "2026-02-01T09:00:00.000Z", // February 2026 is a non-leap 28-day month.
@@ -104,8 +104,8 @@ describe("local events repository", () => {
     expect(result.occurrences.every((o: any) => o.event.id === event.id)).toBe(true);
   });
 
-  it("marks only the toggled occurrence as done, and toggling again reverts it", () => {
-    const db = freshDb();
+  it("marks only the toggled occurrence as done, and toggling again reverts it", async () => {
+    const db = await freshDb();
     const event = createEvent(db, USER_ID, {
       title: "جلسه هفتگی",
       startAt: "2026-02-01T09:00:00.000Z",
@@ -127,8 +127,8 @@ describe("local events repository", () => {
     expect(afterUncomplete.occurrences.some((o: any) => o.isDone)).toBe(false);
   });
 
-  it("creates reminders from reminderOffsets and resyncs their remindAt when startAt changes", () => {
-    const db = freshDb();
+  it("creates reminders from reminderOffsets and resyncs their remindAt when startAt changes", async () => {
+    const db = await freshDb();
     const event = createEvent(db, USER_ID, {
       title: "قرار مهم",
       startAt: "2026-05-01T12:00:00.000Z",
@@ -151,8 +151,8 @@ describe("local events repository", () => {
     expect(resynced[0].notified).toBe(false);
   });
 
-  it("creates and deletes a standalone reminder for an event", () => {
-    const db = freshDb();
+  it("creates and deletes a standalone reminder for an event", async () => {
+    const db = await freshDb();
     const event = createEvent(db, USER_ID, {
       title: "قرار دکتر",
       startAt: "2026-03-10T08:00:00.000Z",
@@ -170,8 +170,8 @@ describe("local events repository", () => {
     expect(() => deleteReminder(db, USER_ID, reminder.id)).toThrow("یادآوری پیدا نشد.");
   });
 
-  it("attaches category and project, and includes matching tasks as taskOccurrences", () => {
-    const db = freshDb();
+  it("attaches category and project, and includes matching tasks as taskOccurrences", async () => {
+    const db = await freshDb();
     const now = new Date().toISOString();
     db.run(`INSERT INTO "Category" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["cat_1", USER_ID, "کاری", now, now]);
     db.run(`INSERT INTO "Project" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["proj_1", USER_ID, "پروژه", now, now]);
@@ -201,8 +201,8 @@ describe("local events repository", () => {
     expect(result.taskOccurrences[0].category?.name).toBe("کاری");
   });
 
-  it("throws a 404 ApiError for an event or reminder belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for an event or reminder belonging to another user", async () => {
+    const db = await freshDb();
     addOtherUser(db);
     const event = createEvent(db, USER_ID, {
       title: "خصوصی",

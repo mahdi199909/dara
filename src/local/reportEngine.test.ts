@@ -12,9 +12,9 @@ import {
 const USER_ID = "user_report_1";
 const now = () => new Date().toISOString();
 
-function freshDb(): LocalDb {
+async function freshDb(): Promise<LocalDb> {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "r@example.com",
@@ -38,8 +38,8 @@ describe("local reportEngine", () => {
     resetLocalDbForTests();
   });
 
-  it("computeTimeAndMoneyReport aggregates task-logged time, transactions, and virtual assets like the web engine", () => {
-    const db = freshDb();
+  it("computeTimeAndMoneyReport aggregates task-logged time, transactions, and virtual assets like the web engine", async () => {
+    const db = await freshDb();
     insertCategory(db, "cat_work", "PRODUCTIVE");
     insertCategory(db, "cat_waste", "WASTE");
 
@@ -74,8 +74,8 @@ describe("local reportEngine", () => {
     expect(report.expenseByCategory.find((c) => c.categoryId === "cat_waste")?.amount).toBe(200000);
   });
 
-  it("computeNetWorth combines real assets, virtual assets, and unpaid installment debt", () => {
-    const db = freshDb();
+  it("computeNetWorth combines real assets, virtual assets, and unpaid installment debt", async () => {
+    const db = await freshDb();
     db.run(`INSERT INTO "Asset" ("id","userId","name","purchasePrice","purchaseDate","currentValue","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
       "asset_1",
       USER_ID,
@@ -135,8 +135,8 @@ describe("local reportEngine", () => {
     expect(net.netWorth).toBe(40000000 + 100000 - 1000000);
   });
 
-  it("computeHabitsReport computes adherence series and per-habit streaks like the web engine", () => {
-    const db = freshDb();
+  it("computeHabitsReport computes adherence series and per-habit streaks like the web engine", async () => {
+    const db = await freshDb();
     const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000);
     db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "مطالعه", twoDaysAgo.toISOString(), now()]);
 
@@ -151,8 +151,8 @@ describe("local reportEngine", () => {
     expect(report.currentStreak).toBeGreaterThanOrEqual(1);
   });
 
-  it("computeCategoryCalendar buckets minutes per day per category, matching dayKeyIso", () => {
-    const db = freshDb();
+  it("computeCategoryCalendar buckets minutes per day per category, matching dayKeyIso", async () => {
+    const db = await freshDb();
     insertCategory(db, "cat_learn", "PRODUCTIVE");
     const day = new Date("2026-02-15T09:00:00.000Z");
     db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
@@ -173,8 +173,8 @@ describe("local reportEngine", () => {
     expect(Object.values(learnStat.days)[0]).toBe(90);
   });
 
-  it("computeHiddenCostReport sorts items by hiddenCost descending and sums totals", () => {
-    const db = freshDb();
+  it("computeHiddenCostReport sorts items by hiddenCost descending and sums totals", async () => {
+    const db = await freshDb();
     const from = new Date("2026-03-01T00:00:00.000Z");
     const to = new Date("2026-03-31T23:59:59.999Z");
     db.run(`INSERT INTO "Task" ("id","userId","title","directCost","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [

@@ -7,9 +7,9 @@ import { createTask } from "./tasks";
 
 const USER_ID = "user_test_1";
 
-function freshDb() {
+async function freshDb() {
   resetLocalDbForTests();
-  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "test@example.com",
@@ -33,8 +33,8 @@ describe("local projects repository", () => {
     resetLocalDbForTests();
   });
 
-  it("creates a project with the same defaults as the web route, and pairs a matching category", () => {
-    const db = freshDb();
+  it("creates a project with the same defaults as the web route, and pairs a matching category", async () => {
+    const db = await freshDb();
     const project = createProject(db, USER_ID, { name: "پروژه‌ی الف" });
 
     expect(project.name).toBe("پروژه‌ی الف");
@@ -51,8 +51,8 @@ describe("local projects repository", () => {
     expect(category?.isActive).toBe(1);
   });
 
-  it("lists only the calling user's non-deleted projects, ordered like the web route, with task counts", () => {
-    const db = freshDb();
+  it("lists only the calling user's non-deleted projects, ordered like the web route, with task counts", async () => {
+    const db = await freshDb();
     const projectA = createProject(db, USER_ID, { name: "پروژه دوم" });
     const projectB = createProject(db, USER_ID, { name: "پروژه اول" });
     // Force distinct createdAt values so ORDER BY createdAt DESC is deterministic regardless
@@ -83,8 +83,8 @@ describe("local projects repository", () => {
     expect(projects.find((p) => p.id === otherUserProject.id)).toBeUndefined();
   });
 
-  it("getProject returns the owned project with its (non-deleted) tasks", () => {
-    const db = freshDb();
+  it("getProject returns the owned project with its (non-deleted) tasks", async () => {
+    const db = await freshDb();
     const project = createProject(db, USER_ID, { name: "پروژه" });
     createTask(db, USER_ID, { title: "کار پروژه", projectId: project.id });
     const deletedTask = createTask(db, USER_ID, { title: "کار حذف‌شده", projectId: project.id });
@@ -96,8 +96,8 @@ describe("local projects repository", () => {
     expect((result.tasks[0] as { title: string }).title).toBe("کار پروژه");
   });
 
-  it("renames the paired category when the project is renamed", () => {
-    const db = freshDb();
+  it("renames the paired category when the project is renamed", async () => {
+    const db = await freshDb();
     const project = createProject(db, USER_ID, { name: "نام قدیمی" });
 
     updateProject(db, USER_ID, project.id, { name: "نام جدید" });
@@ -106,8 +106,8 @@ describe("local projects repository", () => {
     expect(category?.name).toBe("نام جدید");
   });
 
-  it("sets completedAt on transition to COMPLETED and clears it when un-completed", () => {
-    const db = freshDb();
+  it("sets completedAt on transition to COMPLETED and clears it when un-completed", async () => {
+    const db = await freshDb();
     const project = createProject(db, USER_ID, { name: "پروژه" });
     expect(project.completedAt).toBeNull();
 
@@ -118,8 +118,8 @@ describe("local projects repository", () => {
     expect(reactivated.completedAt).toBeNull();
   });
 
-  it("deactivates (not deletes) the paired category on project soft-delete", () => {
-    const db = freshDb();
+  it("deactivates (not deletes) the paired category on project soft-delete", async () => {
+    const db = await freshDb();
     const project = createProject(db, USER_ID, { name: "پروژه" });
 
     deleteProject(db, USER_ID, project.id);
@@ -130,8 +130,8 @@ describe("local projects repository", () => {
     expect(category?.isActive).toBe(0);
   });
 
-  it("throws a 404 ApiError for a project belonging to another user", () => {
-    const db = freshDb();
+  it("throws a 404 ApiError for a project belonging to another user", async () => {
+    const db = await freshDb();
     const project = createProject(db, USER_ID, { name: "پروژه" });
     expect(() => updateProject(db, "someone_else", project.id, { name: "دستکاری" })).toThrow("پروژه پیدا نشد.");
   });

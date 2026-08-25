@@ -11,8 +11,8 @@ describe("local export", () => {
     resetLocalDbForTests();
   });
 
-  it("exports tasks as CSV with category/project names resolved and a UTF-8 BOM", () => {
-    const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  it("exports tasks as CSV with category/project names resolved and a UTF-8 BOM", async () => {
+    const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
       USER_ID,
       "e@example.com",
@@ -31,8 +31,8 @@ describe("local export", () => {
     expect(csv.charCodeAt(0)).toBe(0xfeff);
   });
 
-  it("throws a 400 ApiError for an unsupported entity", () => {
-    const db = openLocalDb(createNodeSqliteDriver(":memory:"));
+  it("throws a 400 ApiError for an unsupported entity", async () => {
+    const db = openLocalDb(await createNodeSqliteDriver(":memory:"));
     expect(() => exportCsv(db, USER_ID, "not-a-real-entity")).toThrow("نوع خروجی پشتیبانی نمی‌شود.");
   });
 });
