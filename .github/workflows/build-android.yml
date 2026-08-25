@@ -22,7 +22,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Capacitor CLI 8.x requires Node >=22 (fails at `cap sync` otherwise, with
+          # "[fatal] The Capacitor CLI requires NodeJS >=22.0.0") — this is also why it
+          # worked in local testing (Node 24 there) but not on this pinned runner version.
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
