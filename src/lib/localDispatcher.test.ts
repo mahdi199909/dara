@@ -57,4 +57,91 @@ describe("localDispatcher", () => {
     const res = dispatchLocal("GET", "/api/not-a-real-route");
     expect(res.status).toBe(404);
   });
+
+  it("wires categories, projects, accounts, and transactions end-to-end through the dispatcher", () => {
+    const category = (dispatchLocal("POST", "/api/categories", { name: "خانه" }).json as any).category;
+    expect(dispatchLocal("GET", "/api/categories").status).toBe(200);
+
+    const project = (dispatchLocal("POST", "/api/projects", { name: "پروژه من" }).json as any).project;
+    expect((dispatchLocal("GET", `/api/projects/${project.id}`).json as any).project.id).toBe(project.id);
+    // Creating a project auto-creates a paired category — should now show up in the list too.
+    expect((dispatchLocal("GET", "/api/categories").json as any).categories.length).toBeGreaterThanOrEqual(2);
+
+    const account = (dispatchLocal("POST", "/api/accounts", { name: "نقد" }).json as any).account;
+    expect(account.balance).toBe(0);
+
+    const txRes = dispatchLocal("POST", "/api/transactions", {
+      type: "EXPENSE",
+      amount: 50000,
+      accountId: account.id,
+      categoryId: category.id,
+    });
+    expect(txRes.status).toBe(201);
+    const transaction = (txRes.json as any).transaction;
+    expect(transaction.amount).toBe(50000);
+
+    const listed = (dispatchLocal("GET", "/api/transactions").json as any).transactions;
+    expect(listed[0].category.id).toBe(category.id); // GET list attaches relations, unlike POST's response
+  });
+
+  it("wires habits, activities, events, installments, assets, settings, notifications, and dashboard end-to-end", () => {
+    // Habits: create, check in, log a duration.
+    const habit = (dispatchLocal("POST", "/api/habits", { title: "مطالعه" }).json as any).habit;
+    const checkin = dispatchLocal("POST", `/api/habits/${habit.id}/checkin`).json as any;
+    expect(checkin.checkedIn).toBe(true);
+    const duration = dispatchLocal("PATCH", `/api/habits/${habit.id}/checkin`, { durationMin: 20 }).json as any;
+    expect(duration.checkIn.durationMin).toBe(20);
+    expect((dispatchLocal("GET", "/api/habits").json as any).habits[0].checkedInToday).toBe(true);
+
+    // Activities: create, start/stop a timer.
+    const activity = (dispatchLocal("POST", "/api/activities", { title: "کدنویسی" }).json as any).activity;
+    dispatchLocal("POST", `/api/activities/${activity.id}/timer/start`);
+    const stopped = dispatchLocal("POST", `/api/activities/${activity.id}/timer/stop`).json as any;
+    expect(stopped.activity.totalDurationMin).toBeGreaterThanOrEqual(0);
+
+    // Events: create, complete an occurrence.
+    const event = (
+      dispatchLocal("POST", "/api/events", {
+        title: "جلسه",
+        startAt: "2026-05-01T08:00:00.000Z",
+        endAt: "2026-05-01T09:00:00.000Z",
+      }).json as any
+    ).event;
+    const completed = dispatchLocal("POST", `/api/events/${event.id}/complete`, { occurrenceDate: "2026-05-01T08:00:00.000Z" }).json as any;
+    expect(completed.isDone).toBe(true);
+
+    // Installments + Assets.
+    const account = (dispatchLocal("POST", "/api/accounts", { name: "نقد" }).json as any).account;
+    const plan = (
+      dispatchLocal("POST", "/api/installment-plans", {
+        title: "وام",
+        totalAmount: 1000000,
+        installmentAmount: 1000000,
+        numberOfInstallments: 1,
+        dueDay: 1,
+      }).json as any
+    ).plan;
+    const paid = dispatchLocal("POST", `/api/installments/${plan.installments[0].id}/pay`, { accountId: account.id }).json as any;
+    expect(paid.installment.status).toBe("PAID");
+
+    const asset = (dispatchLocal("POST", "/api/assets", { name: "ماشین", purchasePrice: 100000000 }).json as any).asset;
+    expect(asset.currentValue).toBe(100000000);
+
+    // Settings.
+    const settingsRes = dispatchLocal("PATCH", "/api/settings", { monthlyIncome: 50000000, workingHoursMonth: 160 }).json as any;
+    expect(settingsRes.hourlyValue).toBeGreaterThan(0);
+
+    // Notifications: at least does not throw, returns an envelope.
+    expect((dispatchLocal("GET", "/api/notifications").json as any).notifications).toBeInstanceOf(Array);
+
+    // Search finds the activity we created (search covers Task/Activity/Event/Transaction/
+    // Asset/Project/Category — Habit was never in scope on the web route either).
+    const searchResults = (dispatchLocal("GET", "/api/search?q=کدنویسی").json as any).results;
+    expect(searchResults.some((r: any) => r.id === activity.id)).toBe(true);
+
+    // Dashboard composes everything without throwing.
+    const dashboard = dispatchLocal("GET", "/api/dashboard").json as any;
+    expect(dashboard.netWorth).toBeDefined();
+    expect(dashboard.today).toBeDefined();
+  });
 });
