@@ -1,26 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
-import { TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
-
-const createSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
-  status: z.enum(TASK_STATUSES).optional(),
-  dueDate: z.string().datetime().optional(),
-  categoryId: z.string().optional(),
-  projectId: z.string().optional(),
-  estimatedCost: z.number().int().min(0).optional(),
-  valueType: z.enum(VALUE_TYPES).optional(),
-  directCost: z.number().int().min(0).optional(),
-  incomeAmount: z.number().int().min(0).optional(),
-  startAt: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
-});
+import { createTaskSchema } from "@/lib/schemas/tasks";
 
 export async function GET(req: NextRequest) {
   try {
@@ -48,7 +32,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
-    const body = createSchema.parse(await req.json());
+    const body = createTaskSchema.parse(await req.json());
 
     const task = await prisma.task.create({
       data: {

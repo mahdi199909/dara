@@ -1,26 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
-import { TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
-
-const updateSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().max(2000).nullable().optional(),
-  status: z.enum(TASK_STATUSES).optional(),
-  dueDate: z.string().datetime().nullable().optional(),
-  categoryId: z.string().nullable().optional(),
-  projectId: z.string().nullable().optional(),
-  estimatedCost: z.number().int().min(0).nullable().optional(),
-  valueType: z.enum(VALUE_TYPES).optional(),
-  directCost: z.number().int().min(0).optional(),
-  incomeAmount: z.number().int().min(0).optional(),
-  startAt: z.string().datetime().nullable().optional(),
-  endAt: z.string().datetime().nullable().optional(),
-});
+import { updateTaskSchema } from "@/lib/schemas/tasks";
 
 async function getOwned(userId: string, id: string) {
   const task = await prisma.task.findFirst({ where: { id, userId, deletedAt: null } });
@@ -32,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
-    const body = updateSchema.parse(await req.json());
+    const body = updateTaskSchema.parse(await req.json());
 
     const wasDone = existing.status === "DONE";
     const willBeDone = body.status === "DONE";
