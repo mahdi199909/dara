@@ -1,0 +1,47 @@
+name: Build Android APK
+
+# Manually triggered from the Actions tab (or `gh workflow run build-android.yml`) — this
+# builds a debug APK you can download and install directly. No GitHub Secrets are required:
+# scripts/build-android.mjs strips out everything (API routes, middleware) that would need a
+# real DATABASE_URL/JWT_SECRET at runtime, so the placeholder values below only need to satisfy
+# `prisma generate`'s schema validation at build time, never a live connection.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "file:./dev.db"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build the static web export (Android variant)
+        run: npm run build:android
+
+      - name: Sync the Capacitor native project
+        run: npx cap sync android
+
+      - name: Build the debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dara-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
