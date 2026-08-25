@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AuthError } from "./auth";
+import { ApiError } from "./apiErrorBase";
+
+export { ApiError } from "./apiErrorBase";
 
 export function handleApiError(err: unknown): NextResponse {
   if (err instanceof AuthError) {
@@ -17,12 +20,4 @@ export function handleApiError(err: unknown): NextResponse {
   }
   console.error(err);
   return NextResponse.json({ error: "خطایی رخ داد. دوباره تلاش کنید." }, { status: 500 });
-}
-
-export class ApiError extends Error {
-  status: number;
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
 }

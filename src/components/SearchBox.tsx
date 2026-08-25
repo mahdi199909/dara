@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { fetcher } from "@/lib/apiClient";
 import { SearchIcon, XIcon } from "./icons";
 
 export default function SearchBox() {
@@ -17,8 +18,7 @@ export default function SearchBox() {
     }
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
+      const data = await fetcher<{ results?: any[] }>(`/api/search?q=${encodeURIComponent(q)}`);
       setResults(data.results ?? []);
     }, 250);
   }, [q]);

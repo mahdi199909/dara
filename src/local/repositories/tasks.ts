@@ -7,10 +7,11 @@
 // syncTaskVirtualAsset (see @/lib/directCostSync). Those need local Transaction and
 // VirtualAssetEntry repositories, which are Phase 4's job — porting them here would mean
 // half-building two other resources before this vertical slice is even done.
-import { ApiError } from "@/lib/apiError";
+import { ApiError } from "@/lib/apiErrorBase";
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/schemas/tasks";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
+import { fetchByIds } from "../relations";
 
 interface TaskRow {
   id: string;
@@ -34,17 +35,8 @@ interface TaskRow {
 }
 
 function attachRelations(db: LocalDb, rows: TaskRow[]) {
-  const categoryIds = [...new Set(rows.map((r) => r.categoryId).filter((v): v is string => v !== null))];
-  const projectIds = [...new Set(rows.map((r) => r.projectId).filter((v): v is string => v !== null))];
-
-  const categories = categoryIds.length
-    ? db.all<Record<string, unknown>>(`SELECT * FROM "Category" WHERE "id" IN (${categoryIds.map(() => "?").join(",")})`, categoryIds)
-    : [];
-  const projects = projectIds.length
-    ? db.all<Record<string, unknown>>(`SELECT * FROM "Project" WHERE "id" IN (${projectIds.map(() => "?").join(",")})`, projectIds)
-    : [];
-  const categoryById = new Map(categories.map((c) => [c.id as string, c]));
-  const projectById = new Map(projects.map((p) => [p.id as string, p]));
+  const categoryById = fetchByIds<{ id: string }>(db, "Category", rows.map((r) => r.categoryId));
+  const projectById = fetchByIds<{ id: string }>(db, "Project", rows.map((r) => r.projectId));
 
   return rows.map((row) => ({
     ...row,

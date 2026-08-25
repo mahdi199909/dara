@@ -1,12 +1,13 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { openLocalDb, resetLocalDbForTests } from "../db";
+import { createNodeSqliteDriver } from "../drivers/nodeSqlite";
 import { createTask, deleteTask, listTasks, updateTask } from "./tasks";
 
 const USER_ID = "user_test_1";
 
 function freshDb() {
   resetLocalDbForTests();
-  const db = openLocalDb(":memory:");
+  const db = openLocalDb(createNodeSqliteDriver(":memory:"));
   db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
     USER_ID,
     "test@example.com",
