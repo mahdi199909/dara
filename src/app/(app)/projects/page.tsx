@@ -54,7 +54,7 @@ export default function ProjectsPage() {
 
       <div className="grid sm:grid-cols-2 gap-3">
         {data?.projects.map((p) => (
-          <Link key={p.id} href={`/projects/${p.id}`}>
+          <Link key={p.id} href={`/projects/detail?id=${p.id}`}>
             <Card className="p-4 h-full hover:shadow-md transition">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-gray-800">{p.name}</h3>

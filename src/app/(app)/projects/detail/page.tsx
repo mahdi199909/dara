@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import useSWR from "swr";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { fetcher, apiPatch } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
 import { formatDuration } from "@/lib/money";
@@ -11,9 +11,22 @@ import { TASK_STATUS_LABELS, PROJECT_STATUS_LABELS, type TaskStatus, type Projec
 import { CheckSquareIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 
+// A query param (?id=...) rather than a /projects/[id] dynamic segment on purpose: the Android
+// build statically exports every page (no server at runtime to resolve an arbitrary id), which
+// requires generateStaticParams() up front for any dynamic segment — impossible here since
+// project ids are created on-device, long after the app is built. A plain query param needs no
+// build-time knowledge of which ids exist, so the exact same file works for both targets.
 export default function ProjectDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const { data, mutate } = useSWR<any>(`/api/projects/${id}`, fetcher);
+  return (
+    <Suspense fallback={null}>
+      <ProjectDetailContent />
+    </Suspense>
+  );
+}
+
+function ProjectDetailContent() {
+  const id = useSearchParams().get("id");
+  const { data, mutate } = useSWR<any>(id ? `/api/projects/${id}` : null, fetcher);
   const [completing, setCompleting] = useState(false);
   const { format } = useCurrencyUnit();
 

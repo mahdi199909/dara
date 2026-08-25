@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         href: `/finance?highlight=${t.id}`,
       })),
       ...assets.map((a) => ({ type: "Asset", id: a.id, title: a.name, href: `/assets?highlight=${a.id}` })),
-      ...projects.map((p) => ({ type: "Project", id: p.id, title: p.name, href: `/projects/${p.id}` })),
+      ...projects.map((p) => ({ type: "Project", id: p.id, title: p.name, href: `/projects/detail?id=${p.id}` })),
       ...categories.map((c) => ({ type: "Category", id: c.id, title: c.name, href: `/settings?tab=categories` })),
     ];
 

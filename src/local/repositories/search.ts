@@ -49,7 +49,7 @@ export function search(db: LocalDb, userId: string, q: string | undefined): Sear
     ...events.map((e) => ({ type: "Event", id: e.id, title: e.title, href: `/calendar?highlight=${e.id}` })),
     ...transactions.map((t) => ({ type: "Transaction", id: t.id, title: t.description || "تراکنش", href: `/finance?highlight=${t.id}` })),
     ...assets.map((a) => ({ type: "Asset", id: a.id, title: a.name, href: `/assets?highlight=${a.id}` })),
-    ...projects.map((p) => ({ type: "Project", id: p.id, title: p.name, href: `/projects/${p.id}` })),
+    ...projects.map((p) => ({ type: "Project", id: p.id, title: p.name, href: `/projects/detail?id=${p.id}` })),
     ...categories.map((c) => ({ type: "Category", id: c.id, title: c.name, href: `/settings?tab=categories` })),
   ];
 }
