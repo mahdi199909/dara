@@ -25,6 +25,7 @@ import * as searchRepo from "@/local/repositories/search";
 import * as exportRepo from "@/local/repositories/export";
 import * as quickCaptureRepo from "@/local/repositories/quickCapture";
 import * as dashboardRepo from "@/local/repositories/dashboard";
+import * as licenseCacheRepo from "@/local/repositories/licenseCache";
 import { createTaskSchema, updateTaskSchema } from "@/lib/schemas/tasks";
 import { createCategorySchema, updateCategorySchema } from "@/lib/schemas/categories";
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
@@ -243,6 +244,14 @@ register("GET", "/api/export/:entity", ({ db, userId, params }) => exportRepo.ex
 register("POST", "/api/quick-capture", ({ db, userId, body }) => quickCaptureRepo.quickCapture(db, userId, body as any), 201);
 
 register("GET", "/api/dashboard", ({ db, userId }) => dashboardRepo.getDashboard(db, userId));
+
+// --- Local-only: the one-time remote login/license cache (see src/lib/nativeOnboarding.ts) ---
+// Not a mirror of any web route — this is Android-only bookkeeping, so there's no shared
+// zod schema and no "byte-identical to the web route" requirement the way every route above has.
+register("GET", "/api/local/license-cache", ({ db }) => ({ license: licenseCacheRepo.getLicenseCache(db) }));
+register("POST", "/api/local/license-cache", ({ db, body }) => ({
+  license: licenseCacheRepo.setLicenseCache(db, body as licenseCacheRepo.LicenseCache),
+}));
 
 // -----------------------------------------------------------------------------------------
 

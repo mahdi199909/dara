@@ -21,14 +21,31 @@ export interface LocalDb {
 function bootstrap(db: LocalDb) {
   db.execute(`CREATE TABLE IF NOT EXISTS "_local_migrations" ("name" TEXT NOT NULL PRIMARY KEY, "appliedAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`);
   const applied = new Set(db.all<{ name: string }>(`SELECT "name" FROM "_local_migrations"`).map((r) => r.name));
-  if (applied.size === LOCAL_SCHEMA_MIGRATIONS.length) return; // already fully bootstrapped
-
-  db.execute("PRAGMA foreign_keys = OFF;"); // migration.sql files aren't written in FK-safe order for a single-shot replay
-  db.execute(LOCAL_SCHEMA_SQL);
-  db.execute("PRAGMA foreign_keys = ON;");
-  for (const name of LOCAL_SCHEMA_MIGRATIONS) {
-    db.run(`INSERT OR IGNORE INTO "_local_migrations" ("name") VALUES (?)`, [name]);
+  if (applied.size !== LOCAL_SCHEMA_MIGRATIONS.length) {
+    db.execute("PRAGMA foreign_keys = OFF;"); // migration.sql files aren't written in FK-safe order for a single-shot replay
+    db.execute(LOCAL_SCHEMA_SQL);
+    db.execute("PRAGMA foreign_keys = ON;");
+    for (const name of LOCAL_SCHEMA_MIGRATIONS) {
+      db.run(`INSERT OR IGNORE INTO "_local_migrations" ("name") VALUES (?)`, [name]);
+    }
   }
+
+  // Local-only infrastructure table, deliberately NOT derived from prisma/schema.prisma like
+  // everything else here — it caches the one-time remote login+license check (see
+  // src/lib/nativeOnboarding.ts) and has no web-side equivalent to stay in sync with, unlike
+  // every other table in this database.
+  db.execute(
+    `CREATE TABLE IF NOT EXISTS "_local_license_cache" (
+       "id" TEXT NOT NULL PRIMARY KEY,
+       "status" TEXT NOT NULL,
+       "trialDaysRemaining" INTEGER,
+       "trialEndsAt" TEXT,
+       "currentPeriodEnd" TEXT,
+       "remoteUserId" TEXT NOT NULL,
+       "remoteEmail" TEXT NOT NULL,
+       "cachedAt" TEXT NOT NULL
+     );`
+  );
 }
 
 let instance: LocalDb | null = null;

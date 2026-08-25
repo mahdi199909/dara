@@ -45,6 +45,7 @@ model User {
   auditLogs           AuditLog[]
   notifications       Notification[]
   habits              Habit[]
+  license             License?
 }
 
 model Settings {
@@ -615,4 +616,27 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
+}
+
+// ---------------------------------------------------------------------------
+// Android app licensing (freemium: free / trial / lifetime / subscribed)
+// ---------------------------------------------------------------------------
+
+// One per user — the thin remote record the offline-first Android app checks once on first
+// login (see /api/license/status) and then trusts locally until the next refresh, since normal
+// app usage never touches this server at all (personal data stays on-device). `status` is the
+// merchant-of-record state; a lapsed TRIAL is treated as effectively FREE at *read* time in the
+// route handler rather than flipped by a background job, so this column can lag trialEndsAt
+// without anything being wrong.
+model License {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status           String    @default("TRIAL") // TRIAL | FREE | SUBSCRIBED | LIFETIME
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime? // populated once Zarinpal Payman billing exists (Android pivot Phase 8)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
