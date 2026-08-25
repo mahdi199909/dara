@@ -1,11 +1,14 @@
 name: Build Android APK
 
-# Manually triggered from the Actions tab (or `gh workflow run build-android.yml`) — this
-# builds a debug APK you can download and install directly. No GitHub Secrets are required:
-# scripts/build-android.mjs strips out everything (API routes, middleware) that would need a
-# real DATABASE_URL/JWT_SECRET at runtime, so the placeholder values below only need to satisfy
-# `prisma generate`'s schema validation at build time, never a live connection.
+# Runs on every push to master (so the very first push already produces a downloadable APK
+# with no extra manual step) and can also be re-run anytime from the Actions tab. No GitHub
+# Secrets are required: scripts/build-android.mjs strips out everything (API routes,
+# middleware) that would need a real DATABASE_URL/JWT_SECRET at runtime, so the placeholder
+# value below only needs to satisfy `prisma generate`'s schema validation at build time, never
+# a live connection.
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 jobs:
