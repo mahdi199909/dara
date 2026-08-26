@@ -40,7 +40,7 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-800">کارها</h1>
         <button

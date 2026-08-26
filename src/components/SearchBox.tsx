@@ -5,11 +5,16 @@ import Link from "next/link";
 import { fetcher } from "@/lib/apiClient";
 import { SearchIcon, XIcon } from "./icons";
 
-export default function SearchBox() {
+export default function SearchBox({ autoFocus }: { autoFocus?: boolean } = {}) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) inputRef.current?.focus();
+  }, [autoFocus]);
 
   useEffect(() => {
     if (!q.trim()) {
@@ -28,6 +33,7 @@ export default function SearchBox() {
       <div className="relative">
         <SearchIcon className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
         <input
+          ref={inputRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setOpen(true)}

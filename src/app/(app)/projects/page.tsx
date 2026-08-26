@@ -31,7 +31,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-800">پروژه‌ها</h1>
         <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700">
@@ -52,7 +52,7 @@ export default function ProjectsPage() {
         </Card>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         {data?.projects.map((p) => (
           <Link key={p.id} href={`/projects/detail?id=${p.id}`}>
             <Card className="p-4 h-full hover:shadow-md transition">

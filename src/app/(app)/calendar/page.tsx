@@ -111,46 +111,44 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="px-4 py-6 space-y-4">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-bold text-gray-800">تقویم</h1>
         <button
           onClick={() => { setSelectedDay(cursor); setEditingEvent(null); setShowForm(true); }}
-          className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700"
+          className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700 shrink-0"
         >
           <PlusIcon className="w-4 h-4" />
           رویداد جدید
         </button>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          {VIEWS.map((v) => (
-            <button
-              key={v.key}
-              onClick={() => setView(v.key)}
-              className={`text-sm px-3.5 py-1.5 rounded-full transition ${
-                view === v.key ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-500"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        {view !== "agenda" && (
-          <div className="flex items-center gap-1">
-            <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
-              <ChevronRightIcon className="w-4 h-4" />
-            </button>
-            <span className="text-sm text-gray-600 min-w-[7rem] text-center">
-              {view === "month" ? formatJalaliMonthYear(cursor) : formatJalali(cursor, { withWeekday: view === "day" })}
-            </span>
-            <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
-              <ChevronLeftIcon className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4">
+        {VIEWS.map((v) => (
+          <button
+            key={v.key}
+            onClick={() => setView(v.key)}
+            className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full transition ${
+              view === v.key ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-500"
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
       </div>
+      {view !== "agenda" && (
+        <div className="flex items-center justify-between">
+          <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 shrink-0">
+            <ChevronRightIcon className="w-4 h-4" />
+          </button>
+          <span className="text-sm text-gray-600 text-center truncate px-2">
+            {view === "month" ? formatJalaliMonthYear(cursor) : formatJalali(cursor, { withWeekday: view === "day" })}
+          </span>
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 shrink-0">
+            <ChevronLeftIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {view === "month" && (
         <Card className="p-3">
@@ -168,32 +166,26 @@ export default function CalendarPage() {
                 <button
                   key={day.toISOString()}
                   onClick={() => { setSelectedDay(day); setCursor(day); setView("day"); }}
-                  className={`aspect-square sm:aspect-auto sm:h-24 rounded-xl border p-1.5 text-right flex flex-col gap-1 ${
+                  className={`h-20 rounded-xl border p-1 text-right flex flex-col gap-0.5 ${
                     inMonth ? "bg-white border-gray-100" : "bg-gray-50 border-transparent text-gray-300"
                   } ${isToday ? "ring-2 ring-brand-400" : ""}`}
                 >
                   <span className={`text-xs ${inMonth ? "text-gray-700" : "text-gray-300"}`}>{toPersianDigits(jd)}</span>
-                  <div className="flex-1 overflow-hidden space-y-0.5 hidden sm:block">
+                  <div className="flex-1 overflow-hidden space-y-0.5 w-full">
                     {events.slice(0, 2).map((occ) => (
-                      <div key={occ.occurrenceId} className="text-[10px] bg-brand-50 text-brand-700 rounded px-1 truncate">
+                      <div key={occ.occurrenceId} className="text-[9px] leading-tight bg-brand-50 text-brand-700 rounded px-1 truncate">
                         {occ.event.title}
                       </div>
                     ))}
                     {tasks.slice(0, Math.max(0, 2 - events.length)).map((t) => (
-                      <div key={t.id} className="text-[10px] bg-amber-50 text-amber-700 rounded px-1 truncate">
+                      <div key={t.id} className="text-[9px] leading-tight bg-amber-50 text-amber-700 rounded px-1 truncate">
                         ☐ {t.title}
                       </div>
                     ))}
                     {events.length + tasks.length > 2 && (
-                      <div className="text-[10px] text-gray-400">+{toPersianDigits(events.length + tasks.length - 2)}</div>
+                      <div className="text-[9px] text-gray-400 px-1">+{toPersianDigits(events.length + tasks.length - 2)}</div>
                     )}
                   </div>
-                  {(events.length > 0 || tasks.length > 0) && (
-                    <div className="sm:hidden flex gap-0.5 self-end">
-                      {events.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-brand-500" />}
-                      {tasks.length > 0 && <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                    </div>
-                  )}
                 </button>
               );
             })}
@@ -202,7 +194,7 @@ export default function CalendarPage() {
       )}
 
       {view === "week" && (
-        <div className="grid grid-cols-1 sm:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {Array.from({ length: 7 }, (_, i) => {
             const day = new Date(range.from.getTime() + i * 86400000);
             const events = occurrencesByDay.get(dayKey(day)) ?? [];

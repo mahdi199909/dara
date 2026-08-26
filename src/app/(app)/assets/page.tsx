@@ -29,10 +29,10 @@ export default function AssetsPage() {
   const virtualTotal = vaData?.total ?? 0;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <h1 className="text-lg font-bold text-gray-800">دارایی‌ها</h1>
 
-      <div className="grid sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <Card className="p-4">
           <StatItem label="دارایی واقعی" value={format(realTotal, { withSuffix: true })} />
         </Card>
@@ -58,7 +58,7 @@ export default function AssetsPage() {
 
         {showForm && <NewAssetForm onDone={() => { setShowForm(false); mutateAssets(); }} />}
 
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {assetsData?.assets.map((a) => (
             <Card key={a.id} className="p-4">
               <p className="font-bold text-gray-800">{a.name}</p>
@@ -101,7 +101,7 @@ export default function AssetsPage() {
           <p className="text-xs text-gray-400 -mt-2">
             با اتمام یک پروژه، هزینه واقعی (مستقیم + زمانی) صرف‌شده روی آن به‌عنوان یک دارایی مجزا ثبت می‌شود.
           </p>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {vaData.projectEntries.map((e: any) => (
               <Card key={e.id} className="p-4">
                 <p className="font-bold text-gray-800">{e.project?.name}</p>

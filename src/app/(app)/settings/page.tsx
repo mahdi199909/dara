@@ -39,7 +39,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("personal");
 
   return (
-    <div className="max-w-2xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <h1 className="text-lg font-bold text-gray-800">تنظیمات</h1>
 
       <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">

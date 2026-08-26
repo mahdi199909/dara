@@ -48,7 +48,7 @@ export default function ReportsPage() {
   const timeColors = ["#2c7166", "#57a89c", "#b0a24a", "#c95a4c", "#8a7ac9", "#8a8a8a"];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-800">گزارش‌ها</h1>
         <div className="flex gap-2">
@@ -100,7 +100,7 @@ export default function ReportsPage() {
             <p className="text-sm text-gray-600 leading-7">{data.narrative}</p>
           </Card>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <Card className="p-5">
               <h3 className="font-bold text-gray-800 text-sm mb-3">زمان</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
@@ -391,10 +391,10 @@ function CategoryCalendarTab() {
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`aspect-square sm:aspect-auto sm:h-16 rounded-xl border p-1.5 flex flex-col items-center justify-center gap-0.5 ${
+                    className={`aspect-square rounded-xl border p-1.5 flex flex-col items-center justify-center gap-0.5 ${
                       !inMonth ? "bg-gray-50 border-transparent text-gray-300" : minutes > 0 ? "border-brand-200" : "bg-white border-gray-100"
                     }`}
-                    style={minutes > 0 ? { backgroundColor: `rgba(44, 113, 102, ${0.12 + intensity * 0.55})` } : undefined}
+                    style={minutes > 0 ? { backgroundColor: `rgba(28, 57, 187, ${0.12 + intensity * 0.55})` } : undefined}
                   >
                     <span className={`text-xs ${inMonth ? (minutes > 0 ? "text-brand-900 font-bold" : "text-gray-700") : "text-gray-300"}`}>
                       {toPersianDigits(jd)}

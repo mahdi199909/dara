@@ -21,3 +21,10 @@ export const NAV_ITEMS = [
   { href: "/projects", label: "پروژه‌ها", icon: FolderIcon },
   { href: "/settings", label: "تنظیمات", icon: GearIcon },
 ] as const;
+
+// The four always-visible bottom tabs — everything else in NAV_ITEMS lives behind the fifth
+// "بیشتر" tab (see BottomNav.tsx). Picked as the most frequently used sections; not just the
+// first four NAV_ITEMS entries (habits sits between tasks and finance there).
+const PRIMARY_HREFS = ["/", "/calendar", "/tasks", "/finance"] as const;
+export const PRIMARY_NAV_ITEMS = PRIMARY_HREFS.map((href) => NAV_ITEMS.find((i) => i.href === href)!);
+export const MORE_NAV_ITEMS = NAV_ITEMS.filter((i) => !(PRIMARY_HREFS as readonly string[]).includes(i.href));

@@ -45,7 +45,7 @@ function ProjectDetailContent() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -85,7 +85,7 @@ function ProjectDetailContent() {
         <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-brand-600" style={{ width: `${summary.progress}%` }} />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">
+        <div className="grid grid-cols-2 gap-4 mt-5">
           <StatItem label="زمان کل" value={formatDuration(summary.totalDurationMin)} />
           <StatItem label="هزینه مستقیم" value={format(summary.directCost, { withSuffix: true })} tone="negative" />
           <StatItem label="هزینه زمانی" value={format(summary.timeCost, { withSuffix: true })} />

@@ -125,11 +125,11 @@ export default function TimeScrollPicker({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/30"
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full sm:max-w-xs bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5"
+            className="w-full max-w-xs mx-auto bg-white rounded-t-2xl shadow-xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

@@ -44,7 +44,7 @@ export default function HabitAdherenceChart({ series, currentStreak, defaultOpen
                   labelFormatter={(v) => shortJalali(v as string)}
                   formatter={(v: number) => [`${toPersianDigits(v)}٪`, "پایبندی"]}
                 />
-                <Line type="monotone" dataKey="percent" stroke="#3a8d80" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="percent" stroke="#3947c4" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}

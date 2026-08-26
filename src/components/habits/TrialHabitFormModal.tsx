@@ -35,8 +35,8 @@ export default function TrialHabitFormModal({ onClose, onCreated }: { onClose: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-0 sm:p-4">
-      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30">
+      <div className="w-full max-w-md mx-auto bg-white rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between px-5 pt-5">
           <div>
             <h2 className="font-bold text-gray-800">عادت تستی ۳ روزه</h2>

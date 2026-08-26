@@ -22,7 +22,7 @@ export default function FinancePage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("transactions");
 
   return (
-    <div className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <h1 className="text-lg font-bold text-gray-800">مالی</h1>
 
       <div className="flex gap-2">
@@ -249,7 +249,7 @@ function AccountsTab() {
         </Card>
       )}
 
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         {data?.accounts.map((a) => (
           <Card key={a.id} className="p-4">
             <p className="text-xs text-gray-400">{ACCOUNT_TYPE_LABELS[a.type as AccountType]}</p>
@@ -308,7 +308,7 @@ function InstallmentsTab() {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <StatItem label="کل بدهی" value={format(plan.summary.totalAmount, { withSuffix: true })} />
               <StatItem label="پرداخت‌شده" value={format(plan.summary.paidAmount, { withSuffix: true })} tone="positive" />
               <StatItem label="باقی‌مانده" value={format(plan.summary.remainingAmount, { withSuffix: true })} tone="negative" />

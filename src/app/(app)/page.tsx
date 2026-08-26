@@ -52,7 +52,7 @@ export default function HomePage() {
   const activeHabits = habits.filter((h: any) => h.isActive && !h.isTrial);
 
   return (
-    <div className="max-w-lg mx-auto px-4 md:px-6 py-8 space-y-6">
+    <div className="px-4 py-8 space-y-6">
       <h1 className="text-xl font-bold text-gray-800 text-center">{greeting} 👋</h1>
 
       <Card className="p-5">

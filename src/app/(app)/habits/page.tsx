@@ -35,7 +35,7 @@ export default function HabitsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 md:px-6 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-800">عادت‌ها</h1>
         <div className="flex gap-2">
@@ -59,7 +59,7 @@ export default function HabitsPage() {
       {trialHabits.length > 0 && (
         <section className="space-y-2">
           <h2 className="font-bold text-gray-700 text-sm">عادت‌های آزمایشی (۳ روزه)</h2>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {trialHabits.map((h: any) => (
               <TrialHabitCard key={h.id} habit={h} onChanged={mutate} />
             ))}

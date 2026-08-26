@@ -34,8 +34,8 @@ export default function HabitDurationModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30" onClick={onClose}>
-      <div className="w-full sm:max-w-xs bg-white rounded-t-2xl sm:rounded-2xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-xs mx-auto bg-white rounded-t-2xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-gray-800 text-sm">چقدر روی «{habit.title}» وقت گذاشتی؟</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
