@@ -284,7 +284,11 @@ function errorResponse(err: unknown): LocalResponse {
     return { status: err.status, json: { error: err.message } };
   }
   console.error(err);
-  return { status: 500, json: { error: "خطایی رخ داد. دوباره تلاش کنید." } };
+  // `details` carries the real underlying message (not just a generic Persian string) so it can
+  // surface all the way to FirstRunGate's error display — on-device failures here (e.g. the
+  // sql.js/Capacitor Filesystem driver bootstrap) have no other way to be seen without ADB.
+  const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  return { status: 500, json: { error: "خطایی رخ داد. دوباره تلاش کنید.", details: detail } };
 }
 
 /** Routes one local "request" the same way a matching /api/* route handler would. */

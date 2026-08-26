@@ -22,6 +22,20 @@ function isNativePlatform(): boolean {
   return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
 }
 
+// Turns any thrown value into a full, readable string — including the ApiClientError.details
+// field errorResponse() in src/lib/localDispatcher.ts fills with the real exception name/message
+// for local (on-device) failures. There's no ADB/log access during this testing phase, so this
+// is the only way to see what actually broke; safe to keep permanently since it's still Persian
+// enough (the server-side Persian message stays the headline) with the raw detail parenthesized.
+function describeError(err: unknown): string {
+  if (err instanceof ApiClientError) {
+    const detail = err.details ? (typeof err.details === "string" ? err.details : JSON.stringify(err.details)) : null;
+    return detail ? `${err.message} (${detail})` : err.message;
+  }
+  if (err instanceof Error) return `خطای غیرمنتظره: ${err.name}: ${err.message}`;
+  return `خطای غیرمنتظره: ${String(err)}`;
+}
+
 export default function FirstRunGate({ children }: { children: React.ReactNode }) {
   // Both start as if native/not-ready, regardless of platform — deciding that from
   // isNativePlatform() here (a plain const, not inside useEffect) would make the very first
@@ -38,6 +52,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -58,7 +73,10 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       const license = await getCachedLicense();
       setReady(!!license);
     })()
-      .catch(() => setReady(false))
+      .catch((err) => {
+        setReady(false);
+        setBootError(describeError(err));
+      })
       .finally(() => setChecking(false));
   }, []);
 
@@ -70,7 +88,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       await completeFirstRun({ mode, name, email, password });
       setReady(true);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "خطا در ورود. دوباره تلاش کنید.");
+      setError(describeError(err));
     } finally {
       setLoading(false);
     }
@@ -86,6 +104,11 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         <p className="text-xs text-gray-400 text-center leading-relaxed">
           این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>
+        {bootError && (
+          <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2 leading-relaxed break-words" dir="ltr">
+            {bootError}
+          </p>
+        )}
         <form onSubmit={onSubmit} className="space-y-3">
           {mode === "register" && (
             <input
