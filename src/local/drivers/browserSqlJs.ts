@@ -59,8 +59,27 @@ async function writePersistedBytes(bytes: Uint8Array): Promise<void> {
   });
 }
 
+async function fetchWasmBinary(): Promise<ArrayBuffer> {
+  // sql.js's own internal loader (locateFile + its built-in fetch) has no fallback at all once
+  // that fetch fails — it swallows the real error and always throws the same generic "both
+  // async and sync fetching of the wasm failed", which is exactly what showed up testing this on
+  // a real device with no way to see why. Fetching the bytes ourselves and handing them to
+  // initSqlJs via `wasmBinary` skips that internal loader path entirely (it only re-fetches if
+  // `wasmBinary` wasn't already supplied) and — just as importantly — lets an actual failure here
+  // surface a real status code or network error instead of that one fixed string.
+  let res: Response;
+  try {
+    res = await fetch("/sql-wasm.wasm");
+  } catch (err) {
+    throw new Error(`Failed to fetch /sql-wasm.wasm: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (!res.ok) throw new Error(`Failed to fetch /sql-wasm.wasm: HTTP ${res.status}`);
+  return res.arrayBuffer();
+}
+
 export async function loadBrowserSqliteDriver(): Promise<LocalDb> {
-  const SQL: SqlJsStatic = await initSqlJs({ locateFile: (file) => `/${file}` });
+  const wasmBinary = await fetchWasmBinary();
+  const SQL: SqlJsStatic = await initSqlJs({ wasmBinary });
   const existing = await readPersistedBytes();
   const db: Database = existing ? new SQL.Database(existing) : new SQL.Database();
 
