@@ -10,7 +10,13 @@ const PUBLIC_PATHS = ["/login", "/register"];
 const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register"];
 
 async function isAuthenticated(req: NextRequest): Promise<boolean> {
-  const token = req.cookies.get(COOKIE_NAME)?.value;
+  // Falls back to `Authorization: Bearer <token>` alongside the cookie — see requireUserId in
+  // src/lib/auth.ts for why: the Android app's Capacitor WebView can't rely on a cross-origin
+  // cookie surviving to /api/license/status, so it carries the same session JWT as a bearer
+  // token instead. Without this fallback here, this middleware 401s that request before the
+  // route handler (which already accepts the header) ever runs.
+  const bearerToken = req.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
+  const token = req.cookies.get(COOKIE_NAME)?.value ?? bearerToken;
   if (!token) return false;
   try {
     await jwtVerify(token, SECRET);
@@ -31,6 +37,12 @@ export async function middleware(req: NextRequest) {
   ) {
     return NextResponse.next();
   }
+
+  // CORS preflights never carry real credentials — let them fall through to the route's own
+  // OPTIONS handler (src/lib/nativeCors.ts) so it can answer with the Access-Control-* headers
+  // the browser is actually asking for. The real request right behind it still goes through the
+  // auth check below as normal.
+  if (req.method === "OPTIONS") return NextResponse.next();
 
   const authed = await isAuthenticated(req);
 
