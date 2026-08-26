@@ -40,6 +40,18 @@ jobs:
           # anything older, so this must match.
           java-version: 21
 
+      - name: Cache the debug signing keystore
+        # Without this, every run gets a fresh CI VM with no ~/.android/debug.keystore, so
+        # Gradle's default debug signing config silently generates a NEW random key each time —
+        # every build ends up signed differently from the last. Android then refuses to install
+        # an APK over an existing install with a different signature ("App not installed"),
+        # which is invisible from here and looks like "the fix didn't take" on the phone. Caching
+        # this file keeps every build signed with the same debug key so updates install in place.
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
       - name: Build the static web export (Android variant)
         run: npm run build:android
 
