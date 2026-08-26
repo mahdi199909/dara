@@ -7,12 +7,12 @@ html {
 }
 
 body {
-  background-color: #f7f8f7;
-  color: #1c2523;
+  background-color: #f8f9fb;
+  color: #1a1d29;
 }
 
 ::selection {
-  background-color: #b0d9d3;
+  background-color: #b3bdf0;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -20,7 +20,7 @@ body {
   height: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #d7ece9;
+  background-color: #d9defa;
   border-radius: 999px;
 }
 

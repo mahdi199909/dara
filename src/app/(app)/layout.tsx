@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SWRProvider>
-      <div className="min-h-screen bg-[#f7f8f7]" dir="rtl">
+      <div className="min-h-screen bg-[#f8f9fb]" dir="rtl">
         <AppTopBar userName={user.name} />
         <main className="pb-24">{children}</main>
         <GlobalCaptureFab />

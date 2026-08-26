@@ -4,8 +4,8 @@
   "description": "سیستم‌عامل شخصی برای مدیریت زمان، وظایف و مالی",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f7f8f7",
-  "theme_color": "#2c7166",
+  "background_color": "#f8f9fb",
+  "theme_color": "#1c39bb",
   "dir": "rtl",
   "lang": "fa",
   "icons": [

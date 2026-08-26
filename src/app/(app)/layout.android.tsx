@@ -13,7 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <FirstRunGate>
       <SWRProvider>
-        <div className="min-h-screen bg-[#f7f8f7]" dir="rtl">
+        <div className="min-h-screen bg-[#f8f9fb]" dir="rtl">
           <AppTopBar userName="کاربر دارا" />
           <main className="pb-24">{children}</main>
           <GlobalCaptureFab />
