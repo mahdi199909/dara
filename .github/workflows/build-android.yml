@@ -34,7 +34,11 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          # Capacitor 8.x's Android Gradle modules (capacitor.build.gradle,
+          # capacitor-cordova-android-plugins) set sourceCompatibility/targetCompatibility
+          # to JavaVersion.VERSION_21 — javac fails with "invalid source release: 21" on
+          # anything older, so this must match.
+          java-version: 21
 
       - name: Build the static web export (Android variant)
         run: npm run build:android
