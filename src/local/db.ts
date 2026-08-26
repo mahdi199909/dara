@@ -62,3 +62,10 @@ export function openLocalDb(driver: LocalDb): LocalDb {
 export function resetLocalDbForTests() {
   instance = null;
 }
+
+/** The already-initialized driver, or null before FirstRunGate's bootstrap has run — see
+ * src/components/native/WidgetQueueDrainer.tsx, which needs the live instance on app resume
+ * rather than opening (and re-bootstrapping against) a new one. */
+export function getLocalDbInstance(): LocalDb | null {
+  return instance;
+}

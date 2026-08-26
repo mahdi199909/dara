@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/capture_scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#4D000000">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:background="@drawable/card_top_rounded"
+        android:clickable="true"
+        android:focusable="true"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_capture_title"
+            android:textColor="#1A1D29"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="14dp" />
+
+        <EditText
+            android:id="@+id/capture_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="چه کاری انجام دادی؟"
+            android:textDirection="rtl"
+            android:gravity="right"
+            android:textColorHint="#9CA3AF"
+            android:textColor="#1A1D29"
+            android:textSize="14sp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:background="@drawable/chip_unselected"
+            android:inputType="text"
+            android:imeOptions="actionDone"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="مدت زمان"
+            android:textColor="#6B7280"
+            android:textSize="12sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp" />
+
+        <LinearLayout
+            android:id="@+id/duration_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:weightSum="5">
+
+            <TextView style="@style/DurationChip" android:id="@+id/duration_05" android:text="۰.۵" android:tag="30" />
+            <TextView style="@style/DurationChip" android:id="@+id/duration_1" android:text="۱" android:tag="60" />
+            <TextView style="@style/DurationChip" android:id="@+id/duration_15" android:text="۱.۵" android:tag="90" />
+            <TextView style="@style/DurationChip" android:id="@+id/duration_2" android:text="۲" android:tag="120" />
+            <TextView style="@style/DurationChip" android:id="@+id/duration_25" android:text="۲.۵" android:tag="150" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="دسته‌بندی"
+            android:textColor="#6B7280"
+            android:textSize="12sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/category_row"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/capture_submit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="ثبت"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:paddingTop="13dp"
+            android:paddingBottom="13dp"
+            android:background="@drawable/widget_background" />
+    </LinearLayout>
+</FrameLayout>

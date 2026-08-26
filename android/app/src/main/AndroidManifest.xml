@@ -24,6 +24,25 @@
 
         </activity>
 
+        <activity
+            android:name=".QuickCaptureActivity"
+            android:theme="@style/Theme.Capture"
+            android:label="@string/widget_capture_title"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:exported="false" />
+
+        <receiver
+            android:name=".QuickCaptureWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_capture_info" />
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

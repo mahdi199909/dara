@@ -69,7 +69,17 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         import("@/local/drivers/browserSqlJs"),
         import("@/lib/localDispatcher"),
       ]);
-      setLocalDbDriver(await loadBrowserSqliteDriver());
+      const driver = await loadBrowserSqliteDriver();
+      setLocalDbDriver(driver);
+
+      // Best-effort: a stuck/malformed widget queue should never block getting into the app.
+      try {
+        const [{ drainWidgetQueue }, { getLocalUserId }] = await Promise.all([import("@/local/widgetQueue"), import("@/local/localUser")]);
+        await drainWidgetQueue(driver, getLocalUserId(driver));
+      } catch (err) {
+        console.error("widget queue drain failed", err);
+      }
+
       const license = await getCachedLicense();
       setReady(!!license);
     })()
