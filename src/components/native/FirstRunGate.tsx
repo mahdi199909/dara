@@ -4,8 +4,9 @@
 // src/lib/auth.ts / src/middleware.ts, both untouched and web-only). On first launch it shows a
 // login/register form that authenticates against the real remote deployment purely to look up
 // (or start) the user's license/trial status; the result is cached on-device, so every later
-// launch skips straight to the app. Completely inert on the web build — isNativePlatform() is
-// false there, so this renders `children` immediately and touches nothing else.
+// launch skips straight to the app. Not used by the actual web build at all — only
+// layout.android.tsx (swapped in for the Android export, see scripts/prepare-android-export.mjs)
+// renders this; the real (app)/layout.tsx never does.
 //
 // NOT wired into src/app/(app)/layout.tsx yet on purpose: that layout is a server component
 // that redirects via a cookie-based session check, which is incompatible with the static-export
@@ -22,9 +23,16 @@ function isNativePlatform(): boolean {
 }
 
 export default function FirstRunGate({ children }: { children: React.ReactNode }) {
-  const native = isNativePlatform();
-  const [checking, setChecking] = useState(native);
-  const [ready, setReady] = useState(!native);
+  // Both start as if native/not-ready, regardless of platform — deciding that from
+  // isNativePlatform() here (a plain const, not inside useEffect) would make the very first
+  // client render disagree with what the static-export build prerendered on the server (where
+  // `window` doesn't exist, so isNativePlatform() always came back false there). That mismatch
+  // is what made the web-app dashboard flash/stick above the login form on a real device instead
+  // of the gate replacing it outright: React had already committed the prerendered "ready" HTML
+  // before the client-only useEffect below ever got a chance to correct it. Only ever branch on
+  // isNativePlatform() inside the effect, which by definition never runs during that prerender.
+  const [checking, setChecking] = useState(true);
+  const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -33,7 +41,11 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!native) return;
+    if (!isNativePlatform()) {
+      setReady(true);
+      setChecking(false);
+      return;
+    }
     (async () => {
       // The on-device database driver is loaded once here, before anything (including the
       // cached-license check right below) tries to read/write local data — see
@@ -48,7 +60,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     })()
       .catch(() => setReady(false))
       .finally(() => setChecking(false));
-  }, [native]);
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
