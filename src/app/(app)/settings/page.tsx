@@ -64,6 +64,40 @@ export default function SettingsPage() {
   );
 }
 
+const LICENSE_STATUS_LABELS: Record<string, string> = {
+  TRIAL: "دوره‌ی آزمایشی رایگان",
+  FREE: "رایگان",
+  SUBSCRIBED: "مشترک",
+  LIFETIME: "اشتراک مادام‌العمر",
+};
+
+// Native-only — reads the same local license cache FirstRunGate.tsx populates on first launch.
+// Renders nothing on the web build (isNativePlatform() is false there) or before that cache read
+// resolves, so there's no layout shift for the common (web) case.
+function LicenseStatusCard() {
+  const [license, setLicense] = useState<import("@/local/repositories/licenseCache").LicenseCache | null>(null);
+
+  useEffect(() => {
+    const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    if (!native) return;
+    import("@/lib/nativeOnboarding")
+      .then(({ getCachedLicense }) => getCachedLicense())
+      .then(setLicense)
+      .catch(() => setLicense(null));
+  }, []);
+
+  if (!license) return null;
+
+  return (
+    <Card className="p-4">
+      <div className="text-sm font-medium text-gray-700">{LICENSE_STATUS_LABELS[license.status] ?? license.status}</div>
+      {license.status === "TRIAL" && license.trialDaysRemaining != null && (
+        <div className="text-xs text-gray-400 mt-1">{license.trialDaysRemaining} روز از دوره‌ی رایگان باقی مانده</div>
+      )}
+    </Card>
+  );
+}
+
 function PersonalTab() {
   const { data, mutate } = useSWR<any>("/api/settings", fetcher);
   const [name, setName] = useState("");
@@ -86,7 +120,9 @@ function PersonalTab() {
   }
 
   return (
-    <Card className="p-5 space-y-4">
+    <div className="space-y-4">
+      <LicenseStatusCard />
+      <Card className="p-5 space-y-4">
       <div>
         <label className="block text-sm text-gray-600 mb-1">نام</label>
         <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
@@ -119,7 +155,8 @@ function PersonalTab() {
       <button onClick={save} className="rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700">
         {saved ? "ذخیره شد ✓" : "ذخیره"}
       </button>
-    </Card>
+      </Card>
+    </div>
   );
 }
 
