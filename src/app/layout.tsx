@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   title: "دارا",
   description: "سیستم‌عامل شخصی برای مدیریت زمان، وظایف و مالی",
   manifest: "/manifest.json",
+  icons: { icon: "/icon.png", apple: "/icon.png" },
 };
 
 export const viewport: Viewport = {

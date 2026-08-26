@@ -68,7 +68,8 @@ export default function BottomNav({ userName }: { userName: string }) {
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-2">
               <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 flex items-center justify-center rounded-xl bg-brand-600 text-white font-bold text-sm">د</div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/icon.png" alt="دارا" className="h-8 w-8 rounded-xl" />
                 <p className="text-xs text-gray-400">{userName}</p>
               </div>
               <button onClick={() => setMoreOpen(false)} className="p-1.5 text-gray-400 hover:text-gray-600" aria-label="بستن">
