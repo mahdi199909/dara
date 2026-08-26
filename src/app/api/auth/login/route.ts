@@ -6,11 +6,16 @@ import { createSessionToken, setSessionCookie } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { corsPreflight, withCors } from "@/lib/nativeCors";
 
 const schema = z.object({
   email: z.string().email("ایمیل نامعتبر است."),
   password: z.string().min(1, "رمز عبور الزامی است."),
 });
+
+export async function OPTIONS() {
+  return corsPreflight();
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,8 +45,10 @@ export async function POST(req: NextRequest) {
       userAgent,
     });
 
-    return NextResponse.json({ id: user.id, name: user.name, email: user.email });
+    // `token` lets the Android app carry this session as a bearer token (see requireUserId) —
+    // the web frontend already has it via the Set-Cookie header above and simply ignores this field.
+    return withCors(NextResponse.json({ id: user.id, name: user.name, email: user.email, token }));
   } catch (err) {
-    return handleApiError(err);
+    return withCors(handleApiError(err));
   }
 }

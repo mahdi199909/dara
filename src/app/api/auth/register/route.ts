@@ -6,12 +6,17 @@ import { createSessionToken, setSessionCookie } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { seedDefaultCategoriesForUser } from "@/lib/defaults";
+import { corsPreflight, withCors } from "@/lib/nativeCors";
 
 const schema = z.object({
   name: z.string().min(1, "نام الزامی است.").max(100),
   email: z.string().email("ایمیل نامعتبر است."),
   password: z.string().min(6, "رمز عبور باید حداقل ۶ کاراکتر باشد."),
 });
+
+export async function OPTIONS() {
+  return corsPreflight();
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,8 +51,8 @@ export async function POST(req: NextRequest) {
     const token = await createSessionToken({ userId: user.id, email: user.email });
     await setSessionCookie(token);
 
-    return NextResponse.json({ id: user.id, name: user.name, email: user.email });
+    return withCors(NextResponse.json({ id: user.id, name: user.name, email: user.email, token }));
   } catch (err) {
-    return handleApiError(err);
+    return withCors(handleApiError(err));
   }
 }

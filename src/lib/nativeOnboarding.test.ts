@@ -30,7 +30,7 @@ describe("nativeOnboarding", () => {
     const calls: string[] = [];
     vi.mocked(remoteLogin).mockImplementation(async () => {
       calls.push("login");
-      return { id: "user_1", name: "Ali", email: "a@example.com" };
+      return { user: { id: "user_1", name: "Ali", email: "a@example.com" }, token: "jwt-1" };
     });
     vi.mocked(fetchRemoteLicenseStatus).mockImplementation(async () => {
       calls.push("status");
@@ -45,6 +45,7 @@ describe("nativeOnboarding", () => {
 
     expect(calls).toEqual(["login", "status", "cache"]);
     expect(remoteLogin).toHaveBeenCalledWith("a@example.com", "secret");
+    expect(fetchRemoteLicenseStatus).toHaveBeenCalledWith("jwt-1");
     expect(remoteRegister).not.toHaveBeenCalled();
     expect(apiPost).toHaveBeenCalledWith("/api/local/license-cache", {
       status: "TRIAL",
@@ -58,7 +59,7 @@ describe("nativeOnboarding", () => {
   });
 
   it("completeFirstRun calls remoteRegister instead of remoteLogin when mode is 'register'", async () => {
-    vi.mocked(remoteRegister).mockResolvedValue({ id: "user_2", name: "Sara", email: "s@example.com" });
+    vi.mocked(remoteRegister).mockResolvedValue({ user: { id: "user_2", name: "Sara", email: "s@example.com" }, token: "jwt-2" });
     vi.mocked(fetchRemoteLicenseStatus).mockResolvedValue({ status: "TRIAL", trialDaysRemaining: 30, trialEndsAt: null, currentPeriodEnd: null });
     vi.mocked(apiPost).mockResolvedValue({ license: { status: "TRIAL" } });
 

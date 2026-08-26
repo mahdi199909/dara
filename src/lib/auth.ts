@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
+import type { NextRequest } from "next/server";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "hesabkon_session";
 const SECRET = new TextEncoder().encode(
@@ -55,9 +56,18 @@ export async function getCurrentUser() {
   return user;
 }
 
-/** Route Handler helper: returns userId or throws a 401-friendly error. */
-export async function requireUserId(): Promise<string> {
-  const token = cookies().get(COOKIE_NAME)?.value;
+/**
+ * Route Handler helper: returns userId or throws a 401-friendly error. Accepts an optional
+ * `req` so callers reachable cross-origin from the Android app (see src/lib/nativeCors.ts) can
+ * also authenticate via `Authorization: Bearer <token>` — the session cookie itself can't cross
+ * from a Capacitor WebView origin to this deployment (SameSite), so the native app carries the
+ * same session JWT as a bearer token instead. Web callers never send this header; cookie auth
+ * is unaffected.
+ */
+export async function requireUserId(req?: NextRequest): Promise<string> {
+  const cookieToken = cookies().get(COOKIE_NAME)?.value;
+  const bearerToken = req?.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
+  const token = cookieToken ?? bearerToken;
   if (!token) throw new AuthError();
   const payload = await verifySessionToken(token);
   if (!payload) throw new AuthError();

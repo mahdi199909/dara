@@ -20,10 +20,10 @@ export interface FirstRunInput {
 }
 
 export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCache> {
-  const user =
+  const { user, token } =
     input.mode === "register" ? await remoteRegister(input.name ?? "", input.email, input.password) : await remoteLogin(input.email, input.password);
 
-  const status = await fetchRemoteLicenseStatus();
+  const status = await fetchRemoteLicenseStatus(token);
 
   const { license } = await apiPost<{ license: LicenseCache }>("/api/local/license-cache", {
     status: status.status,

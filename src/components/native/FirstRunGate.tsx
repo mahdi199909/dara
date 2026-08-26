@@ -34,8 +34,18 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (!native) return;
-    getCachedLicense()
-      .then((license) => setReady(!!license))
+    (async () => {
+      // The on-device database driver is loaded once here, before anything (including the
+      // cached-license check right below) tries to read/write local data — see
+      // src/local/drivers/browserSqlJs.ts and setLocalDbDriver in src/lib/localDispatcher.ts.
+      const [{ loadBrowserSqliteDriver }, { setLocalDbDriver }] = await Promise.all([
+        import("@/local/drivers/browserSqlJs"),
+        import("@/lib/localDispatcher"),
+      ]);
+      setLocalDbDriver(await loadBrowserSqliteDriver());
+      const license = await getCachedLicense();
+      setReady(!!license);
+    })()
       .catch(() => setReady(false))
       .finally(() => setChecking(false));
   }, [native]);

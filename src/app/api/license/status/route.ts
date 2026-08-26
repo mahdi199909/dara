@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
+import { corsPreflight, withCors } from "@/lib/nativeCors";
 import type { NextRequest } from "next/server";
 
 // First login on any device (web or Android) starts the user's one-time free trial — see the
@@ -22,9 +23,13 @@ export type LicenseStatus = "TRIAL" | "FREE" | "SUBSCRIBED" | "LIFETIME";
  * stored License.status may still literally say "TRIAL" until the user's next login re-derives
  * it — there's no background job flipping that column, by design.
  */
+export async function OPTIONS() {
+  return corsPreflight();
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const userId = await requireUserId();
+    const userId = await requireUserId(req);
 
     let license = await prisma.license.findUnique({ where: { userId } });
     if (!license) {
@@ -58,13 +63,15 @@ export async function GET(req: NextRequest) {
       status = "FREE";
     }
 
-    return NextResponse.json({
-      status,
-      trialDaysRemaining,
-      trialEndsAt: license.trialEndsAt,
-      currentPeriodEnd: license.currentPeriodEnd,
-    });
+    return withCors(
+      NextResponse.json({
+        status,
+        trialDaysRemaining,
+        trialEndsAt: license.trialEndsAt,
+        currentPeriodEnd: license.currentPeriodEnd,
+      })
+    );
   } catch (err) {
-    return handleApiError(err);
+    return withCors(handleApiError(err));
   }
 }

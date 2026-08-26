@@ -1,12 +1,12 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetLocalDbForTests } from "@/local/db";
 import { createNodeSqliteDriver } from "@/local/drivers/nodeSqlite";
-import { dispatchLocal, setLocalDbDriverForTests } from "./localDispatcher";
+import { dispatchLocal, setLocalDbDriver } from "./localDispatcher";
 
 describe("localDispatcher", () => {
   beforeEach(async () => {
     resetLocalDbForTests();
-    setLocalDbDriverForTests(await createNodeSqliteDriver(":memory:"));
+    setLocalDbDriver(await createNodeSqliteDriver(":memory:"));
   });
 
   it("creates and lists a task with the same JSON shape the web route returns", () => {

@@ -11,6 +11,7 @@
 // in a normal dev session doesn't wipe out every API route.
 import { existsSync, rmSync, copyFileSync } from "node:fs";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 
 if (process.env.ANDROID_EXPORT_BUILD !== "1") {
   console.error(
@@ -40,3 +41,13 @@ if (!existsSync(androidLayout)) {
 }
 copyFileSync(androidLayout, webLayout);
 console.log("Replaced src/app/(app)/layout.tsx with the native-safe layout.android.tsx.");
+
+// src/local/drivers/browserSqlJs.ts loads this at runtime via a plain "/sql-wasm.wasm" fetch —
+// Next only serves files placed under public/ at that path, so copy it in fresh from
+// node_modules on every export build rather than committing a copy that could drift from the
+// installed sql.js version.
+const require = createRequire(import.meta.url);
+const wasmSource = require.resolve("sql.js/dist/sql-wasm.wasm");
+const wasmDest = join(root, "public/sql-wasm.wasm");
+copyFileSync(wasmSource, wasmDest);
+console.log("Copied sql-wasm.wasm into public/ for the on-device database driver.");

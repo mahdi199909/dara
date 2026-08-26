@@ -256,15 +256,19 @@ register("POST", "/api/local/license-cache", ({ db, body }) => ({
 // -----------------------------------------------------------------------------------------
 
 let driverOverride: LocalDb | null = null;
-/** Test-only: point the dispatcher at a specific driver (e.g. an in-memory node-sqlite one) instead of the real on-device driver. */
-export function setLocalDbDriverForTests(driver: LocalDb) {
+/**
+ * Registers the driver dispatchLocal() will use. Tests point this at an in-memory node-sqlite
+ * driver; on a real device, src/components/native/FirstRunGate.tsx calls this once at app
+ * startup with the sql.js-in-WebView driver (src/local/drivers/browserSqlJs.ts) before anything
+ * else tries to read/write local data.
+ */
+export function setLocalDbDriver(driver: LocalDb) {
   driverOverride = driver;
 }
 
 function resolveDriver(): LocalDb {
   if (driverOverride) return driverOverride;
-  // The real Capacitor-SQLite-backed driver gets wired in here in Phase 6.
-  throw new Error("Local database driver not configured — this should only run inside the Capacitor Android shell.");
+  throw new Error("Local database driver not configured — setLocalDbDriver() must run before any local request.");
 }
 
 export interface LocalResponse {

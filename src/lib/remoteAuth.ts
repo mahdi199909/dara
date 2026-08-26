@@ -32,22 +32,31 @@ export interface RemoteUser {
   email: string;
 }
 
-export function remoteLogin(email: string, password: string): Promise<RemoteUser> {
-  return fetch(`${REMOTE_API_BASE}/api/auth/login`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  }).then((res) => handle<RemoteUser>(res));
+// Login/register return the session JWT in the body (not just a cookie) specifically for this
+// native flow: a SameSite=Lax cookie set by a cross-origin response never gets attached to the
+// Capacitor WebView's follow-up cross-origin request, so the app carries this token explicitly
+// as an Authorization header instead (see requireUserId in src/lib/auth.ts).
+export interface RemoteAuthResult {
+  user: RemoteUser;
+  token: string;
 }
 
-export function remoteRegister(name: string, email: string, password: string): Promise<RemoteUser> {
+export function remoteLogin(email: string, password: string): Promise<RemoteAuthResult> {
+  return fetch(`${REMOTE_API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  }).then((res) => handle<{ id: string; name: string; email: string; token: string }>(res))
+    .then(({ token, ...user }) => ({ user, token }));
+}
+
+export function remoteRegister(name: string, email: string, password: string): Promise<RemoteAuthResult> {
   return fetch(`${REMOTE_API_BASE}/api/auth/register`, {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
-  }).then((res) => handle<RemoteUser>(res));
+  }).then((res) => handle<{ id: string; name: string; email: string; token: string }>(res))
+    .then(({ token, ...user }) => ({ user, token }));
 }
 
 export interface RemoteLicenseStatus {
@@ -57,7 +66,8 @@ export interface RemoteLicenseStatus {
   currentPeriodEnd: string | null;
 }
 
-/** Must be called right after remoteLogin/remoteRegister so the session cookie those set is attached. */
-export function fetchRemoteLicenseStatus(): Promise<RemoteLicenseStatus> {
-  return fetch(`${REMOTE_API_BASE}/api/license/status`, { credentials: "include" }).then((res) => handle<RemoteLicenseStatus>(res));
+export function fetchRemoteLicenseStatus(token: string): Promise<RemoteLicenseStatus> {
+  return fetch(`${REMOTE_API_BASE}/api/license/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }).then((res) => handle<RemoteLicenseStatus>(res));
 }
