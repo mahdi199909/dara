@@ -7,4 +7,7 @@
     <string name="widget_capture_title">ثبت سریع کار</string>
     <string name="widget_capture_subtitle">بدون باز کردن دارا</string>
     <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ دارا</string>
+    <string name="widget_today_events_title">رویدادهای امروز</string>
+    <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>
+    <string name="widget_today_events_description">نمایش لیست رویدادهای امروز</string>
 </resources>
