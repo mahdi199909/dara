@@ -6,9 +6,11 @@
 // local-dispatcher branching instead; this module must never be used for anything else.
 import { ApiClientError } from "./apiClient";
 
-// Overridable at build time (e.g. for a staging backend) via NEXT_PUBLIC_REMOTE_API_BASE;
-// defaults to the real production deployment.
-const REMOTE_API_BASE = process.env.NEXT_PUBLIC_REMOTE_API_BASE ?? "https://dara.mganic.ir";
+// Overridable at build time (e.g. for a staging backend) via NEXT_PUBLIC_REMOTE_API_BASE.
+// Temporarily pointed at Railway's own domain instead of dara.mganic.ir — that custom domain's
+// DNS has stopped resolving entirely (unrelated to any app code; confirmed 2026-08-26 against
+// public resolvers). Switch back to https://dara.mganic.ir once that's fixed.
+const REMOTE_API_BASE = process.env.NEXT_PUBLIC_REMOTE_API_BASE ?? "https://hesabkon-app-production.up.railway.app";
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
