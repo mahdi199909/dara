@@ -26,6 +26,16 @@ import * as exportRepo from "@/local/repositories/export";
 import * as quickCaptureRepo from "@/local/repositories/quickCapture";
 import * as dashboardRepo from "@/local/repositories/dashboard";
 import * as licenseCacheRepo from "@/local/repositories/licenseCache";
+import {
+  computeTimeAndMoneyReport,
+  computeNetWorth,
+  computeHiddenCostReport,
+  computeHabitsReport,
+  computeCategoryCalendar,
+} from "@/local/reportEngine";
+import { generateNarrative } from "@/lib/narrative";
+import { resolveRange } from "@/lib/reportRange";
+import { jalaliMonthRange, toJalali } from "@/lib/jalali";
 import { createTaskSchema, updateTaskSchema } from "@/lib/schemas/tasks";
 import { createCategorySchema, updateCategorySchema } from "@/lib/schemas/categories";
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
@@ -244,6 +254,30 @@ register("GET", "/api/export/:entity", ({ db, userId, params }) => exportRepo.ex
 register("POST", "/api/quick-capture", ({ db, userId, body }) => quickCaptureRepo.quickCapture(db, userId, body as any), 201);
 
 register("GET", "/api/dashboard", ({ db, userId }) => dashboardRepo.getDashboard(db, userId));
+
+// --- Reports -------------------------------------------------------------------------------
+// Was entirely missing until now: src/local/reportEngine.ts's compute* functions existed and
+// were unit-tested in isolation, but nothing ever routed "/api/reports"/"/api/reports/
+// category-calendar" to them, so the Reports page's useSWR calls 404'd forever on-device and
+// the page never got past "در حال بارگذاری..." — see src/app/api/reports/route.ts and
+// src/app/api/reports/category-calendar/route.ts for the web shape this mirrors.
+register("GET", "/api/reports", ({ db, userId, query }) => {
+  const { from, to, label } = resolveRange(query.get("preset"), query.get("from"), query.get("to"));
+  const report = computeTimeAndMoneyReport(db, userId, from, to);
+  const netWorth = computeNetWorth(db, userId);
+  const hiddenCost = computeHiddenCostReport(db, userId, from, to);
+  const habitsReport = computeHabitsReport(db, userId, from, to);
+  const narrative = generateNarrative(report, label);
+  return { report, netWorth, hiddenCost, habitsReport, narrative, label, from, to };
+});
+register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
+  const { jy: curJy, jm: curJm } = toJalali(new Date());
+  const jy = Number(query.get("jy") ?? curJy);
+  const jm = Number(query.get("jm") ?? curJm);
+  const { start, end } = jalaliMonthRange(jy, jm);
+  const categories = computeCategoryCalendar(db, userId, start, end);
+  return { categories, jy, jm };
+});
 
 // --- Local-only: the one-time remote login/license cache (see src/lib/nativeOnboarding.ts) ---
 // Not a mirror of any web route — this is Android-only bookkeeping, so there's no shared

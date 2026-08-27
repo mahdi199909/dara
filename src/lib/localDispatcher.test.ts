@@ -144,4 +144,31 @@ describe("localDispatcher", () => {
     expect(dashboard.netWorth).toBeDefined();
     expect(dashboard.today).toBeDefined();
   });
+
+  it("wires /api/reports and /api/reports/category-calendar through the dispatcher for every preset", () => {
+    // Regression test: these two routes were never registered at all, so the Reports page's
+    // useSWR calls 404'd forever on-device and the page never got past "در حال بارگذاری..."
+    // (see the comment above these registrations in localDispatcher.ts).
+    const category = (dispatchLocal("POST", "/api/categories", { name: "کار", kind: "PRODUCTIVE" }).json as any).category;
+    const account = (dispatchLocal("POST", "/api/accounts", { name: "نقد" }).json as any).account;
+    dispatchLocal("POST", "/api/transactions", { type: "INCOME", amount: 1000000, accountId: account.id, categoryId: category.id });
+
+    for (const preset of ["today", "week", "month", "lastMonth", "year"]) {
+      const res = dispatchLocal("GET", `/api/reports?preset=${preset}`);
+      expect(res.status).toBe(200);
+      const body = res.json as any;
+      expect(body.report).toBeDefined();
+      expect(body.netWorth).toBeDefined();
+      expect(body.hiddenCost.items).toBeInstanceOf(Array);
+      expect(body.habitsReport.habits).toBeInstanceOf(Array);
+      expect(typeof body.narrative).toBe("string");
+    }
+    // The income transaction (dated "now") should land inside every range that includes today.
+    const month = (dispatchLocal("GET", "/api/reports?preset=month").json as any).report;
+    expect(month.income).toBe(1000000);
+
+    const calendar = dispatchLocal("GET", "/api/reports/category-calendar").json as any;
+    expect(calendar.categories).toBeInstanceOf(Array);
+    expect(calendar.jy).toBeGreaterThan(1000);
+  });
 });
