@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
@@ -11,6 +11,44 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { formatTime } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
 import { ClockIcon, PlusIcon, XIcon, CheckSquareIcon } from "@/components/icons";
+
+// Native-only, and only for non-FREE license statuses (TRIAL/SUBSCRIBED/LIFETIME all count as
+// "ویژه" — trial users get the full premium feel, same as every other trial-gated feature in
+// this app). Also respects Settings' own dailyQuoteEnabled toggle. Renders nothing until every
+// check has actually resolved, rather than showing then hiding, to avoid a layout flash.
+function DailyQuoteCard() {
+  const [ready, setReady] = useState(false);
+  const [isSpecial, setIsSpecial] = useState(false);
+  const [quote, setQuote] = useState<string | null>(null);
+  const { data: settingsData } = useSWR<{ settings: { dailyQuoteEnabled: boolean } }>("/api/settings", fetcher);
+
+  useEffect(() => {
+    const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    if (!native) {
+      setReady(true);
+      return;
+    }
+    Promise.all([
+      import("@/lib/nativeOnboarding").then(({ getCachedLicense }) => getCachedLicense()),
+      import("@/lib/dailyQuote").then(({ fetchDailyQuote }) => fetchDailyQuote()),
+    ])
+      .then(([license, fetchedQuote]) => {
+        setIsSpecial(!!license && license.status !== "FREE");
+        setQuote(fetchedQuote);
+      })
+      .catch(() => {})
+      .finally(() => setReady(true));
+  }, []);
+
+  const quoteEnabled = settingsData ? settingsData.settings.dailyQuoteEnabled !== false : false;
+  if (!ready || !isSpecial || !quoteEnabled || !quote) return null;
+
+  return (
+    <Card className="p-4 bg-brand-50 border border-brand-100">
+      <p className="text-sm text-brand-700 leading-relaxed text-center">{quote}</p>
+    </Card>
+  );
+}
 
 function todayRange() {
   const now = new Date();
@@ -54,6 +92,8 @@ export default function HomePage() {
   return (
     <div className="px-4 py-8 space-y-6">
       <h1 className="text-xl font-bold text-gray-800 text-center">{greeting} 👋</h1>
+
+      <DailyQuoteCard />
 
       <Card className="p-5">
         <div className="flex items-center justify-between mb-3">

@@ -8,7 +8,7 @@
 // module sits on the import chain apiClient.ts -> localDispatcher.ts -> here. Only test files
 // import the Node driver directly; production (Phase 6) will do the same with a Capacitor
 // driver instead.
-import { LOCAL_SCHEMA_MIGRATIONS, LOCAL_SCHEMA_SQL } from "./generatedSchema";
+import { LOCAL_SCHEMA_MIGRATIONS } from "./generatedSchema";
 
 export interface LocalDb {
   run(sql: string, params?: unknown[]): { changes: number };
@@ -17,17 +17,24 @@ export interface LocalDb {
   execute(sql: string): void;
 }
 
-/** Bootstraps a fresh database (or no-ops if already bootstrapped) by replaying every Prisma migration in order — see scripts/generate-local-schema.ts. */
+/**
+ * Bootstraps a fresh database, or brings an existing one up to date, by replaying only the
+ * Prisma migrations (see scripts/generate-local-schema.ts) a given device hasn't applied yet —
+ * a fresh install applies all of them; a device upgrading from an earlier build applies just the
+ * new ones. Replaying an already-applied migration's CREATE TABLE/ALTER TABLE against a table
+ * that already exists would throw, so this must stay strictly incremental.
+ */
 function bootstrap(db: LocalDb) {
   db.execute(`CREATE TABLE IF NOT EXISTS "_local_migrations" ("name" TEXT NOT NULL PRIMARY KEY, "appliedAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`);
   const applied = new Set(db.all<{ name: string }>(`SELECT "name" FROM "_local_migrations"`).map((r) => r.name));
-  if (applied.size !== LOCAL_SCHEMA_MIGRATIONS.length) {
+  const pending = LOCAL_SCHEMA_MIGRATIONS.filter((m) => !applied.has(m.name));
+  if (pending.length > 0) {
     db.execute("PRAGMA foreign_keys = OFF;"); // migration.sql files aren't written in FK-safe order for a single-shot replay
-    db.execute(LOCAL_SCHEMA_SQL);
-    db.execute("PRAGMA foreign_keys = ON;");
-    for (const name of LOCAL_SCHEMA_MIGRATIONS) {
-      db.run(`INSERT OR IGNORE INTO "_local_migrations" ("name") VALUES (?)`, [name]);
+    for (const migration of pending) {
+      db.execute(migration.sql);
+      db.run(`INSERT OR IGNORE INTO "_local_migrations" ("name") VALUES (?)`, [migration.name]);
     }
+    db.execute("PRAGMA foreign_keys = ON;");
   }
 
   // Local-only infrastructure table, deliberately NOT derived from prisma/schema.prisma like

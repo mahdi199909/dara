@@ -65,6 +65,7 @@ model Settings {
   workingHoursMonth   Int?
   hourlyValueOverride Int?
   dashboardCardPrefs  String? // JSON: which dashboard cards are hidden
+  dailyQuoteEnabled   Boolean @default(true) // Home page's quote-of-the-day section (server-sourced, license-gated)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

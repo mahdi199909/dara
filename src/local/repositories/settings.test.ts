@@ -36,6 +36,7 @@ describe("local settings repository", () => {
     expect(settings.currency).toBe("IRT");
     expect(settings.currencyDisplayUnit).toBe("TOMAN");
     expect(settings.calendarType).toBe("jalali");
+    expect(settings.dailyQuoteEnabled).toBe(true);
     expect(user?.name).toBe("Settings Tester");
     expect(hourlyValue).toBe(0); // no monthlyIncome/workingHoursMonth/override yet
 
@@ -83,5 +84,15 @@ describe("local settings repository", () => {
     getSettings(db, USER_ID);
     const { settings } = updateSettings(db, USER_ID, { dashboardCardPrefs: { netWorth: false, habits: true } });
     expect(JSON.parse(settings.dashboardCardPrefs!)).toEqual({ netWorth: false, habits: true });
+  });
+
+  it("turns dailyQuoteEnabled off and persists it as a real boolean, not 0/1", async () => {
+    const db = await freshDb();
+    getSettings(db, USER_ID);
+    const { settings } = updateSettings(db, USER_ID, { dailyQuoteEnabled: false });
+    expect(settings.dailyQuoteEnabled).toBe(false);
+
+    const reread = getSettings(db, USER_ID);
+    expect(reread.settings.dailyQuoteEnabled).toBe(false);
   });
 });

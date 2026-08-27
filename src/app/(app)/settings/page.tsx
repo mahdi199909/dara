@@ -98,12 +98,126 @@ function LicenseStatusCard() {
   );
 }
 
+// Total price per plan, not a per-month rate — see the discount math below.
+const MEMBERSHIP_BASE_MONTHLY_PRICE = 200_000;
+const MEMBERSHIP_PLANS = [
+  { months: 1, totalPrice: 199_000, label: "یک ماهه" },
+  { months: 3, totalPrice: 299_000, label: "سه ماهه" },
+  { months: 6, totalPrice: 499_000, label: "شش ماهه" },
+  { months: 12, totalPrice: 899_000, label: "یک‌ساله" },
+] as const;
+
+// Native-only, same convention as LicenseStatusCard above. No payment gateway yet (Zarinpal
+// Payman is planned but not wired up) — this only gets the user to a manual card-to-card
+// transfer, same as how businesses in Iran commonly take کارت به کارت payments directly.
+function MembershipUpgradeCard() {
+  const [native, setNative] = useState(false);
+  const [selected, setSelected] = useState<(typeof MEMBERSHIP_PLANS)[number] | null>(null);
+  const [copied, setCopied] = useState(false);
+  const { format } = useCurrencyUnit();
+
+  useEffect(() => {
+    setNative(Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()));
+  }, []);
+
+  if (!native) return null;
+
+  const cardNumber = process.env.NEXT_PUBLIC_PAYMENT_CARD_NUMBER;
+  const contactId = process.env.NEXT_PUBLIC_PAYMENT_CONTACT_ID;
+
+  async function copyCardNumber() {
+    if (!cardNumber) return;
+    await navigator.clipboard.writeText(cardNumber);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <Card className="p-5 space-y-4">
+      <h2 className="font-bold text-gray-800 text-sm">ارتقا عضویت</h2>
+
+      {!selected ? (
+        <div className="grid grid-cols-2 gap-3">
+          {MEMBERSHIP_PLANS.map((plan) => {
+            const perMonth = plan.totalPrice / plan.months;
+            const discountPercent = Math.round((1 - perMonth / MEMBERSHIP_BASE_MONTHLY_PRICE) * 100);
+            return (
+              <button
+                key={plan.months}
+                type="button"
+                onClick={() => setSelected(plan)}
+                className="rounded-xl border border-gray-200 p-3 text-center hover:border-brand-400 hover:bg-brand-50 transition"
+              >
+                <div className="text-sm font-bold text-gray-800">{plan.label}</div>
+                <div className="text-xs text-gray-400 mt-1">{format(perMonth, { withSuffix: true })}/ماه</div>
+                <div className="text-sm font-bold text-brand-600 mt-1.5">{format(plan.totalPrice, { withSuffix: true })}</div>
+                <div className="mt-1.5 inline-block text-[11px] bg-brand-100 text-brand-700 rounded-full px-2 py-0.5">
+                  {discountPercent}٪ تخفیف نسبت به پایه
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-xl bg-brand-50 border border-brand-100 p-4 text-center space-y-1">
+            <div className="text-2xl">🎉</div>
+            <p className="text-sm font-bold text-brand-700">تبریک! پلن {selected.label} رو انتخاب کردید</p>
+            <p className="text-xs text-brand-600">یک قدم دیگه تا فعال‌سازی اشتراکتون مونده.</p>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <p className="text-gray-600">
+              مبلغ <strong>{format(selected.totalPrice, { withSuffix: true })}</strong> رو به شماره کارت زیر واریز کنید:
+            </p>
+            {cardNumber ? (
+              <div className="flex items-center gap-2">
+                <div dir="ltr" className="flex-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-center font-mono tracking-wider text-gray-800">
+                  {cardNumber}
+                </div>
+                <button
+                  type="button"
+                  onClick={copyCardNumber}
+                  className="shrink-0 text-xs bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl hover:bg-gray-200"
+                >
+                  {copied ? "کپی شد ✓" : "کپی"}
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-waste-500">
+                شماره کارت هنوز تنظیم نشده — NEXT_PUBLIC_PAYMENT_CARD_NUMBER رو در .env مقداردهی کنید.
+              </p>
+            )}
+            <p className="text-gray-600">
+              بعد از واریز، برای فعال‌سازی اشتراک به این آیدی پیام بدید:{" "}
+              {contactId ? (
+                <strong dir="ltr">{contactId}</strong>
+              ) : (
+                <span className="text-xs text-waste-500">(NEXT_PUBLIC_PAYMENT_CONTACT_ID تنظیم نشده)</span>
+              )}
+            </p>
+          </div>
+
+          <button type="button" onClick={() => setSelected(null)} className="w-full text-center text-xs text-gray-400 hover:text-gray-600">
+            بازگشت به انتخاب پلن
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function PersonalTab() {
   const { data, mutate } = useSWR<any>("/api/settings", fetcher);
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Tehran");
   const [saved, setSaved] = useState(false);
   const { unit, setUnit } = useCurrencyUnit();
+
+  async function toggleDailyQuote() {
+    await apiPatch("/api/settings", { dailyQuoteEnabled: !data.settings.dailyQuoteEnabled });
+    mutate();
+  }
 
   useEffect(() => {
     if (data) {
@@ -122,6 +236,7 @@ function PersonalTab() {
   return (
     <div className="space-y-4">
       <LicenseStatusCard />
+      <MembershipUpgradeCard />
       <Card className="p-5 space-y-4">
       <div>
         <label className="block text-sm text-gray-600 mb-1">نام</label>
@@ -152,6 +267,25 @@ function PersonalTab() {
         </p>
       </div>
       <div className="text-sm text-gray-500">تقویم: شمسی</div>
+      {data && (
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-700">نمایش جمله روز</p>
+            <p className="text-xs text-gray-400">فقط برای کاربران ویژه، در صفحه اصلی نشان داده می‌شود.</p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleDailyQuote}
+            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.dailyQuoteEnabled ? "bg-brand-500" : "bg-gray-300"}`}
+            aria-label={data.settings.dailyQuoteEnabled ? "غیرفعال کردن جمله روز" : "فعال کردن جمله روز"}
+          >
+            <span
+              className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
+              style={{ [data.settings.dailyQuoteEnabled ? "left" : "right"]: "3px" }}
+            />
+          </button>
+        </div>
+      )}
       <button onClick={save} className="rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700">
         {saved ? "ذخیره شد ✓" : "ذخیره"}
       </button>

@@ -17,6 +17,7 @@ interface SettingsRow {
   workingHoursMonth: number | null;
   hourlyValueOverride: number | null;
   dashboardCardPrefs: string | null;
+  dailyQuoteEnabled: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,9 +30,9 @@ function insertDefaultSettings(db: LocalDb, userId: string): SettingsRow {
   const id = crypto.randomUUID();
   const ts = now();
   db.run(
-    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?)`,
-    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", ts, ts]
+    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, ts, ts]
   );
   return db.get<SettingsRow>(`SELECT * FROM "Settings" WHERE "id" = ?`, [id])!;
 }
@@ -57,7 +58,9 @@ export function getSettings(db: LocalDb, userId: string) {
   const user = db.get<{ id: string; name: string; email: string }>(`SELECT "id","name","email" FROM "User" WHERE "id" = ?`, [userId]);
 
   return {
-    settings,
+    // dailyQuoteEnabled comes back from SQLite as 0/1 (no native boolean type); coerced here so
+    // the shape matches what Prisma returns for the same field on the web route.
+    settings: { ...settings, dailyQuoteEnabled: !!settings.dailyQuoteEnabled },
     user: user ?? null,
     hourlyValue: computeHourlyValue(settings),
   };
@@ -86,6 +89,7 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.monthlyIncome !== undefined) set("monthlyIncome", settingsBody.monthlyIncome);
     if (settingsBody.workingHoursMonth !== undefined) set("workingHoursMonth", settingsBody.workingHoursMonth);
     if (settingsBody.hourlyValueOverride !== undefined) set("hourlyValueOverride", settingsBody.hourlyValueOverride);
+    if (settingsBody.dailyQuoteEnabled !== undefined) set("dailyQuoteEnabled", settingsBody.dailyQuoteEnabled ? 1 : 0);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 
@@ -102,8 +106,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     const id = crypto.randomUUID();
     const ts = now();
     db.run(
-      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","createdAt","updatedAt")
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","createdAt","updatedAt")
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         userId,
@@ -114,6 +118,7 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
         settingsBody.monthlyIncome ?? null,
         settingsBody.workingHoursMonth ?? null,
         settingsBody.hourlyValueOverride ?? null,
+        settingsBody.dailyQuoteEnabled === false ? 0 : 1,
         ts,
         ts,
       ]
@@ -130,5 +135,5 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     newValue: settings,
   });
 
-  return { settings, hourlyValue: computeHourlyValue(settings) };
+  return { settings: { ...settings, dailyQuoteEnabled: !!settings.dailyQuoteEnabled }, hourlyValue: computeHourlyValue(settings) };
 }

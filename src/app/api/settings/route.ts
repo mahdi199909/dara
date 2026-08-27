@@ -17,6 +17,7 @@ const updateSchema = z.object({
   workingHoursMonth: z.number().int().min(1).max(744).nullable().optional(),
   hourlyValueOverride: z.number().int().min(0).nullable().optional(),
   dashboardCardPrefs: z.record(z.boolean()).optional(),
+  dailyQuoteEnabled: z.boolean().optional(),
 });
 
 export async function GET() {
