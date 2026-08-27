@@ -640,3 +640,22 @@ model License {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// Not tied to a User row — this exists entirely BEFORE one does, to prove the registering
+// visitor actually controls the email address they're signing up with. /api/auth/register
+// requires a matching, unexpired, unconsumed `verifiedAt` here before it will create the
+// account; /api/auth/verify-email/confirm is the only place that sets `verifiedAt`, and
+// register deletes the row once it's consumed so a code can never be replayed for a second
+// signup. One row per email — a fresh /request overwrites whatever was pending for that address.
+model EmailVerification {
+  id    String @id @default(cuid())
+  email String @unique
+
+  code       String
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  attempts   Int       @default(0) // confirm() increments on a wrong code; locked out past a small limit
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
