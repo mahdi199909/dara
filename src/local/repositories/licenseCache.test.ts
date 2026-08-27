@@ -27,6 +27,7 @@ describe("local license cache", () => {
       currentPeriodEnd: null,
       remoteUserId: "user_1",
       remoteEmail: "a@example.com",
+      token: "jwt-1",
     });
 
     const cached = getLicenseCache(db);
@@ -38,8 +39,8 @@ describe("local license cache", () => {
 
   it("overwrites the single cached row on a repeated refresh instead of inserting a second one", async () => {
     const db = await freshDb();
-    setLicenseCache(db, { status: "TRIAL", trialDaysRemaining: 30, trialEndsAt: "2026-09-24T00:00:00.000Z", currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com" });
-    setLicenseCache(db, { status: "LIFETIME", trialDaysRemaining: null, trialEndsAt: null, currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com" });
+    setLicenseCache(db, { status: "TRIAL", trialDaysRemaining: 30, trialEndsAt: "2026-09-24T00:00:00.000Z", currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" });
+    setLicenseCache(db, { status: "LIFETIME", trialDaysRemaining: null, trialEndsAt: null, currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" });
 
     expect(getLicenseCache(db)?.status).toBe("LIFETIME");
     expect(db.all(`SELECT * FROM "_local_license_cache"`)).toHaveLength(1);
@@ -47,8 +48,18 @@ describe("local license cache", () => {
 
   it("clears the cache", async () => {
     const db = await freshDb();
-    setLicenseCache(db, { status: "FREE", trialDaysRemaining: null, trialEndsAt: null, currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com" });
+    setLicenseCache(db, { status: "FREE", trialDaysRemaining: null, trialEndsAt: null, currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" });
     clearLicenseCache(db);
     expect(getLicenseCache(db)).toBeNull();
+  });
+
+  it("stores and updates the auth token, so a later re-check can reuse it", async () => {
+    const db = await freshDb();
+    setLicenseCache(db, { status: "TRIAL", trialDaysRemaining: 30, trialEndsAt: null, currentPeriodEnd: null, remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" });
+    expect(getLicenseCache(db)?.token).toBe("jwt-1");
+
+    setLicenseCache(db, { status: "SUBSCRIBED", trialDaysRemaining: null, trialEndsAt: null, currentPeriodEnd: "2026-10-24T00:00:00.000Z", remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" });
+    expect(getLicenseCache(db)?.status).toBe("SUBSCRIBED");
+    expect(getLicenseCache(db)?.token).toBe("jwt-1");
   });
 });

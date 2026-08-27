@@ -32,7 +32,38 @@ export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCac
     currentPeriodEnd: status.currentPeriodEnd,
     remoteUserId: user.id,
     remoteEmail: user.email,
+    token,
   });
 
   return license;
+}
+
+/**
+ * Best-effort re-check with the server, so trial-days-remaining (and any subscribe/lifetime
+ * upgrade made elsewhere) actually updates over time instead of being frozen at whatever
+ * completeFirstRun cached on the very first login. Called on every app open/resume — see
+ * src/components/native/FirstRunGate.tsx and WidgetQueueDrainer.tsx.
+ *
+ * Silently no-ops (keeping whatever's already cached) if there's no stored token yet (rows
+ * written before this field existed), or if the token has since expired (the 30-day session JWT
+ * — see src/lib/auth.ts) — this must never force the user back through FirstRunGate's login
+ * form just because a background refresh failed offline or with a stale token.
+ */
+export async function refreshLicenseStatus(): Promise<void> {
+  const cached = await getCachedLicense();
+  if (!cached?.token) return;
+  try {
+    const status = await fetchRemoteLicenseStatus(cached.token);
+    await apiPost("/api/local/license-cache", {
+      status: status.status,
+      trialDaysRemaining: status.trialDaysRemaining,
+      trialEndsAt: status.trialEndsAt,
+      currentPeriodEnd: status.currentPeriodEnd,
+      remoteUserId: cached.remoteUserId,
+      remoteEmail: cached.remoteEmail,
+      token: cached.token,
+    });
+  } catch {
+    // offline, server hiccup, or expired token — keep serving the last known-good cache
+  }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-// Two jobs on every app resume, both stemming from the same fact: Capacitor keeps the WebView
+// Three jobs on every app resume, all stemming from the same fact: Capacitor keeps the WebView
 // alive across a simple background/foreground cycle, so nothing re-runs FirstRunGate's one-time
 // bootstrap effect just because the user switched back to an already-running app.
 //
@@ -11,9 +11,13 @@
 //    something: revalidateOnFocus is deliberately off (see SWRProvider.tsx — it caused a request
 //    storm), so without this, reopening the app after any amount of time shows whatever was
 //    cached from before, stale, until the user happens to navigate somewhere new.
+// 3. Re-check license/trial status with the server (see nativeOnboarding.ts's own doc comment
+//    on refreshLicenseStatus) — otherwise trial-days-remaining stays frozen at whatever
+//    FirstRunGate's very first login cached, forever.
 import { useEffect } from "react";
 import { mutate } from "swr";
 import { getLocalDbInstance } from "@/local/db";
+import { refreshLicenseStatus } from "@/lib/nativeOnboarding";
 
 function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
@@ -42,6 +46,7 @@ export default function WidgetQueueDrainer() {
         }
         // Unconditional, and outside the try/catch above: a failed drain shouldn't also
         // suppress refreshing the data that WAS already there before this resume.
+        void refreshLicenseStatus();
         mutate(() => true, undefined, { revalidate: true });
       });
       remove = () => handle.remove();

@@ -12,7 +12,7 @@ vi.mock("./remoteAuth", () => ({
 
 import { fetcher, apiPost } from "./apiClient";
 import { remoteLogin, remoteRegister, fetchRemoteLicenseStatus } from "./remoteAuth";
-import { completeFirstRun, getCachedLicense } from "./nativeOnboarding";
+import { completeFirstRun, getCachedLicense, refreshLicenseStatus } from "./nativeOnboarding";
 
 describe("nativeOnboarding", () => {
   beforeEach(() => {
@@ -54,6 +54,7 @@ describe("nativeOnboarding", () => {
       currentPeriodEnd: null,
       remoteUserId: "user_1",
       remoteEmail: "a@example.com",
+      token: "jwt-1",
     });
     expect(result).toEqual({ status: "TRIAL" });
   });
@@ -75,5 +76,56 @@ describe("nativeOnboarding", () => {
     await expect(completeFirstRun({ mode: "login", email: "a@example.com", password: "wrong" })).rejects.toThrow("ایمیل یا رمز عبور اشتباه است.");
     expect(fetchRemoteLicenseStatus).not.toHaveBeenCalled();
     expect(apiPost).not.toHaveBeenCalled();
+  });
+
+  describe("refreshLicenseStatus", () => {
+    it("does nothing if there's no cached license yet", async () => {
+      vi.mocked(fetcher).mockResolvedValue({ license: null });
+      await refreshLicenseStatus();
+      expect(fetchRemoteLicenseStatus).not.toHaveBeenCalled();
+      expect(apiPost).not.toHaveBeenCalled();
+    });
+
+    it("does nothing if the cached license has no stored token", async () => {
+      vi.mocked(fetcher).mockResolvedValue({ license: { status: "TRIAL", remoteUserId: "user_1", remoteEmail: "a@example.com", token: null } });
+      await refreshLicenseStatus();
+      expect(fetchRemoteLicenseStatus).not.toHaveBeenCalled();
+      expect(apiPost).not.toHaveBeenCalled();
+    });
+
+    it("re-fetches with the stored token and re-caches the fresh status, keeping the same token", async () => {
+      vi.mocked(fetcher).mockResolvedValue({
+        license: { status: "TRIAL", trialDaysRemaining: 5, remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" },
+      });
+      vi.mocked(fetchRemoteLicenseStatus).mockResolvedValue({
+        status: "TRIAL",
+        trialDaysRemaining: 4,
+        trialEndsAt: "2026-09-24T00:00:00.000Z",
+        currentPeriodEnd: null,
+      });
+
+      await refreshLicenseStatus();
+
+      expect(fetchRemoteLicenseStatus).toHaveBeenCalledWith("jwt-1");
+      expect(apiPost).toHaveBeenCalledWith("/api/local/license-cache", {
+        status: "TRIAL",
+        trialDaysRemaining: 4,
+        trialEndsAt: "2026-09-24T00:00:00.000Z",
+        currentPeriodEnd: null,
+        remoteUserId: "user_1",
+        remoteEmail: "a@example.com",
+        token: "jwt-1",
+      });
+    });
+
+    it("silently keeps the stale cache if the server re-check fails (offline, expired token, etc.)", async () => {
+      vi.mocked(fetcher).mockResolvedValue({
+        license: { status: "TRIAL", remoteUserId: "user_1", remoteEmail: "a@example.com", token: "jwt-1" },
+      });
+      vi.mocked(fetchRemoteLicenseStatus).mockRejectedValue(new Error("network error"));
+
+      await expect(refreshLicenseStatus()).resolves.toBeUndefined();
+      expect(apiPost).not.toHaveBeenCalled();
+    });
   });
 });

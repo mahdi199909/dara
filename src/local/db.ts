@@ -46,6 +46,15 @@ function bootstrap(db: LocalDb) {
        "cachedAt" TEXT NOT NULL
      );`
   );
+  // Added after this table already shipped to real devices, so CREATE TABLE IF NOT EXISTS above
+  // won't retroactively add it to an install that already has the table — ALTER TABLE is the
+  // only way to backfill a column onto an existing SQLite table. SQLite has no "ADD COLUMN IF
+  // NOT EXISTS", so this throws (harmlessly) on every run after the first; swallow that.
+  try {
+    db.execute(`ALTER TABLE "_local_license_cache" ADD COLUMN "token" TEXT;`);
+  } catch {
+    // column already exists
+  }
 }
 
 let instance: LocalDb | null = null;

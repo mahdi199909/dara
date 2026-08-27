@@ -12,6 +12,11 @@ export interface LicenseCache {
   currentPeriodEnd: string | null;
   remoteUserId: string;
   remoteEmail: string;
+  // The session JWT from the first-run login/register call, persisted (unlike before) so the
+  // app can re-check license status with the server on every later open/resume without forcing
+  // the user through FirstRunGate's login form again. Null for rows written before this field
+  // existed, or if a future caller genuinely has no token — re-check just skips itself then.
+  token: string | null;
   cachedAt: string;
 }
 
@@ -23,8 +28,8 @@ export function getLicenseCache(db: LocalDb): LicenseCache | null {
 export function setLicenseCache(db: LocalDb, data: Omit<LicenseCache, "cachedAt">): LicenseCache {
   const cachedAt = new Date().toISOString();
   db.run(
-    `INSERT INTO "_local_license_cache" ("id","status","trialDaysRemaining","trialEndsAt","currentPeriodEnd","remoteUserId","remoteEmail","cachedAt")
-     VALUES (?,?,?,?,?,?,?,?)
+    `INSERT INTO "_local_license_cache" ("id","status","trialDaysRemaining","trialEndsAt","currentPeriodEnd","remoteUserId","remoteEmail","token","cachedAt")
+     VALUES (?,?,?,?,?,?,?,?,?)
      ON CONFLICT("id") DO UPDATE SET
        "status" = excluded."status",
        "trialDaysRemaining" = excluded."trialDaysRemaining",
@@ -32,8 +37,19 @@ export function setLicenseCache(db: LocalDb, data: Omit<LicenseCache, "cachedAt"
        "currentPeriodEnd" = excluded."currentPeriodEnd",
        "remoteUserId" = excluded."remoteUserId",
        "remoteEmail" = excluded."remoteEmail",
+       "token" = excluded."token",
        "cachedAt" = excluded."cachedAt"`,
-    [SINGLETON_ID, data.status, data.trialDaysRemaining, data.trialEndsAt, data.currentPeriodEnd, data.remoteUserId, data.remoteEmail, cachedAt]
+    [
+      SINGLETON_ID,
+      data.status,
+      data.trialDaysRemaining,
+      data.trialEndsAt,
+      data.currentPeriodEnd,
+      data.remoteUserId,
+      data.remoteEmail,
+      data.token,
+      cachedAt,
+    ]
   );
   return { ...data, cachedAt };
 }

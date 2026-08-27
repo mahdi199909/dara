@@ -14,7 +14,7 @@
 // Wiring this in is part of restructuring that layout in Phase 6, once there's a real Capacitor
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
-import { getCachedLicense, completeFirstRun } from "@/lib/nativeOnboarding";
+import { getCachedLicense, completeFirstRun, refreshLicenseStatus } from "@/lib/nativeOnboarding";
 import { ApiClientError } from "@/lib/apiClient";
 
 function isNativePlatform(): boolean {
@@ -82,6 +82,11 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
 
       const license = await getCachedLicense();
       setReady(!!license);
+
+      // Fire-and-forget, deliberately not awaited: re-checking with the server shouldn't delay
+      // showing the (already-cached) app by a network round trip. See refreshLicenseStatus's own
+      // doc comment for why a failure here is silent rather than surfaced.
+      void refreshLicenseStatus();
     })()
       .catch((err) => {
         setReady(false);
