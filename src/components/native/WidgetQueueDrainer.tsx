@@ -1,11 +1,16 @@
 "use client";
 
-// Handles the case FirstRunGate's own one-time bootstrap doesn't cover: the app was already
-// running (just backgrounded, not cold-launched) when the user logged a capture through the
-// home-screen widget. Capacitor keeps the WebView alive across a simple background/foreground
-// cycle, so nothing re-runs FirstRunGate's effect — this listens for the app resume event
-// instead and drains the same queue then. See src/local/widgetQueue.ts for why the widget
-// hands off through a queue rather than writing the shared database directly.
+// Two jobs on every app resume, both stemming from the same fact: Capacitor keeps the WebView
+// alive across a simple background/foreground cycle, so nothing re-runs FirstRunGate's one-time
+// bootstrap effect just because the user switched back to an already-running app.
+//
+// 1. Drain captures logged through the home-screen widget while the app wasn't in the
+//    foreground — see src/local/widgetQueue.ts for why the widget hands off through a queue
+//    rather than writing the shared database directly.
+// 2. Refresh every SWR-cached page unconditionally, not only when the drain above found
+//    something: revalidateOnFocus is deliberately off (see SWRProvider.tsx — it caused a request
+//    storm), so without this, reopening the app after any amount of time shows whatever was
+//    cached from before, stale, until the user happens to navigate somewhere new.
 import { useEffect } from "react";
 import { mutate } from "swr";
 import { getLocalDbInstance } from "@/local/db";
@@ -28,13 +33,16 @@ export default function WidgetQueueDrainer() {
       ]);
       const handle = await App.addListener("resume", async () => {
         const db = getLocalDbInstance();
-        if (!db) return; // shouldn't happen post-FirstRunGate, but never crash the resume path over it
-        try {
-          const drained = await drainWidgetQueue(db, getLocalUserId(db));
-          if (drained > 0) mutate(() => true, undefined, { revalidate: true });
-        } catch (err) {
-          console.error("widget queue drain on resume failed", err);
+        if (db) {
+          try {
+            await drainWidgetQueue(db, getLocalUserId(db));
+          } catch (err) {
+            console.error("widget queue drain on resume failed", err);
+          }
         }
+        // Unconditional, and outside the try/catch above: a failed drain shouldn't also
+        // suppress refreshing the data that WAS already there before this resume.
+        mutate(() => true, undefined, { revalidate: true });
       });
       remove = () => handle.remove();
     })();
