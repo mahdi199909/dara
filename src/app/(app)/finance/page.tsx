@@ -342,7 +342,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
   const [totalAmount, setTotalAmount] = useState("");
   const [installmentAmount, setInstallmentAmount] = useState("");
   const [numberOfInstallments, setNumberOfInstallments] = useState("");
-  const [dueDay, setDueDay] = useState("15");
+  const [dueDay, setDueDay] = useState("");
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([60 * 24]);
   const [loading, setLoading] = useState(false);
   const { format } = useCurrencyUnit();
@@ -388,7 +388,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />
-          <input type="number" dir="ltr" min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />
+          <input type="number" dir="ltr" required min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۲۸)" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />
         </div>
 
         {preview && (

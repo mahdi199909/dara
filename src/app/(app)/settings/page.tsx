@@ -123,6 +123,8 @@ function MembershipUpgradeCard() {
   if (!native) return null;
 
   const cardNumber = process.env.NEXT_PUBLIC_PAYMENT_CARD_NUMBER;
+  const bankName = process.env.NEXT_PUBLIC_PAYMENT_BANK_NAME;
+  const cardHolder = process.env.NEXT_PUBLIC_PAYMENT_CARD_HOLDER;
   const contactId = process.env.NEXT_PUBLIC_PAYMENT_CONTACT_ID;
 
   async function copyCardNumber() {
@@ -171,25 +173,32 @@ function MembershipUpgradeCard() {
               مبلغ <strong>{format(selected.totalPrice, { withSuffix: true })}</strong> رو به شماره کارت زیر واریز کنید:
             </p>
             {cardNumber ? (
-              <div className="flex items-center gap-2">
-                <div dir="ltr" className="flex-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-center font-mono tracking-wider text-gray-800">
-                  {cardNumber}
+              <>
+                <div className="flex items-center gap-2">
+                  <div dir="ltr" className="flex-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-center font-mono tracking-wider text-gray-800">
+                    {cardNumber}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={copyCardNumber}
+                    className="shrink-0 text-xs bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl hover:bg-gray-200"
+                  >
+                    {copied ? "کپی شد ✓" : "کپی"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={copyCardNumber}
-                  className="shrink-0 text-xs bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl hover:bg-gray-200"
-                >
-                  {copied ? "کپی شد ✓" : "کپی"}
-                </button>
-              </div>
+                {(bankName || cardHolder) && (
+                  <p className="text-xs text-gray-400 text-center">
+                    {[bankName, cardHolder].filter(Boolean).join(" — به نام ")}
+                  </p>
+                )}
+              </>
             ) : (
               <p className="text-xs text-waste-500">
                 شماره کارت هنوز تنظیم نشده — NEXT_PUBLIC_PAYMENT_CARD_NUMBER رو در .env مقداردهی کنید.
               </p>
             )}
             <p className="text-gray-600">
-              بعد از واریز، برای فعال‌سازی اشتراک به این آیدی پیام بدید:{" "}
+              بعد از واریز، برای فعال‌سازی اشتراک در بله یا تلگرام به این آیدی پیام بدید:{" "}
               {contactId ? (
                 <strong dir="ltr">{contactId}</strong>
               ) : (
