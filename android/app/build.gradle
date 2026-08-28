@@ -7,8 +7,13 @@ android {
         applicationId "ir.mganic.dara"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Driven by CI (ANDROID_VERSION_CODE = the GitHub Actions run number, always increasing)
+        // so every build Android sees as strictly newer than the last — a fixed versionCode
+        // meant every build looked like a same-or-older version, which some install paths
+        // refuse even when the signing key already matches. Falls back to 1/"1.0" for a plain
+        // local `./gradlew assembleDebug` where no CI env var is set.
+        versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
+        versionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

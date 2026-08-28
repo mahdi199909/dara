@@ -21,6 +21,9 @@ jobs:
       # Blank until set at GitHub → Settings → Secrets and variables → Actions → Variables.
       NEXT_PUBLIC_PAYMENT_CARD_NUMBER: ${{ vars.PAYMENT_CARD_NUMBER }}
       NEXT_PUBLIC_PAYMENT_CONTACT_ID: ${{ vars.PAYMENT_CONTACT_ID }}
+      # Read by android/app/build.gradle — github.run_number always increases, so every build
+      # installs as an update over the last instead of looking like the same/an older version.
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
 
     steps:
       - uses: actions/checkout@v4
