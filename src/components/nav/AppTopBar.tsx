@@ -21,7 +21,7 @@ export default function AppTopBar() {
         </div>
       ) : (
         <div className="flex items-center justify-between">
-          <p className="font-bold text-gray-800 text-sm">دارا</p>
+          <p className="font-bold text-gray-800 text-sm">پنهان</p>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setShowSearch(true)}

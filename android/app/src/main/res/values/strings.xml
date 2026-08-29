@@ -1,12 +1,12 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">دارا</string>
-    <string name="title_activity_main">دارا</string>
+    <string name="app_name">پنهان</string>
+    <string name="title_activity_main">پنهان</string>
     <string name="package_name">ir.mganic.dara</string>
     <string name="custom_url_scheme">ir.mganic.dara</string>
     <string name="widget_capture_title">ثبت سریع کار</string>
-    <string name="widget_capture_subtitle">بدون باز کردن دارا</string>
-    <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ دارا</string>
+    <string name="widget_capture_subtitle">بدون باز کردن پنهان</string>
+    <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ پنهان</string>
     <string name="widget_today_events_title">رویدادهای امروز</string>
     <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>
     <string name="widget_today_events_description">نمایش لیست رویدادهای امروز</string>

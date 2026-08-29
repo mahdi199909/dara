@@ -116,8 +116,8 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" dir="rtl">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow p-6 space-y-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.png" alt="دارا" className="h-14 w-14 rounded-2xl mx-auto" />
-        <h1 className="text-lg font-bold text-gray-800 text-center">{mode === "login" ? "ورود به دارا" : "ساخت حساب در دارا"}</h1>
+        <img src="/icon.png" alt="پنهان" className="h-14 w-14 rounded-2xl mx-auto" />
+        <h1 className="text-lg font-bold text-gray-800 text-center">{mode === "login" ? "ورود به پنهان" : "ساخت حساب در پنهان"}</h1>
         <p className="text-xs text-gray-400 text-center leading-relaxed">
           این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>

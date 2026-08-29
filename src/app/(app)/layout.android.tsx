@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <AppTopBar />
           <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
           <GlobalCaptureFab />
-          <BottomNav userName="کاربر دارا" />
+          <BottomNav userName="کاربر پنهان" />
         </div>
       </SWRProvider>
     </FirstRunGate>
