@@ -15,7 +15,6 @@
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
 import { getCachedLicense, completeFirstRun, refreshLicenseStatus } from "@/lib/nativeOnboarding";
-import { requestEmailVerification, confirmEmailVerification } from "@/lib/remoteAuth";
 import { ApiClientError } from "@/lib/apiClient";
 
 function isNativePlatform(): boolean {
@@ -49,19 +48,12 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   const [checking, setChecking] = useState(true);
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
-  // Register is two steps: fill in the form (which only requests an email code), then enter that
-  // code before completeFirstRun's remoteRegister call actually creates the account — the server
-  // rejects registration outright without a recently-confirmed EmailVerification row (see
-  // /api/auth/register). Login has no such step.
-  const [registerStep, setRegisterStep] = useState<"form" | "verify">("form");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [bootError, setBootError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (!isNativePlatform()) {
@@ -108,14 +100,6 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     setError(null);
     setLoading(true);
     try {
-      if (mode === "register" && registerStep === "form") {
-        await requestEmailVerification(email);
-        setRegisterStep("verify");
-        return;
-      }
-      if (mode === "register" && registerStep === "verify") {
-        await confirmEmailVerification(email, code);
-      }
       await completeFirstRun({ mode, name, email, password });
       setReady(true);
     } catch (err) {
@@ -123,25 +107,6 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
-  }
-
-  async function onResendCode() {
-    setError(null);
-    setResending(true);
-    try {
-      await requestEmailVerification(email);
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setResending(false);
-    }
-  }
-
-  function switchMode() {
-    setMode(mode === "login" ? "register" : "login");
-    setRegisterStep("form");
-    setCode("");
-    setError(null);
   }
 
   if (checking) return null;
@@ -152,13 +117,9 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       <div className="w-full max-w-sm bg-white rounded-2xl shadow p-6 space-y-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon.png" alt="دارا" className="h-14 w-14 rounded-2xl mx-auto" />
-        <h1 className="text-lg font-bold text-gray-800 text-center">
-          {mode === "login" ? "ورود به دارا" : registerStep === "form" ? "ساخت حساب در دارا" : "تأیید ایمیل"}
-        </h1>
+        <h1 className="text-lg font-bold text-gray-800 text-center">{mode === "login" ? "ورود به دارا" : "ساخت حساب در دارا"}</h1>
         <p className="text-xs text-gray-400 text-center leading-relaxed">
-          {mode === "register" && registerStep === "verify"
-            ? `کد ۶ رقمی ارسال‌شده به ${email} رو وارد کنید.`
-            : "این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه."}
+          این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>
         {bootError && (
           <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2 leading-relaxed break-words" dir="ltr">
@@ -166,95 +127,49 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
           </p>
         )}
         <form onSubmit={onSubmit} className="space-y-3">
-          {mode === "register" && registerStep === "verify" ? (
+          {mode === "register" && (
             <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="کد ۶ رقمی"
-              inputMode="numeric"
-              maxLength={6}
-              dir="ltr"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-center tracking-[0.5em]"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="نام"
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
               required
-              autoFocus
             />
-          ) : (
-            <>
-              {mode === "register" && (
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="نام"
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
-                  required
-                />
-              )}
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ایمیل"
-                dir="ltr"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
-                required
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="رمز عبور"
-                dir="ltr"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
-                required
-              />
-            </>
           )}
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="ایمیل"
+            dir="ltr"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
+            required
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="رمز عبور"
+            dir="ltr"
+            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
+            required
+          />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
             type="submit"
             disabled={loading}
             className="w-full rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
           >
-            {mode === "login"
-              ? loading
-                ? "در حال بررسی..."
-                : "ورود"
-              : registerStep === "form"
-                ? loading
-                  ? "در حال ارسال کد..."
-                  : "ثبت‌نام"
-                : loading
-                  ? "در حال بررسی..."
-                  : "تأیید و ساخت حساب"}
+            {loading ? "در حال بررسی..." : mode === "login" ? "ورود" : "ثبت‌نام"}
           </button>
         </form>
-        {mode === "register" && registerStep === "verify" ? (
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => {
-                setRegisterStep("form");
-                setCode("");
-                setError(null);
-              }}
-              className="text-xs text-gray-400 hover:text-gray-600"
-            >
-              اصلاح ایمیل
-            </button>
-            <button
-              type="button"
-              onClick={onResendCode}
-              disabled={resending}
-              className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-40"
-            >
-              {resending ? "در حال ارسال..." : "ارسال دوباره‌ی کد"}
-            </button>
-          </div>
-        ) : (
-          <button type="button" onClick={switchMode} className="w-full text-center text-xs text-gray-400 hover:text-gray-600">
-            {mode === "login" ? "حساب ندارید؟ ثبت‌نام کنید" : "قبلاً حساب دارید؟ وارد شوید"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setMode(mode === "login" ? "register" : "login")}
+          className="w-full text-center text-xs text-gray-400 hover:text-gray-600"
+        >
+          {mode === "login" ? "حساب ندارید؟ ثبت‌نام کنید" : "قبلاً حساب دارید؟ وارد شوید"}
+        </button>
       </div>
     </div>
   );

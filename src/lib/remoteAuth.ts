@@ -61,24 +61,6 @@ export function remoteRegister(name: string, email: string, password: string): P
     .then(({ token, ...user }) => ({ user, token }));
 }
 
-/** Step 1 of registration — sends a 6-digit code to `email`. See /api/auth/verify-email/request. */
-export function requestEmailVerification(email: string): Promise<void> {
-  return fetch(`${REMOTE_API_BASE}/api/auth/verify-email/request`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  }).then((res) => handle<void>(res));
-}
-
-/** Step 2 — confirms the code. remoteRegister (step 3) will reject if this hasn't succeeded recently. */
-export function confirmEmailVerification(email: string, code: string): Promise<void> {
-  return fetch(`${REMOTE_API_BASE}/api/auth/verify-email/confirm`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code }),
-  }).then((res) => handle<void>(res));
-}
-
 export interface RemoteLicenseStatus {
   status: "TRIAL" | "FREE" | "SUBSCRIBED" | "LIFETIME";
   trialDaysRemaining: number | null;

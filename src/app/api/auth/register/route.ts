@@ -26,15 +26,6 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw new ApiError("این ایمیل قبلاً ثبت شده است.", 409);
 
-    // Requires /api/auth/verify-email/{request,confirm} to have already run for this exact
-    // email — a 30-minute window between confirming the code and finishing this form (not just
-    // "must exist"), so a code can't be confirmed once and then reused arbitrarily later.
-    const verification = await prisma.emailVerification.findUnique({ where: { email } });
-    const VERIFICATION_WINDOW_MS = 30 * 60 * 1000;
-    if (!verification?.verifiedAt || Date.now() - verification.verifiedAt.getTime() > VERIFICATION_WINDOW_MS) {
-      throw new ApiError("ایمیل تأیید نشده است. لطفاً دوباره کد تأیید رو دریافت کنید.", 400);
-    }
-
     const passwordHash = await hashPassword(body.password);
     const user = await prisma.user.create({
       data: {
@@ -46,10 +37,6 @@ export async function POST(req: NextRequest) {
     });
 
     await seedDefaultCategoriesForUser(user.id);
-    // Consumed — delete rather than leave verifiedAt sitting there, so it can never be reused
-    // (a re-register attempt with the same email will fail on the User uniqueness check above
-    // long before it would ever reach this table again anyway, but this keeps it tidy).
-    await prisma.emailVerification.delete({ where: { email } }).catch(() => {});
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

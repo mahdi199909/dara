@@ -7,7 +7,7 @@ const SECRET = new TextEncoder().encode(
 );
 
 const PUBLIC_PATHS = ["/login", "/register"];
-const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/auth/verify-email", "/api/quotes"];
+const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/quotes"];
 
 async function isAuthenticated(req: NextRequest): Promise<boolean> {
   // Falls back to `Authorization: Bearer <token>` alongside the cookie — see requireUserId in
