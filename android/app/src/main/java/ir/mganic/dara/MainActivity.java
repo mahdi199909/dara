@@ -38,11 +38,19 @@ public class MainActivity extends BridgeActivity {
     };
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
         final Context appContext = getApplicationContext();
         refreshWidgets(appContext);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> refreshWidgets(appContext), DELAYED_WIDGET_REFRESH_MS);
+        // Plain anonymous Runnable, not a lambda — no compileOptions/sourceCompatibility block
+        // sets a Java 8+ language level anywhere in this module's Gradle files, and this is the
+        // only place in the whole native codebase a lambda was ever attempted.
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                refreshWidgets(appContext);
+            }
+        }, DELAYED_WIDGET_REFRESH_MS);
     }
 
     private static void refreshWidgets(Context context) {
