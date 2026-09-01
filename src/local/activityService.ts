@@ -79,14 +79,14 @@ export function recalcActivityDuration(db: LocalDb, activityId: string): number 
 
     if (existing) {
       db.run(
-        `UPDATE "VirtualAssetEntry" SET "categoryId" = ?, "durationMin" = ?, "valuePerHour" = ?, "totalValue" = ? WHERE "activityId" = ?`,
-        [cat.id, totalDurationMin, cat.virtualAssetValuePerHour, totalValue, activityId]
+        `UPDATE "VirtualAssetEntry" SET "categoryId" = ?, "durationMin" = ?, "valuePerHour" = ?, "totalValue" = ?, "updatedAt" = ? WHERE "activityId" = ?`,
+        [cat.id, totalDurationMin, cat.virtualAssetValuePerHour, totalValue, now(), activityId]
       );
     } else {
       db.run(
-        `INSERT INTO "VirtualAssetEntry" ("id","userId","activityId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt")
-         VALUES (?,?,?,?,?,?,?,?,?)`,
-        [crypto.randomUUID(), activity.userId, activityId, cat.id, totalDurationMin, cat.virtualAssetValuePerHour, totalValue, activity.createdAt, now()]
+        `INSERT INTO "VirtualAssetEntry" ("id","userId","activityId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt")
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [crypto.randomUUID(), activity.userId, activityId, cat.id, totalDurationMin, cat.virtualAssetValuePerHour, totalValue, activity.createdAt, now(), now()]
       );
     }
   } else {

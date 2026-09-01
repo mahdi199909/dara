@@ -178,7 +178,7 @@ export function deleteInstallmentPlan(db: LocalDb, userId: string, id: string): 
     throw new ApiError("طرحی که پرداخت انجام‌شده دارد قابل حذف نیست تا صحت گزارش‌ها حفظ شود.", 409);
   }
 
-  db.run(`UPDATE "InstallmentPlan" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "InstallmentPlan" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "InstallmentPlan", entityId: id, oldValue: existing });
   return { ok: true };
 }

@@ -103,7 +103,7 @@ export function updateCategory(db: LocalDb, userId: string, id: string, input: U
 
 export function deleteCategory(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedRow(db, userId, id);
-  db.run(`UPDATE "Category" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "Category" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Category", entityId: id, oldValue: existing });
   return { ok: true };
 }

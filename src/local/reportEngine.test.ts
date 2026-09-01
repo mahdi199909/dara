@@ -86,12 +86,13 @@ describe("local reportEngine", () => {
       now(),
       now(),
     ]);
-    db.run(`INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt") VALUES (?,?,?,?,?,?,?)`, [
+    db.run(`INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
       "vae_1",
       USER_ID,
       60,
       100000,
       100000,
+      now(),
       now(),
       now(),
     ]);
@@ -142,8 +143,8 @@ describe("local reportEngine", () => {
 
     const today = new Date();
     const yesterday = new Date(Date.now() - 86_400_000);
-    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt") VALUES (?,?,?,?)`, ["ci_1", "habit_1", new Date(yesterday.toDateString()).toISOString(), now()]);
-    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt") VALUES (?,?,?,?)`, ["ci_2", "habit_1", new Date(today.toDateString()).toISOString(), now()]);
+    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["ci_1", "habit_1", new Date(yesterday.toDateString()).toISOString(), now(), now()]);
+    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["ci_2", "habit_1", new Date(today.toDateString()).toISOString(), now(), now()]);
 
     const report = computeHabitsReport(db, USER_ID, twoDaysAgo, today);
     expect(report.habits).toHaveLength(1);

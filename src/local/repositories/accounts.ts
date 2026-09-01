@@ -119,7 +119,7 @@ export function deleteAccount(db: LocalDb, userId: string, id: string) {
     throw new ApiError("این حساب دارای تراکنش است و نمی‌تواند حذف شود؛ آن را غیرفعال کنید.", 409);
   }
 
-  db.run(`UPDATE "FinanceAccount" SET "deletedAt" = ? WHERE "id" = ?`, [new Date().toISOString(), id]);
+  db.run(`UPDATE "FinanceAccount" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [new Date().toISOString(), new Date().toISOString(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "FinanceAccount", entityId: id, oldValue: toAccount(existing) });
   return { ok: true };
 }

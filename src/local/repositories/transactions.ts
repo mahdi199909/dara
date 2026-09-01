@@ -185,7 +185,7 @@ export function deleteTransaction(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedRow(db, userId, id);
   if (existing.installmentId) throw new ApiError("تراکنش‌های مرتبط با قسط از این مسیر قابل حذف نیستند.", 409);
 
-  db.run(`UPDATE "Transaction" SET "deletedAt" = ? WHERE "id" = ?`, [new Date().toISOString(), id]);
+  db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [new Date().toISOString(), new Date().toISOString(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Transaction", entityId: id, oldValue: existing });
   return { ok: true };
 }

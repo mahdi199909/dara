@@ -228,7 +228,7 @@ export function updateHabit(db: LocalDb, userId: string, id: string, input: Upda
 
 export function deleteHabit(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedHabitRow(db, userId, id);
-  db.run(`UPDATE "Habit" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "Habit" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Habit", entityId: id, oldValue: existing });
   return { ok: true };
 }
@@ -249,7 +249,7 @@ export function toggleHabitCheckIn(db: LocalDb, userId: string, habitId: string,
   }
 
   const id = crypto.randomUUID();
-  db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt") VALUES (?,?,?,?)`, [id, habitId, dateIso, now()]);
+  db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, [id, habitId, dateIso, now(), now()]);
   syncHabitCheckInVirtualAsset(db, id);
 
   const checkIn = db.get<HabitCheckInRow>(`SELECT * FROM "HabitCheckIn" WHERE "id" = ?`, [id]);
@@ -272,15 +272,16 @@ export function logHabitCheckInDuration(db: LocalDb, userId: string, habitId: st
 
   let checkInId: string;
   if (existing) {
-    db.run(`UPDATE "HabitCheckIn" SET "durationMin" = ? WHERE "id" = ?`, [durationMin, existing.id]);
+    db.run(`UPDATE "HabitCheckIn" SET "durationMin" = ?, "updatedAt" = ? WHERE "id" = ?`, [durationMin, now(), existing.id]);
     checkInId = existing.id;
   } else {
     checkInId = crypto.randomUUID();
-    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","createdAt") VALUES (?,?,?,?,?)`, [
+    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
       checkInId,
       habitId,
       dateIso,
       durationMin,
+      now(),
       now(),
     ]);
   }

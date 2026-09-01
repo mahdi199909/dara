@@ -176,7 +176,7 @@ export function updateProject(db: LocalDb, userId: string, id: string, input: Up
 
 export function deleteProject(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedRow(db, userId, id);
-  db.run(`UPDATE "Project" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "Project" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   deactivateProjectCategory(db, id);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Project", entityId: id, oldValue: existing });
   return { ok: true };

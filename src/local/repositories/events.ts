@@ -329,7 +329,7 @@ export function updateEvent(db: LocalDb, userId: string, id: string, input: Upda
 
 export function deleteEvent(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedEventRow(db, userId, id);
-  db.run(`UPDATE "Event" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "Event" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Event", entityId: id, oldValue: toEvent(existing) });
   return { ok: true };
 }

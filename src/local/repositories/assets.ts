@@ -116,7 +116,7 @@ export function updateAsset(db: LocalDb, userId: string, id: string, input: Upda
 
 export function deleteAsset(db: LocalDb, userId: string, id: string): { ok: true } {
   const existing = getOwnedAssetRow(db, userId, id);
-  db.run(`UPDATE "Asset" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "Asset" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Asset", entityId: id, oldValue: existing });
   return { ok: true };
 }

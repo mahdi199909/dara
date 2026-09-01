@@ -30,19 +30,19 @@ describe("local virtual assets repository", () => {
     db.run(`INSERT INTO "Category" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["cat_1", USER_ID, "یادگیری", now(), now()]);
     db.run(`INSERT INTO "Project" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["proj_1", USER_ID, "پروژه", now(), now()]);
     db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "عادت", now(), now()]);
-    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt") VALUES (?,?,?,?)`, ["hc_1", "habit_1", now(), now()]);
+    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["hc_1", "habit_1", now(), now(), now()]);
 
     db.run(
-      `INSERT INTO "VirtualAssetEntry" ("id","userId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt") VALUES (?,?,?,?,?,?,?,?)`,
-      ["va_cat", USER_ID, "cat_1", 60, 1000, 1000, now(), now()]
+      `INSERT INTO "VirtualAssetEntry" ("id","userId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)`,
+      ["va_cat", USER_ID, "cat_1", 60, 1000, 1000, now(), now(), now()]
     );
     db.run(
-      `INSERT INTO "VirtualAssetEntry" ("id","userId","projectId","durationMin","valuePerHour","totalValue","date","createdAt") VALUES (?,?,?,?,?,?,?,?)`,
-      ["va_proj", USER_ID, "proj_1", 0, 0, 5000, now(), now()]
+      `INSERT INTO "VirtualAssetEntry" ("id","userId","projectId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)`,
+      ["va_proj", USER_ID, "proj_1", 0, 0, 5000, now(), now(), now()]
     );
     db.run(
-      `INSERT INTO "VirtualAssetEntry" ("id","userId","habitCheckInId","durationMin","valuePerHour","totalValue","date","createdAt") VALUES (?,?,?,?,?,?,?,?)`,
-      ["va_habit", USER_ID, "hc_1", 0, 0, 500, now(), now()]
+      `INSERT INTO "VirtualAssetEntry" ("id","userId","habitCheckInId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)`,
+      ["va_habit", USER_ID, "hc_1", 0, 0, 500, now(), now(), now()]
     );
 
     const result = listVirtualAssets(db, USER_ID);
@@ -67,8 +67,8 @@ describe("local virtual assets repository", () => {
       now(),
     ]);
     db.run(
-      `INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt") VALUES (?,?,?,?,?,?,?)`,
-      ["va_other", "someone_else", 0, 0, 999, now(), now()]
+      `INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+      ["va_other", "someone_else", 0, 0, 999, now(), now(), now()]
     );
 
     const result = listVirtualAssets(db, USER_ID);

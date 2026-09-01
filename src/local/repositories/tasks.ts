@@ -154,7 +154,7 @@ export function updateTask(db: LocalDb, userId: string, id: string, input: Updat
 
 export function deleteTask(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedRow(db, userId, id);
-  db.run(`UPDATE "Task" SET "deletedAt" = ? WHERE "id" = ?`, [now(), id]);
+  db.run(`UPDATE "Task" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Task", entityId: id, oldValue: existing });
   return { ok: true };
 }

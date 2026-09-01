@@ -500,6 +500,7 @@ model VirtualAssetEntry {
   date         DateTime
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // added for server sync (Phase 12) — recalcActivityDuration/syncTaskVirtualAsset/syncHabitCheckInVirtualAsset all update this in place after creation
 
   @@index([userId])
   @@index([date])
@@ -569,6 +570,7 @@ model HabitCheckIn {
   durationMin Int?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // added for server sync (Phase 12) — durationMin can be PATCHed in after creation
 
   virtualAssetEntry VirtualAssetEntry?
 

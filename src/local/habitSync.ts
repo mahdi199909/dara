@@ -57,18 +57,19 @@ export function syncHabitCheckInVirtualAsset(db: LocalDb, checkInId: string): vo
 
   const existing = db.get<{ id: string }>(`SELECT "id" FROM "VirtualAssetEntry" WHERE "habitCheckInId" = ?`, [checkInId]);
   if (existing) {
-    db.run(`UPDATE "VirtualAssetEntry" SET "categoryId" = ?, "durationMin" = ?, "valuePerHour" = ?, "totalValue" = ? WHERE "id" = ?`, [
+    db.run(`UPDATE "VirtualAssetEntry" SET "categoryId" = ?, "durationMin" = ?, "valuePerHour" = ?, "totalValue" = ?, "updatedAt" = ? WHERE "id" = ?`, [
       habit.categoryId,
       durationMin,
       valuePerHour,
       totalValue,
+      new Date().toISOString(),
       existing.id,
     ]);
   } else {
     db.run(
-      `INSERT INTO "VirtualAssetEntry" ("id","userId","habitCheckInId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt")
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [crypto.randomUUID(), habit.userId, checkInId, habit.categoryId, durationMin, valuePerHour, totalValue, checkIn.date, new Date().toISOString()]
+      `INSERT INTO "VirtualAssetEntry" ("id","userId","habitCheckInId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt")
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [crypto.randomUUID(), habit.userId, checkInId, habit.categoryId, durationMin, valuePerHour, totalValue, checkIn.date, new Date().toISOString(), new Date().toISOString()]
     );
   }
 }

@@ -112,17 +112,18 @@ export function syncTaskVirtualAsset(db: LocalDb, taskId: string) {
     const totalValue = computeVirtualAssetValue(durationMin, category.virtualAssetValuePerHour);
     const existing = db.get<{ id: string }>(`SELECT "id" FROM "VirtualAssetEntry" WHERE "taskId" = ?`, [taskId]);
     if (existing) {
-      db.run(`UPDATE "VirtualAssetEntry" SET "categoryId" = ?, "durationMin" = ?, "valuePerHour" = ?, "totalValue" = ? WHERE "id" = ?`, [
+      db.run(`UPDATE "VirtualAssetEntry" SET "categoryId" = ?, "durationMin" = ?, "valuePerHour" = ?, "totalValue" = ?, "updatedAt" = ? WHERE "id" = ?`, [
         category.id,
         durationMin,
         category.virtualAssetValuePerHour,
         totalValue,
+        now(),
         existing.id,
       ]);
     } else {
       db.run(
-        `INSERT INTO "VirtualAssetEntry" ("id","userId","taskId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt") VALUES (?,?,?,?,?,?,?,?,?)`,
-        [crypto.randomUUID(), task.userId, taskId, category.id, durationMin, category.virtualAssetValuePerHour, totalValue, task.startAt, now()]
+        `INSERT INTO "VirtualAssetEntry" ("id","userId","taskId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [crypto.randomUUID(), task.userId, taskId, category.id, durationMin, category.virtualAssetValuePerHour, totalValue, task.startAt, now(), now()]
       );
     }
   } else {
