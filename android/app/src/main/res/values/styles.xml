@@ -20,6 +20,19 @@
         <item name="android:background">@drawable/splash</item>
     </style>
 
+    <!-- SplashActivity's theme — deliberately NOT Theme.SplashScreen-based like the one above.
+         That theme makes Android show its OWN automatic cold-start icon (small, centered near
+         the top, per the Android 12+ SplashScreen API) before the Activity's content even
+         inflates — since SplashActivity already draws its own full logo+name+slogan layout,
+         inheriting Theme.SplashScreen too meant BOTH showed, one right after the other, which is
+         what looked like duplicated/scattered logos. Plain white background matches
+         activity_splash.xml's own background so there's no flash between the two anyway. -->
+    <style name="AppTheme.Splash" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
     <!-- The quick-capture widget's popup form floats over the home screen instead of opening
          as a normal full-screen page — see QuickCaptureActivity. -->
     <style name="Theme.Capture" parent="Theme.AppCompat.Light.NoActionBar">

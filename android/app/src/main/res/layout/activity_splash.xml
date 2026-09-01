@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:layoutDirection="rtl"
     android:gravity="center"
     android:background="#FFFFFF"
     android:padding="32dp">
@@ -10,28 +11,31 @@
     <ImageView
         android:layout_width="96dp"
         android:layout_height="96dp"
+        android:layout_gravity="center_horizontal"
         android:src="@mipmap/ic_launcher"
         android:contentDescription="@string/app_name" />
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
+        android:gravity="center"
         android:text="@string/app_name"
         android:textColor="#1C39BB"
         android:textSize="22sp"
+        android:fontFamily="@font/vazirmatn"
         android:textStyle="bold" />
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
+        android:gravity="center"
         android:text="@string/splash_slogan"
         android:textColor="#6B7280"
         android:textSize="13sp"
-        android:textDirection="rtl"
+        android:fontFamily="@font/vazirmatn"
         android:textAlignment="center"
-        android:gravity="center"
         android:lineSpacingExtra="4dp" />
 
 </LinearLayout>
