@@ -2,20 +2,13 @@
 // same validation (shared schemas from @/lib/schemas/projects), same field defaults, same audit
 // actions, same 404 message, so the local dispatcher (Phase 3) can return byte-identical
 // shapes regardless of whether it's backed by this repository or the real HTTP routes.
-//
-// Deliberately NOT ported: the web GET-one route also aggregates Activity/Transaction/Event/
-// Settings/VirtualAssetEntry data into a `summary` (progress, totalDurationMin, directCost,
-// income, timeCost, realCost, ...) — see src/app/api/projects/[id]/route.ts. Those resources
-// don't have local repositories yet, so getProject below only returns the project and its
-// tasks (Task already has a repository — src/local/repositories/tasks.ts). Wiring up the full
-// summary is follow-on work once Activity/Transaction/Event get their own local repositories —
-// same reasoning as skipping syncProjectCompletionAsset (see the comment in updateProject
-// below, and src/local/projectSync.ts).
 import { ApiError } from "@/lib/apiErrorBase";
 import type { CreateProjectInput, UpdateProjectInput } from "@/lib/schemas/projects";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { createProjectCategory, renameProjectCategory, deactivateProjectCategory } from "../projectSync";
+import { computeHourlyValue } from "@/lib/hourlyValue";
+import { computeRealCost } from "@/lib/timeCost";
 
 interface ProjectRow {
   id: string;
@@ -58,8 +51,64 @@ export function getProject(db: LocalDb, userId: string, id: string) {
   // already checked via getOwnedRow above, and the web route trusts projectId scoping the
   // same way — it never re-checks task.userId either), no relations attached (the web route's
   // findMany here has no `include`).
-  const tasks = db.all(`SELECT * FROM "Task" WHERE "projectId" = ? AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [id]);
-  return { project, tasks };
+  const tasks = db.all<any>(`SELECT * FROM "Task" WHERE "projectId" = ? AND "deletedAt" IS NULL ORDER BY "createdAt" DESC`, [id]);
+
+  // Mirrors the web route's `include: { category: true }` — a plain LEFT JOIN since there's no
+  // ORM here to do it for us.
+  const activityRows = db.all<any>(
+    `SELECT a.*, c."id" as "categoryRowId", c."name" as "categoryName", c."icon" as "categoryIcon", c."color" as "categoryColor"
+     FROM "Activity" a LEFT JOIN "Category" c ON c."id" = a."categoryId"
+     WHERE a."projectId" = ? AND a."deletedAt" IS NULL ORDER BY a."createdAt" DESC`,
+    [id]
+  );
+  const activities = activityRows.map((row) => {
+    const { categoryRowId, categoryName, categoryIcon, categoryColor, ...activity } = row;
+    return { ...activity, category: categoryRowId ? { id: categoryRowId, name: categoryName, icon: categoryIcon, color: categoryColor } : null };
+  });
+
+  const transactions = db.all<any>(`SELECT * FROM "Transaction" WHERE "projectId" = ? AND "deletedAt" IS NULL ORDER BY "date" DESC`, [id]);
+  const events = db.all<any>(`SELECT * FROM "Event" WHERE "projectId" = ? AND "deletedAt" IS NULL ORDER BY "startAt" DESC`, [id]);
+  const virtualAssetEntry = db.get<any>(`SELECT * FROM "VirtualAssetEntry" WHERE "projectId" = ?`, [id]) ?? null;
+
+  const settingsRow = db.get<any>(`SELECT * FROM "Settings" WHERE "userId" = ?`, [userId]);
+  const hourlyValue = computeHourlyValue(settingsRow ?? {});
+
+  // Same computation as the web route: time from Activities/Tasks, money from Transactions only
+  // (every Activity/Task directCost/incomeAmount is already mirrored into a linked Transaction —
+  // see directCostSync.ts — so summing both here too would double-count).
+  const activityDurationMin = activities.reduce((s: number, a: any) => s + a.totalDurationMin, 0);
+  const taskDurationMin = tasks.reduce((s: number, t: any) => {
+    if (!t.startAt || !t.endAt) return s;
+    return s + Math.max(0, Math.round((new Date(t.endAt).getTime() - new Date(t.startAt).getTime()) / 60000));
+  }, 0);
+  const totalDurationMin = activityDurationMin + taskDurationMin;
+
+  const directCost = transactions.filter((t: any) => t.type === "EXPENSE").reduce((s: number, t: any) => s + t.amount, 0);
+  const income = transactions.filter((t: any) => t.type === "INCOME").reduce((s: number, t: any) => s + t.amount, 0);
+  const { timeCost, realCost } = computeRealCost(totalDurationMin, directCost, hourlyValue);
+
+  const doneTasks = tasks.filter((t: any) => t.status === "DONE").length;
+  const progress = tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0;
+
+  return {
+    project,
+    tasks,
+    activities,
+    transactions,
+    events,
+    virtualAssetEntry,
+    summary: {
+      progress,
+      totalTasks: tasks.length,
+      doneTasks,
+      totalDurationMin,
+      directCost,
+      income,
+      netCashFlow: income - directCost,
+      timeCost,
+      realCost,
+    },
+  };
 }
 
 export function createProject(db: LocalDb, userId: string, input: CreateProjectInput) {

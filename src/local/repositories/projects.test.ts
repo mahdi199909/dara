@@ -4,6 +4,10 @@ import { createNodeSqliteDriver } from "../drivers/nodeSqlite";
 import type { LocalDb } from "../db";
 import { createProject, deleteProject, getProject, listProjects, updateProject } from "./projects";
 import { createTask } from "./tasks";
+import { createCategory } from "./categories";
+import { createActivity } from "./activities";
+import { createTransaction } from "./transactions";
+import { createAccount } from "./accounts";
 
 const USER_ID = "user_test_1";
 
@@ -94,6 +98,34 @@ describe("local projects repository", () => {
     expect(result.project.id).toBe(project.id);
     expect(result.tasks).toHaveLength(1);
     expect((result.tasks[0] as { title: string }).title).toBe("کار پروژه");
+  });
+
+  // Regression test: getProject used to return only { project, tasks } — activities,
+  // transactions, events, virtualAssetEntry, and summary were never ported from the web route
+  // (see the old header comment this file used to have). On native, this crashed the project
+  // detail page outright the moment it tried to read any of those missing fields.
+  it("getProject also returns activities (with category), transactions, and a computed summary, matching the web route", async () => {
+    const db = await freshDb();
+    const project = createProject(db, USER_ID, { name: "پروژه" });
+    const category = createCategory(db, USER_ID, { name: "توسعه", icon: "💻" });
+    const account = createAccount(db, USER_ID, { name: "حساب اصلی" });
+
+    createActivity(db, USER_ID, { title: "کدنویسی", projectId: project.id, categoryId: category.id, durationMin: 90 });
+    createTransaction(db, USER_ID, { type: "EXPENSE", amount: 50_000, accountId: account.id, projectId: project.id });
+    createTransaction(db, USER_ID, { type: "INCOME", amount: 200_000, accountId: account.id, projectId: project.id });
+
+    const result = getProject(db, USER_ID, project.id) as any;
+
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].category).toMatchObject({ name: "توسعه", icon: "💻" });
+    expect(result.transactions).toHaveLength(2);
+    expect(result.events).toEqual([]);
+    expect(result.virtualAssetEntry).toBeNull();
+
+    expect(result.summary.totalDurationMin).toBe(90);
+    expect(result.summary.directCost).toBe(50_000);
+    expect(result.summary.income).toBe(200_000);
+    expect(result.summary.netCashFlow).toBe(150_000);
   });
 
   it("renames the paired category when the project is renamed", async () => {
