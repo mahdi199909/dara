@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
@@ -28,21 +29,49 @@ const REPORT_TABS = [
 ] as const;
 
 export default function ReportsPage() {
+  const router = useRouter();
   const [preset, setPreset] = useState("month");
   const [tab, setTab] = useState<(typeof REPORT_TABS)[number]["key"]>("summary");
   const { data } = useSWR<any>(`/api/reports?preset=${preset}`, fetcher);
   const { format } = useCurrencyUnit();
 
+  // window.open(..., "_blank") — the old approach — targets a real browser tab, which doesn't
+  // exist inside the Capacitor WebView; there it silently fails to navigate anywhere useful and
+  // the SPA's own router falls back to "/". Both exports below branch on platform instead of
+  // relying on browser-only APIs.
   async function exportCsv(entity: string) {
-    window.open(`/api/export/${entity}`, "_blank");
+    const isNative = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    const filename = `${entity}.csv`;
+    let csv: string;
+    if (isNative) {
+      const { dispatchLocal } = await import("@/lib/localDispatcher");
+      csv = dispatchLocal("GET", `/api/export/${entity}`).json as string;
+    } else {
+      csv = await fetch(`/api/export/${entity}`).then((res) => res.text());
+    }
+
+    if (isNative) {
+      const { Filesystem, Directory, Encoding } = await import("@capacitor/filesystem");
+      await Filesystem.writeFile({ path: filename, data: csv, directory: Directory.Documents, encoding: Encoding.UTF8 });
+      alert(`فایل در پوشه Documents گوشی ذخیره شد: ${filename}`);
+    } else {
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   function exportPdf() {
     // jsPDF can't shape/reverse Persian (Arabic-script) text correctly — it renders as
     // disconnected, wrong-order letters. A real HTML report + the browser's native
     // print-to-PDF renders Persian perfectly since it's genuine text layout, not a
-    // font-embedding workaround. See src/app/print/report/page.tsx.
-    window.open(`/print/report?preset=${preset}`, "_blank");
+    // font-embedding workaround. See src/app/print/report/page.tsx. Plain in-app navigation
+    // (not window.open) since there's no separate browser tab inside the Capacitor WebView.
+    router.push(`/print/report?preset=${preset}`);
   }
 
   const timeColors = ["#2c7166", "#57a89c", "#b0a24a", "#c95a4c", "#8a7ac9", "#8a8a8a"];

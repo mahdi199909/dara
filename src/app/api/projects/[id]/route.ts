@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
     const [tasks, activities, transactions, events, settings, virtualAssetEntry] = await Promise.all([
       prisma.task.findMany({ where: { projectId: project.id, deletedAt: null }, orderBy: { createdAt: "desc" } }),
-      prisma.activity.findMany({ where: { projectId: project.id, deletedAt: null }, orderBy: { createdAt: "desc" } }),
+      prisma.activity.findMany({ where: { projectId: project.id, deletedAt: null }, include: { category: true }, orderBy: { createdAt: "desc" } }),
       prisma.transaction.findMany({ where: { projectId: project.id, deletedAt: null }, orderBy: { date: "desc" } }),
       prisma.event.findMany({ where: { projectId: project.id, deletedAt: null }, orderBy: { startAt: "desc" } }),
       prisma.settings.findUnique({ where: { userId } }),

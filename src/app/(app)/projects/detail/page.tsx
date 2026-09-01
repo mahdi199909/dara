@@ -126,20 +126,35 @@ function ProjectDetailContent() {
 
       <section>
         <h2 className="font-bold text-gray-700 text-sm mb-2">فعالیت‌ها</h2>
-        <Card>
-          {activities.length === 0 ? (
+        {activities.length === 0 ? (
+          <Card>
             <EmptyState message="فعالیتی برای این پروژه ثبت نشده." />
-          ) : (
-            <ul className="divide-y divide-gray-50">
-              {activities.map((a: any) => (
-                <li key={a.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className="text-gray-700">{a.title}</span>
-                  <span className="text-xs text-gray-400">{formatDuration(a.totalDurationMin)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(
+              activities.reduce((groups: Record<string, any[]>, a: any) => {
+                const key = a.category?.name ?? "بدون دسته‌بندی";
+                (groups[key] ??= []).push(a);
+                return groups;
+              }, {})
+            ).map(([categoryName, items]) => (
+              <div key={categoryName}>
+                <p className="text-xs text-gray-400 mb-1 px-1">{categoryName}</p>
+                <Card>
+                  <ul className="divide-y divide-gray-50">
+                    {(items as any[]).map((a) => (
+                      <li key={a.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                        <span className="text-gray-700">{a.title}</span>
+                        <span className="text-xs text-gray-400">{formatDuration(a.totalDurationMin)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>

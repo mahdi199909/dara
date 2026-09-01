@@ -96,6 +96,33 @@ export default function HomePage() {
       <DailyQuoteCard />
 
       <Card className="p-5">
+        {!showForm ? (
+          <button
+            onClick={() => setShowForm(true)}
+            className="w-full flex items-center justify-between text-gray-500 hover:text-gray-700 transition"
+          >
+            <span className="text-sm font-medium">ثبت کار</span>
+            <PlusIcon className="w-5 h-5 text-brand-600" />
+          </button>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-gray-800 text-sm">ثبت کار</h2>
+              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <CaptureForm
+              onDone={() => {
+                setShowForm(false);
+                mutate();
+              }}
+            />
+          </>
+        )}
+      </Card>
+
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold text-gray-800 text-sm">رویدادهای امروز</h2>
         </div>
@@ -161,33 +188,6 @@ export default function HomePage() {
           </ul>
         )}
         {activeHabits.length > 0 && <HabitAdherenceChart series={series} currentStreak={currentStreak} />}
-      </Card>
-
-      <Card className="p-5">
-        {!showForm ? (
-          <button
-            onClick={() => setShowForm(true)}
-            className="w-full flex items-center justify-between text-gray-500 hover:text-gray-700 transition"
-          >
-            <span className="text-sm font-medium">ثبت کار</span>
-            <PlusIcon className="w-5 h-5 text-brand-600" />
-          </button>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-gray-800 text-sm">ثبت کار</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 p-1">
-                <XIcon className="w-4 h-4" />
-              </button>
-            </div>
-            <CaptureForm
-              onDone={() => {
-                setShowForm(false);
-                mutate();
-              }}
-            />
-          </>
-        )}
       </Card>
 
       {durationHabit && (
