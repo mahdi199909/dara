@@ -11,7 +11,7 @@ import { PlusIcon, TrashIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
-import type { DataExportTable, ImportResult } from "@/local/dataExport";
+import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
 
 // Only shown once isNativePlatform() resolves true (see BackupTab) — a plain web session has
 // no on-device database to export and no OS share sheet to hand a file to.
@@ -563,5 +563,240 @@ function HistoryTab() {
         </ul>
       )}
     </Card>
+  );
+}
+
+// User-facing Persian names for src/local/dataExport.ts's DATA_EXPORT_TABLES, for the
+// pre-import confirmation and the post-import result summary below. Same convention as
+// AUDIT_ACTION_LABELS above — an unrecognized key (shouldn't happen, but a future table this
+// build doesn't have a label for yet) falls back to the raw table name rather than crashing.
+const TABLE_LABELS_FA: Partial<Record<DataExportTable, string>> = {
+  User: "کاربر",
+  Settings: "تنظیمات",
+  Project: "پروژه",
+  Category: "دسته‌بندی",
+  Task: "کار",
+  Habit: "عادت",
+  Activity: "فعالیت",
+  HabitCheckIn: "چک‌این عادت",
+  TimeEntry: "بازه زمانی",
+  FinanceAccount: "حساب مالی",
+  Asset: "دارایی",
+  AssetTransaction: "تراکنش دارایی",
+  InstallmentPlan: "طرح قسط",
+  Installment: "قسط",
+  Event: "رویداد",
+  EventCompletion: "تکمیل رویداد",
+  VirtualAssetEntry: "دارایی مجازی",
+  Transaction: "تراکنش مالی",
+  Reminder: "یادآور",
+  AuditLog: "سابقه فعالیت",
+  Notification: "اعلان",
+};
+
+/**
+ * Native-only cross-device data migration — see src/local/dataExport.ts for the actual export/
+ * import logic (this component only wires it to the filesystem/share plugins and a confirmation
+ * step). Gated to native the same way LicenseStatusCard/MembershipUpgradeCard above are: the tab
+ * itself is hidden on web by SettingsPage's own native check, so this component only ever
+ * mounts inside the Android shell, but it's written defensively (getLocalDbInstance() can still
+ * be null for an instant before FirstRunGate's bootstrap resolves) rather than assuming that.
+ */
+function BackupTab() {
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const [pendingImport, setPendingImport] = useState<{ file: DataExportFile; counts: Array<{ table: DataExportTable; count: number }> } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    setExportMessage(null);
+    try {
+      const [{ exportAllData }, { Filesystem, Directory, Encoding }, { Share }] = await Promise.all([
+        import("@/local/dataExport"),
+        import("@capacitor/filesystem"),
+        import("@capacitor/share"),
+      ]);
+      const db = getLocalDbInstance();
+      if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
+
+      const data = exportAllData(db);
+      const json = JSON.stringify(data, null, 2);
+      const filename = `panhan-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      // Same Filesystem.writeFile + Directory.Documents pattern already used for the per-entity
+      // CSV export (see src/app/(app)/reports/page.tsx) — plain UTF8 text, no base64 needed.
+      await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Documents, encoding: Encoding.UTF8 });
+      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents });
+      // `files` (not `url`) is @capacitor/share's option for a local file:// attachment — see
+      // node_modules/@capacitor/share's ShareOptions — so Telegram/email/etc. in the resulting
+      // share sheet receive the actual file, not just a path string.
+      await Share.share({ title: "پشتیبان اطلاعات پنهان", dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
+
+      setExportMessage(`فایل پشتیبان ساخته شد و در پوشه Documents ذخیره شد (${filename}).`);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "ساخت فایل پشتیبان با خطا مواجه شد.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so picking the exact same file again still fires onChange next time
+    if (!file) return;
+
+    setImportError(null);
+    setImportResult(null);
+    setPendingImport(null);
+
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        setImportError("فایل انتخاب‌شده یک JSON معتبر نیست.");
+        return;
+      }
+
+      const { validateExportFile, summarizeTableCounts } = await import("@/local/dataExport");
+      const validated = validateExportFile(parsed);
+      if (!validated.ok) {
+        setImportError(validated.error);
+        return;
+      }
+      const counts = summarizeTableCounts(validated.file.tables);
+      if (counts.length === 0) {
+        setImportError("این فایل هیچ داده‌ای برای وارد کردن ندارد.");
+        return;
+      }
+      setPendingImport({ file: validated.file, counts });
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "خواندن فایل با خطا مواجه شد.");
+    }
+  }
+
+  async function confirmImport() {
+    if (!pendingImport) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const { importAllData } = await import("@/local/dataExport");
+      const db = getLocalDbInstance();
+      if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
+      const result = importAllData(db, pendingImport.file);
+      setImportResult(result);
+      setPendingImport(null);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "وارد کردن اطلاعات با خطا مواجه شد.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  const resultTables = importResult
+    ? ([...new Set([...Object.keys(importResult.added), ...Object.keys(importResult.skipped), ...Object.keys(importResult.errors)])] as DataExportTable[])
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-5 space-y-3">
+        <h2 className="font-bold text-gray-800 text-sm">خروجی گرفتن از همه اطلاعات</h2>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          یک فایل شامل تمام اطلاعات شما (کارها، فعالیت‌ها، تراکنش‌ها، عادت‌ها و ...) می‌سازد تا آن را از طریق تلگرام، ایمیل، فضای ابری یا هر روش دیگری به گوشی جدید منتقل کنید.
+        </p>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          className="rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+        >
+          {exporting ? "در حال ساخت فایل..." : "ساخت و اشتراک‌گذاری فایل پشتیبان"}
+        </button>
+        {exportMessage && <p className="text-xs text-brand-600">{exportMessage}</p>}
+        {exportError && <p className="text-xs text-waste-500">{exportError}</p>}
+      </Card>
+
+      <Card className="p-5 space-y-3">
+        <h2 className="font-bold text-gray-800 text-sm">وارد کردن اطلاعات از فایل پشتیبان</h2>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          فایل پشتیبانی که قبلاً از گوشی دیگر ساخته‌اید را انتخاب کنید. این کار فقط اطلاعات جدید را اضافه می‌کند — چیزی را جایگزین یا حذف نمی‌کند.
+        </p>
+        <label className="inline-block rounded-xl bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium cursor-pointer hover:bg-gray-200">
+          انتخاب فایل پشتیبان
+          <input type="file" accept="application/json,.json" onChange={handleFileSelected} className="hidden" />
+        </label>
+        {importError && <p className="text-xs text-waste-500">{importError}</p>}
+
+        {pendingImport && (
+          <div className="rounded-xl bg-brand-50 border border-brand-100 p-4 space-y-3">
+            <p className="text-sm text-brand-700">
+              این فایل شامل موارد زیر است — مواردی که از قبل روی این گوشی وجود داشته باشند نادیده گرفته می‌شوند:
+            </p>
+            <ul className="text-xs text-gray-600 space-y-1">
+              {pendingImport.counts.map(({ table, count }) => (
+                <li key={table} className="flex items-center justify-between">
+                  <span>{TABLE_LABELS_FA[table] ?? table}</span>
+                  <span className="font-medium" dir="ltr">
+                    {count.toLocaleString("fa-IR")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={confirmImport}
+                disabled={importing}
+                className="flex-1 rounded-xl bg-brand-600 text-white py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+              >
+                {importing ? "در حال وارد کردن..." : "تأیید و وارد کردن"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingImport(null)}
+                disabled={importing}
+                className="flex-1 rounded-xl bg-gray-100 text-gray-600 py-2 text-sm"
+              >
+                انصراف
+              </button>
+            </div>
+          </div>
+        )}
+
+        {importResult && (
+          <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
+            <p className="text-sm text-gray-700 font-medium">نتیجه وارد کردن اطلاعات:</p>
+            {resultTables.length === 0 ? (
+              <p className="text-xs text-gray-400">هیچ داده‌ی جدیدی برای اضافه کردن پیدا نشد.</p>
+            ) : (
+              <ul className="text-xs text-gray-600 space-y-1">
+                {resultTables.map((table) => {
+                  const added = importResult.added[table] ?? 0;
+                  const skipped = importResult.skipped[table] ?? 0;
+                  const errors = importResult.errors[table] ?? 0;
+                  return (
+                    <li key={table}>
+                      <span className="text-gray-700">{TABLE_LABELS_FA[table] ?? table}: </span>
+                      {added > 0 && <span className="text-brand-600">{added.toLocaleString("fa-IR")} مورد اضافه شد</span>}
+                      {added > 0 && skipped > 0 && "، "}
+                      {skipped > 0 && <span>{skipped.toLocaleString("fa-IR")} مورد از قبل موجود بود</span>}
+                      {(added > 0 || skipped > 0) && errors > 0 && "، "}
+                      {errors > 0 && <span className="text-waste-500">{errors.toLocaleString("fa-IR")} مورد با خطا مواجه شد</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }
