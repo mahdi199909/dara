@@ -1,7 +1,8 @@
 // CORS for the handful of routes the Android app's Capacitor WebView calls directly over the
-// network (see src/lib/remoteAuth.ts: /api/auth/login, /api/auth/register, /api/license/status).
-// Every other /api/* route is either same-origin only (web) or never reached at all on native
-// (see src/lib/localDispatcher.ts), so this stays scoped to exactly those three.
+// network (see src/lib/remoteAuth.ts: /api/auth/login, /api/auth/register, /api/license/status;
+// see src/local/sync.ts: /api/sync/push, /api/sync/pull). Every other /api/* route is either
+// same-origin only (web) or never reached at all on native (see src/lib/localDispatcher.ts), so
+// this stays scoped to exactly those five.
 //
 // Allow-Origin "*" is safe here because the native flow no longer relies on cookies for these
 // calls (see requireUserId's Authorization-header fallback in src/lib/auth.ts) — there's no
