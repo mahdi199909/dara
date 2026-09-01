@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layoutDirection="rtl"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <ImageView
+        android:id="@+id/habit_checkbox"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:padding="2dp"
+        android:src="@drawable/ic_habit_unchecked"
+        android:contentDescription="@string/widget_habits_checkbox_description" />
+
+    <TextView
+        android:id="@+id/habit_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:textDirection="rtl"
+        android:textAlignment="viewStart"
+        android:textColor="#374151"
+        android:textSize="12sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+</LinearLayout>

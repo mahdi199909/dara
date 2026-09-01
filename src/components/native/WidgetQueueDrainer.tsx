@@ -4,9 +4,9 @@
 // alive across a simple background/foreground cycle, so nothing re-runs FirstRunGate's one-time
 // bootstrap effect just because the user switched back to an already-running app.
 //
-// 1. Drain captures logged through the home-screen widget while the app wasn't in the
-//    foreground — see src/local/widgetQueue.ts for why the widget hands off through a queue
-//    rather than writing the shared database directly.
+// 1. Drain captures and habit check-in toggles logged through the home-screen widgets while the
+//    app wasn't in the foreground — see src/local/widgetQueue.ts for why the widgets hand off
+//    through a queue rather than writing the shared database directly.
 // 2. Refresh every SWR-cached page unconditionally, not only when the drain above found
 //    something: revalidateOnFocus is deliberately off (see SWRProvider.tsx — it caused a request
 //    storm), so without this, reopening the app after any amount of time shows whatever was

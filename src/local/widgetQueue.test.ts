@@ -17,6 +17,7 @@ import { openLocalDb, resetLocalDbForTests, type LocalDb } from "./db";
 import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import { drainWidgetQueue } from "./widgetQueue";
 import { listActivities } from "./repositories/activities";
+import { createHabit, listHabits } from "./repositories/habits";
 
 const USER_ID = "user_test_1";
 
@@ -108,5 +109,86 @@ describe("drainWidgetQueue", () => {
     expect(count).toBe(2);
     const activities = listActivities(db, USER_ID);
     expect(activities.map((a) => a.title).sort()).toEqual(["اول", "دوم"]);
+  });
+});
+
+describe("drainWidgetQueue — habit check-in toggles", () => {
+  it("drains a single pending toggle into a real check-in", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "مدیتیشن" });
+    const todayIso = new Date().toISOString();
+    store.set("widget_pending_habit_checkins", JSON.stringify([{ habitId: habit.id, date: todayIso }]));
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+    expect(store.has("widget_pending_habit_checkins")).toBe(false);
+
+    const { habits } = listHabits(db, USER_ID);
+    expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
+  });
+
+  it("replays multiple queued taps on the same habit in order, netting out to the correct final state", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "ورزش" });
+    const todayIso = new Date().toISOString();
+    // check, uncheck, check — three widget taps queued while the app was closed should net to
+    // "checked", the same as if each tap had been applied live against a real database.
+    store.set(
+      "widget_pending_habit_checkins",
+      JSON.stringify([
+        { habitId: habit.id, date: todayIso },
+        { habitId: habit.id, date: todayIso },
+        { habitId: habit.id, date: todayIso },
+      ])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(3);
+    const { habits } = listHabits(db, USER_ID);
+    expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
+  });
+
+  it("skips a toggle for a habit that no longer exists instead of failing the whole drain", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "نوشتن" });
+    const todayIso = new Date().toISOString();
+    store.set(
+      "widget_pending_habit_checkins",
+      JSON.stringify([
+        { habitId: "does-not-exist", date: todayIso },
+        { habitId: habit.id, date: todayIso },
+      ])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+    const { habits } = listHabits(db, USER_ID);
+    expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
+  });
+
+  it("ignores malformed entries and clears the queue regardless", async () => {
+    const db = await freshDb();
+    store.set("widget_pending_habit_checkins", JSON.stringify([{ habitId: 123 }, "not-an-object", null]));
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(0);
+    expect(store.has("widget_pending_habit_checkins")).toBe(false);
+  });
+
+  it("drains queued captures and habit check-ins together in one call", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "کتاب خواندن" });
+    const todayIso = new Date().toISOString();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([{ title: "جلسه", categoryId: null, durationMinutes: 20, startedAt: "2026-08-20T08:00:00.000Z" }])
+    );
+    store.set("widget_pending_habit_checkins", JSON.stringify([{ habitId: habit.id, date: todayIso }]));
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(2);
+    expect(listActivities(db, USER_ID)).toHaveLength(1);
+    const { habits } = listHabits(db, USER_ID);
+    expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
   });
 });

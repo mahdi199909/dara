@@ -10,12 +10,17 @@ import { CATEGORY_KINDS, CATEGORY_KIND_LABELS, type CategoryKind, VALUE_TYPES, V
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
+import { getLocalDbInstance } from "@/local/db";
+import type { DataExportTable, ImportResult } from "@/local/dataExport";
 
+// Only shown once isNativePlatform() resolves true (see BackupTab) — a plain web session has
+// no on-device database to export and no OS share sheet to hand a file to.
 const TABS = [
   { key: "personal", label: "شخصی" },
   { key: "financial", label: "مالی" },
   { key: "categories", label: "دسته‌بندی‌ها" },
   { key: "history", label: "سابقه" },
+  { key: "backup", label: "پشتیبان‌گیری" },
 ] as const;
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -37,13 +42,23 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("personal");
+  // Same SSR-safe pattern as LicenseStatusCard/MembershipUpgradeCard below: only ever branch on
+  // isNativePlatform() inside an effect, never at module scope or during the first render, so
+  // the static-export prerender (no `window`) and the real client render always agree.
+  const [native, setNative] = useState(false);
+
+  useEffect(() => {
+    setNative(Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()));
+  }, []);
+
+  const visibleTabs = native ? TABS : TABS.filter((t) => t.key !== "backup");
 
   return (
     <div className="px-4 py-6 space-y-4">
       <h1 className="text-lg font-bold text-gray-800">تنظیمات</h1>
 
       <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -60,6 +75,7 @@ export default function SettingsPage() {
       {tab === "financial" && <FinancialTab />}
       {tab === "categories" && <CategoriesTab />}
       {tab === "history" && <HistoryTab />}
+      {tab === "backup" && <BackupTab />}
     </div>
   );
 }

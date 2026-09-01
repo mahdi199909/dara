@@ -10,4 +10,8 @@
     <string name="widget_today_events_title">رویدادهای امروز</string>
     <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>
     <string name="widget_today_events_description">نمایش لیست رویدادهای امروز</string>
+    <string name="widget_habits_title">عادت‌های امروز</string>
+    <string name="widget_habits_empty">عادتی برای امروز ثبت نشده</string>
+    <string name="widget_habits_description">نمایش و ثبت عادت‌های امروز، بدون باز کردن اپ پنهان</string>
+    <string name="widget_habits_checkbox_description">علامت‌گذاری عادت</string>
 </resources>
