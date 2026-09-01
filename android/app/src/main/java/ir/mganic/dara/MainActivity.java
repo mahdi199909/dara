@@ -4,8 +4,13 @@ import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.print.PrintAttributes;
+import android.print.PrintManager;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -28,6 +33,16 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
 
     private static final long DELAYED_WIDGET_REFRESH_MS = 800;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // window.print() is a no-op in a bare Android WebView — Capacitor doesn't wire up
+        // printing by default. This exposes window.AndroidPrint.print() to JS instead (see
+        // src/app/print/report/page.tsx), bridging to Android's real PrintManager so "چاپ /
+        // ذخیره PDF" produces the system print dialog, which itself offers "Save as PDF".
+        getBridge().getWebView().addJavascriptInterface(new WebPrintBridge(this), "AndroidPrint");
+    }
 
     // QuickCaptureWidgetProvider is deliberately excluded here: it's a static "tap to open the
     // capture form" button with no dynamic content (see its own file-level comment), so
@@ -63,6 +78,30 @@ public class MainActivity extends BridgeActivity {
             intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
             intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
             context.sendBroadcast(intent);
+        }
+    }
+
+    // addJavascriptInterface() methods are always invoked on a WebView background thread, never
+    // the UI thread — every real call here has to hop back via runOnUiThread() before touching
+    // PrintManager or the WebView itself.
+    private static class WebPrintBridge {
+        private final MainActivity activity;
+
+        WebPrintBridge(MainActivity activity) {
+            this.activity = activity;
+        }
+
+        @JavascriptInterface
+        public void print() {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    WebView webView = activity.getBridge().getWebView();
+                    PrintManager printManager = (PrintManager) activity.getSystemService(Context.PRINT_SERVICE);
+                    String jobName = activity.getString(R.string.app_name) + " Document";
+                    printManager.print(jobName, webView.createPrintDocumentAdapter(jobName), new PrintAttributes.Builder().build());
+                }
+            });
         }
     }
 }

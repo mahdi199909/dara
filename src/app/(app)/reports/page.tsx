@@ -42,26 +42,39 @@ export default function ReportsPage() {
   async function exportCsv(entity: string) {
     const isNative = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
     const filename = `${entity}.csv`;
-    let csv: string;
-    if (isNative) {
-      const { dispatchLocal } = await import("@/lib/localDispatcher");
-      csv = dispatchLocal("GET", `/api/export/${entity}`).json as string;
-    } else {
-      csv = await fetch(`/api/export/${entity}`).then((res) => res.text());
-    }
+    try {
+      let csv: string;
+      if (isNative) {
+        const { dispatchLocal } = await import("@/lib/localDispatcher");
+        const res = dispatchLocal("GET", `/api/export/${entity}`);
+        if (res.status >= 400) throw new Error((res.json as { error?: string })?.error ?? `HTTP ${res.status}`);
+        csv = res.json as string;
+      } else {
+        const res = await fetch(`/api/export/${entity}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        csv = await res.text();
+      }
 
-    if (isNative) {
-      const { Filesystem, Directory, Encoding } = await import("@capacitor/filesystem");
-      await Filesystem.writeFile({ path: filename, data: csv, directory: Directory.Documents, encoding: Encoding.UTF8 });
-      alert(`فایل در پوشه Documents گوشی ذخیره شد: ${filename}`);
-    } else {
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (isNative) {
+        // Same Filesystem.writeFile + getUri + Share.share pattern already proven working for
+        // the full-data backup export (see settings/page.tsx's BackupTab) — a plain alert() here
+        // before gave no way to actually get the file off the device, and (being un-caught)
+        // silently swallowed any real error too.
+        const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([import("@capacitor/filesystem"), import("@capacitor/share")]);
+        await Filesystem.writeFile({ path: filename, data: csv, directory: Directory.Documents, encoding: Encoding.UTF8 });
+        const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents });
+        await Share.share({ title: filename, dialogTitle: "ارسال فایل خروجی", files: [uri] });
+      } else {
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      alert(`خروجی گرفتن ناموفق بود: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

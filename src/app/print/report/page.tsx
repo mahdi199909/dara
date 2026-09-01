@@ -46,7 +46,14 @@ function PrintReportContent() {
 
       <div className="no-print flex justify-end mb-6">
         <button
-          onClick={() => window.print()}
+          onClick={() => {
+            // window.print() is a no-op in the Capacitor Android WebView — MainActivity.java
+            // bridges a real one via window.AndroidPrint when running natively (see its own
+            // comment); falls back to the browser's real window.print() on web.
+            const androidPrint = (window as unknown as { AndroidPrint?: { print?: () => void } }).AndroidPrint;
+            if (androidPrint?.print) androidPrint.print();
+            else window.print();
+          }}
           className="bg-brand-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-brand-700"
         >
           چاپ / ذخیره PDF
