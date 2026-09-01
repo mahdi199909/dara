@@ -14,4 +14,5 @@
     <string name="widget_habits_empty">عادتی برای امروز ثبت نشده</string>
     <string name="widget_habits_description">نمایش و ثبت عادت‌های امروز، بدون باز کردن اپ پنهان</string>
     <string name="widget_habits_checkbox_description">علامت‌گذاری عادت</string>
+    <string name="splash_slogan">پنهان جایی است که در خاموشی می‌سازی. و آنچه آنجا ساخته می‌شود، دارایی پنهان توست.</string>
 </resources>

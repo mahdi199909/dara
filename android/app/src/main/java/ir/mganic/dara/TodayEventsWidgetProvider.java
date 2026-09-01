@@ -46,14 +46,15 @@ public class TodayEventsWidgetProvider extends AppWidgetProvider {
                 }
             }
 
-            Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-            if (launch != null) {
-                launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                PendingIntent pendingIntent = PendingIntent.getActivity(
-                    context, appWidgetId, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                );
-                views.setOnClickPendingIntent(R.id.widget_today_events_root, pendingIntent);
-            }
+            // Explicit MainActivity intent, not getLaunchIntentForPackage() — that resolves to
+            // whichever Activity holds the LAUNCHER intent-filter, which is now SplashActivity;
+            // a widget tap should jump straight into the app, not sit through the splash delay.
+            Intent launch = new Intent(context, MainActivity.class);
+            launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent pendingIntent = PendingIntent.getActivity(
+                context, appWidgetId, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            views.setOnClickPendingIntent(R.id.widget_today_events_root, pendingIntent);
 
             appWidgetManager.updateAppWidget(appWidgetId, views);
         }

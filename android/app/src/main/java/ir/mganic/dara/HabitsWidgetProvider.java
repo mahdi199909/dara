@@ -143,19 +143,20 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
             }
         }
 
-        Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-        if (launch != null) {
-            launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            PendingIntent launchPendingIntent = PendingIntent.getActivity(
-                context, appWidgetId, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
-            // Rows bind their own, more specific PendingIntent on R.id.habit_checkbox above;
-            // that always takes precedence over this root-level one for a tap that lands on the
-            // checkbox specifically, so this only fires for taps elsewhere on the card (the
-            // title text, the empty state, empty space) — same "tap card to open app" pattern as
-            // TodayEventsWidgetProvider.
-            views.setOnClickPendingIntent(R.id.widget_habits_root, launchPendingIntent);
-        }
+        // Explicit MainActivity intent, not getLaunchIntentForPackage() — that resolves to
+        // whichever Activity holds the LAUNCHER intent-filter, which is now SplashActivity; a
+        // widget tap should jump straight into the app, not sit through the splash delay.
+        Intent launch = new Intent(context, MainActivity.class);
+        launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent launchPendingIntent = PendingIntent.getActivity(
+            context, appWidgetId, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        // Rows bind their own, more specific PendingIntent on R.id.habit_checkbox above;
+        // that always takes precedence over this root-level one for a tap that lands on the
+        // checkbox specifically, so this only fires for taps elsewhere on the card (the
+        // title text, the empty state, empty space) — same "tap card to open app" pattern as
+        // TodayEventsWidgetProvider.
+        views.setOnClickPendingIntent(R.id.widget_habits_root, launchPendingIntent);
 
         return views;
     }
