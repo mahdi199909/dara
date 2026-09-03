@@ -500,7 +500,13 @@ model VirtualAssetEntry {
   date         DateTime
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt // added for server sync (Phase 12) — recalcActivityDuration/syncTaskVirtualAsset/syncHabitCheckInVirtualAsset all update this in place after creation
+  // @default(now()) is required here, not just @updatedAt: without it, `prisma db push`
+  // refuses to add this as a required column to a table that already has rows in production
+  // ("Added the required column `updatedAt`... without a default value... not possible to
+  // execute this step") — this took down the live deploy once already (see the Phase 12
+  // migration history). @updatedAt alone only governs Prisma Client's behavior on .update()
+  // calls; it isn't a database-level default `db push` can use to backfill existing rows.
+  updatedAt DateTime @default(now()) @updatedAt // added for server sync (Phase 12) — recalcActivityDuration/syncTaskVirtualAsset/syncHabitCheckInVirtualAsset all update this in place after creation
 
   @@index([userId])
   @@index([date])
@@ -570,7 +576,9 @@ model HabitCheckIn {
   durationMin Int?
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt // added for server sync (Phase 12) — durationMin can be PATCHed in after creation
+  // See VirtualAssetEntry.updatedAt's comment: @default(now()) is required, not just
+  // @updatedAt, or `prisma db push` refuses to add this to a table with existing rows.
+  updatedAt DateTime @default(now()) @updatedAt // added for server sync (Phase 12) — durationMin can be PATCHed in after creation
 
   virtualAssetEntry VirtualAssetEntry?
 
