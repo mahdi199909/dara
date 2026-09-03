@@ -34,6 +34,7 @@ import {
   computeCategoryCalendar,
   recordDailyCapitalSnapshot,
   computeDayBattery,
+  sumCategoryLifetimeMinutes,
 } from "@/local/reportEngine";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
@@ -269,7 +270,9 @@ register("GET", "/api/reports", ({ db, userId, query }) => {
   const netWorth = computeNetWorth(db, userId);
   const hiddenCost = computeHiddenCostReport(db, userId, from, to);
   const habitsReport = computeHabitsReport(db, userId, from, to);
-  const narrative = generateNarrative(report, label);
+  const topProductive = [...report.timeByCategory].filter((c) => c.kind === "PRODUCTIVE").sort((a, b) => b.minutes - a.minutes)[0];
+  const topCategoryLifetimeMinutes = topProductive ? sumCategoryLifetimeMinutes(db, userId, topProductive.categoryId) : 0;
+  const narrative = generateNarrative(report, hiddenCost, topCategoryLifetimeMinutes);
   return { report, netWorth, hiddenCost, habitsReport, narrative, label, from, to };
 });
 register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {

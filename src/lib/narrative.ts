@@ -1,32 +1,40 @@
-import { formatToman, toPersianDigits } from "./money";
-import type { TimeAndMoneyReport } from "./reportEngine";
+import { computeTimeCost } from "./timeCost";
+import { phraseSpend, phraseHidden, phraseBuild } from "./phrasing";
+import type { TimeAndMoneyReport, HiddenCostReport } from "./reportEngine";
 
-export function generateNarrative(report: TimeAndMoneyReport, periodLabel: string): string {
-  const totalHours = Math.round(report.totalDurationMin / 60);
-  const lines: string[] = [];
+/**
+ * A three-act narrative for the reporting period, replacing the old seven-line accounting-table
+ * dump. Render order is fixed (پرده ۱→۲→۳) per the pain→path→pride rule and is never
+ * reordered by data: چه خرج کردی (pain) → چه پنهان بود (pain, surfaced) → چه ساختی (pride).
+ * Any act with nothing real to report is simply omitted — never a fabricated placeholder.
+ *
+ * `topCategoryLifetimeMinutes` is the caller's job to fetch (see sumCategoryLifetimeMinutes in
+ * reportEngine.ts / local/reportEngine.ts) for whichever category ends up being Act 3's subject
+ * — this function stays pure (no DB access) so it can be unit-tested directly like everything
+ * else phrasing-related.
+ */
+export function generateNarrative(report: TimeAndMoneyReport, hiddenCost: HiddenCostReport, topCategoryLifetimeMinutes: number): string {
+  const acts: string[] = [];
 
-  lines.push(`در ${periodLabel} شما ${toPersianDigits(totalHours)} ساعت فعالیت ثبت کرده‌اید.`);
-
-  const topCategories = [...report.timeByCategory].sort((a, b) => b.minutes - a.minutes).slice(0, 5);
-  for (const c of topCategories) {
-    const hours = Math.round((c.minutes / 60) * 10) / 10;
-    if (hours <= 0) continue;
-    lines.push(`${toPersianDigits(hours)} ساعت صرف ${c.name} شده.`);
+  // پرده ۱ — چه خرج کردی: the period's single biggest time sink, whatever its kind.
+  const topSpend = [...report.timeByCategory].sort((a, b) => b.minutes - a.minutes)[0];
+  if (topSpend && topSpend.minutes > 0) {
+    const tomans = computeTimeCost(topSpend.minutes, report.hourlyValue);
+    acts.push(phraseSpend(topSpend.minutes, tomans, topSpend.name));
   }
 
-  lines.push(`هزینه مستقیم شما: ${formatToman(report.expense)} تومان.`);
-  lines.push(`هزینه زمانی: ${formatToman(report.timeCost)} تومان.`);
-  lines.push(`هزینه واقعی: ${formatToman(report.realCost)} تومان.`);
-
-  if (report.opportunityCost > 0) {
-    lines.push(`هزینه فرصت زمان‌های اتلافی: ${formatToman(report.opportunityCost)} تومان.`);
+  // پرده ۲ — چه پنهان بود: the single largest hidden-cost item, if the period has one at all.
+  const topHidden = hiddenCost.items[0]; // already sorted by hiddenCost descending
+  if (topHidden && topHidden.hiddenCost > 0) {
+    acts.push(phraseHidden(topHidden.hiddenCost, topHidden.title));
   }
 
-  if (report.virtualAssetValue > 0) {
-    lines.push(`دارایی مجازی ایجادشده: ${formatToman(report.virtualAssetValue)} تومان.`);
+  // پرده ۳ — چه ساختی: the period's top PRODUCTIVE-category contribution, with its own
+  // lifetime running total (not this period's total) — see phraseBuild's "جمعش الان" clause.
+  const topBuild = [...report.timeByCategory].filter((c) => c.kind === "PRODUCTIVE").sort((a, b) => b.minutes - a.minutes)[0];
+  if (topBuild && topBuild.minutes > 0) {
+    acts.push(phraseBuild(topBuild.minutes, topBuild.name, topCategoryLifetimeMinutes));
   }
 
-  lines.push(`درآمد: ${formatToman(report.income)} تومان و خالص جریان نقدی: ${formatToman(report.net)} تومان.`);
-
-  return lines.join(" ");
+  return acts.join(" ");
 }

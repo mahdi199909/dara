@@ -31,7 +31,7 @@ export interface TimeAndMoneyReport {
   neutralMin: number;
   wasteMin: number;
   productiveRatio: number;
-  timeByCategory: { categoryId: string; name: string; color: string; minutes: number }[];
+  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number }[];
   timeByProject: { projectId: string; name: string; minutes: number }[];
   income: number;
   expense: number;
@@ -117,7 +117,7 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
   let productiveMin = 0;
   let neutralMin = 0;
   let wasteMin = 0;
-  const byCategory = new Map<string, { name: string; color: string; minutes: number }>();
+  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number }>();
   const byProject = new Map<string, { name: string; minutes: number }>();
 
   function addTime(categoryId: string | null, projectId: string | null, minutes: number) {
@@ -129,7 +129,7 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
     else neutralMin += minutes;
 
     if (cat) {
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -529,6 +529,17 @@ function sumInvestedMinutesLocal(db: LocalDb, userId: string, fromIso?: string):
   const taskMin = projectTasks.reduce((s, t) => s + Math.max(0, Math.round((parseDate(t.endAt).getTime() - parseDate(t.startAt).getTime()) / 60000)), 0);
 
   return (productive?.total ?? 0) + (habits?.total ?? 0) + taskMin;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's sumCategoryLifetimeMinutes — see its doc
+ * comment for why this is TimeEntry-only, not the full timeByCategory source mix. */
+export function sumCategoryLifetimeMinutes(db: LocalDb, userId: string, categoryId: string): number {
+  const row = db.get<{ total: number | null }>(
+    `SELECT SUM(te."durationMin") as total FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND a."categoryId" = ? AND te."durationMin" IS NOT NULL`,
+    [userId, categoryId]
+  );
+  return row?.total ?? 0;
 }
 
 export function computeFounderCapital(db: LocalDb, userId: string): FounderCapital {

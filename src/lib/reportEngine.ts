@@ -17,7 +17,7 @@ export interface TimeAndMoneyReport {
   wasteMin: number;
   productiveRatio: number; // 0-1
 
-  timeByCategory: { categoryId: string; name: string; color: string; minutes: number }[];
+  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number }[];
   timeByProject: { projectId: string; name: string; minutes: number }[];
 
   income: number;
@@ -75,7 +75,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
   let productiveMin = 0;
   let neutralMin = 0;
   let wasteMin = 0;
-  const byCategory = new Map<string, { name: string; color: string; minutes: number }>();
+  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number }>();
   const byProject = new Map<string, { name: string; minutes: number }>();
 
   for (const te of timeEntries) {
@@ -89,7 +89,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
     if (te.activity.category) {
       const cat = te.activity.category;
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -112,7 +112,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     else neutralMin += minutes;
 
     if (task.category) {
-      const entry = byCategory.get(task.category.id) ?? { name: task.category.name, color: task.category.color, minutes: 0 };
+      const entry = byCategory.get(task.category.id) ?? { name: task.category.name, color: task.category.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(task.category.id, entry);
     }
@@ -135,7 +135,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     else neutralMin += minutes;
 
     if (event.category) {
-      const entry = byCategory.get(event.category.id) ?? { name: event.category.name, color: event.category.color, minutes: 0 };
+      const entry = byCategory.get(event.category.id) ?? { name: event.category.name, color: event.category.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(event.category.id, entry);
     }
@@ -158,7 +158,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
     if (checkIn.habit.category) {
       const cat = checkIn.habit.category;
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -581,6 +581,21 @@ async function sumInvestedMinutes(userId: string, from?: Date): Promise<number> 
   const taskMin = projectTasks.reduce((s, t) => s + Math.max(0, Math.round((t.endAt!.getTime() - t.startAt!.getTime()) / 60000)), 0);
 
   return (productive._sum.durationMin ?? 0) + habitMin + taskMin;
+}
+
+/**
+ * Lifetime TimeEntry minutes logged under one specific category — for narrative.ts's Act 3
+ * ("چه ساختی"), which names the period's top-productive category and reports its running total.
+ * Deliberately scoped to TimeEntry only (not the full TimeEntry+Task+Event+HabitCheckIn mix
+ * computeTimeAndMoneyReport's timeByCategory uses) — a lighter, targeted query for just the one
+ * category the narrative ends up naming, rather than recomputing the whole report lifetime-wide.
+ */
+export async function sumCategoryLifetimeMinutes(userId: string, categoryId: string): Promise<number> {
+  const result = await prisma.timeEntry.aggregate({
+    _sum: { durationMin: true },
+    where: { activity: { userId, deletedAt: null, categoryId }, durationMin: { not: null } },
+  });
+  return result._sum.durationMin ?? 0;
 }
 
 /**
