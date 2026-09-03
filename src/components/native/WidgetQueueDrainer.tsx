@@ -1,20 +1,24 @@
 "use client";
 
-// Four jobs on every app resume, all stemming from the same fact: Capacitor keeps the WebView
+// Five jobs on every app resume, all stemming from the same fact: Capacitor keeps the WebView
 // alive across a simple background/foreground cycle, so nothing re-runs FirstRunGate's one-time
 // bootstrap effect just because the user switched back to an already-running app.
 //
 // 1. Drain captures and habit check-in toggles logged through the home-screen widgets while the
 //    app wasn't in the foreground — see src/local/widgetQueue.ts for why the widgets hand off
 //    through a queue rather than writing the shared database directly.
-// 2. Re-check license/trial status with the server (see nativeOnboarding.ts's own doc comment
+// 2. Record today's "سرمایه من" snapshot (see reportEngine.ts's recordDailyCapitalSnapshot) —
+//    idempotent, so this just keeps today's row fresh as more work gets logged through the day;
+//    without a resume-time trigger, a user who never happens to open Home on a given day would
+//    never get that day's snapshot recorded at all.
+// 3. Re-check license/trial status with the server (see nativeOnboarding.ts's own doc comment
 //    on refreshLicenseStatus) — otherwise trial-days-remaining stays frozen at whatever
 //    FirstRunGate's very first login cached, forever.
-// 3. Push local changes and pull remote ones (see nativeOnboarding.ts's syncWithServer) —
+// 4. Push local changes and pull remote ones (see nativeOnboarding.ts's syncWithServer) —
 //    AWAITED, unlike the fire-and-forget license refresh above: the mutate() below is what makes
 //    a freshly-pulled row actually visible, so revalidating before sync lands would just show the
 //    same stale data one resume cycle early.
-// 4. Refresh every SWR-cached page unconditionally, not only when the steps above found
+// 5. Refresh every SWR-cached page unconditionally, not only when the steps above found
 //    something: revalidateOnFocus is deliberately off (see SWRProvider.tsx — it caused a request
 //    storm), so without this, reopening the app after any amount of time shows whatever was
 //    cached from before, stale, until the user happens to navigate somewhere new.
@@ -34,10 +38,11 @@ export default function WidgetQueueDrainer() {
     let remove: (() => void) | undefined;
 
     (async () => {
-      const [{ App }, { drainWidgetQueue }, { getLocalUserId }] = await Promise.all([
+      const [{ App }, { drainWidgetQueue }, { getLocalUserId }, { recordDailyCapitalSnapshot }] = await Promise.all([
         import("@capacitor/app"),
         import("@/local/widgetQueue"),
         import("@/local/localUser"),
+        import("@/local/reportEngine"),
       ]);
       const handle = await App.addListener("resume", async () => {
         const db = getLocalDbInstance();
@@ -46,6 +51,11 @@ export default function WidgetQueueDrainer() {
             await drainWidgetQueue(db, getLocalUserId(db));
           } catch (err) {
             console.error("widget queue drain on resume failed", err);
+          }
+          try {
+            recordDailyCapitalSnapshot(db, getLocalUserId(db));
+          } catch (err) {
+            console.error("capital snapshot on resume failed", err);
           }
         }
         // Unconditional, and outside the try/catch above: a failed drain shouldn't also

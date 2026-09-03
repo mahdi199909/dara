@@ -46,6 +46,7 @@ model User {
   notifications       Notification[]
   habits              Habit[]
   license             License?
+  capitalSnapshots    CapitalSnapshot[]
 }
 
 model Settings {
@@ -642,4 +643,29 @@ model License {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// "سرمایه من" (Founder Capital) — see src/lib/reportEngine.ts's computeFounderCapital
+// ---------------------------------------------------------------------------
+
+// One row per user per Jalali calendar day — powers the growth sparkline and today/month
+// deltas on the Home dashboard. `date` is a Jalali day key (e.g. "1405-06-12"), not a
+// DateTime — a deliberate exception to this file's usual "dates stored as UTC DateTime" rule
+// (see the top of this file): the natural key for "which day" is the day itself, and storing
+// it pre-formatted makes the one-row-per-day uniqueness constraint and "last 30 days"
+// ordering plain string operations instead of Jalali conversion math on every read.
+model CapitalSnapshot {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date              String
+  investedMinutes   Int
+  virtualAssetValue Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId])
 }

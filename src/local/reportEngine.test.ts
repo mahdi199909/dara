@@ -7,6 +7,7 @@ import {
   computeNetWorth,
   computeHabitsReport,
   computeCategoryCalendar,
+  computeFounderCapital,
 } from "./reportEngine";
 
 const USER_ID = "user_report_1";
@@ -193,5 +194,210 @@ describe("local reportEngine", () => {
     expect(report.items).toHaveLength(1);
     expect(report.items[0].directCost).toBe(500000);
     expect(report.totalDirectCost).toBe(500000);
+  });
+
+  describe("computeFounderCapital", () => {
+    it("returns all zeros and a null firstRecordAt for a user with no records", async () => {
+      const db = await freshDb();
+      const capital = computeFounderCapital(db, USER_ID);
+      expect(capital).toEqual({
+        investedMinutes: 0,
+        virtualAssetValue: 0,
+        skillCount: 0,
+        projectCount: 0,
+        assetCount: 0,
+        firstRecordAt: null,
+        todayDeltaMinutes: 0,
+        monthDeltaMinutes: 0,
+      });
+    });
+
+    it("counts habit check-in minutes regardless of the habit's category (habit-only user)", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_waste", "WASTE"); // deliberately not PRODUCTIVE — habit minutes should still count
+      db.run(`INSERT INTO "Habit" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "habit_1",
+        USER_ID,
+        "cat_waste",
+        "مطالعه",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "ci_1",
+        "habit_1",
+        now(),
+        30,
+        now(),
+        now(),
+      ]);
+
+      const capital = computeFounderCapital(db, USER_ID);
+      expect(capital.investedMinutes).toBe(30);
+      expect(capital.firstRecordAt).not.toBeNull();
+    });
+
+    it("counts TimeEntry minutes only under a PRODUCTIVE category (activity-only user)", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_prod", "PRODUCTIVE");
+      insertCategory(db, "cat_waste", "WASTE");
+      db.run(`INSERT INTO "Activity" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "a_prod",
+        USER_ID,
+        "cat_prod",
+        "کدنویسی",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "TimeEntry" ("id","activityId","startAt","durationMin","isRunning","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
+        "te_prod",
+        "a_prod",
+        now(),
+        60,
+        0,
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "Activity" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "a_waste",
+        USER_ID,
+        "cat_waste",
+        "شبکه اجتماعی",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "TimeEntry" ("id","activityId","startAt","durationMin","isRunning","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
+        "te_waste",
+        "a_waste",
+        now(),
+        45,
+        0,
+        now(),
+        now(),
+      ]);
+
+      const capital = computeFounderCapital(db, USER_ID);
+      expect(capital.investedMinutes).toBe(60); // only the PRODUCTIVE-category activity counts
+    });
+
+    it("combines activity, habit, and project-task minutes, and counts skills/projects/assets from real rows", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_prod", "PRODUCTIVE");
+      db.run(`INSERT INTO "Activity" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "a1",
+        USER_ID,
+        "cat_prod",
+        "کدنویسی",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "TimeEntry" ("id","activityId","startAt","durationMin","isRunning","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
+        "te1",
+        "a1",
+        now(),
+        60,
+        0,
+        now(),
+        now(),
+      ]);
+
+      db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "مطالعه", now(), now()]);
+      db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "ci_1",
+        "habit_1",
+        now(),
+        20,
+        now(),
+        now(),
+      ]);
+
+      db.run(`INSERT INTO "Project" ("id","userId","name","status","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "proj_done",
+        USER_ID,
+        "پروژه تمام‌شده",
+        "COMPLETED",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "Project" ("id","userId","name","status","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "proj_active",
+        USER_ID,
+        "پروژه فعال",
+        "ACTIVE",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "Task" ("id","userId","projectId","title","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "task_1",
+        USER_ID,
+        "proj_active",
+        "کار پروژه",
+        "2026-01-01T09:00:00.000Z",
+        "2026-01-01T09:40:00.000Z",
+        now(),
+        now(),
+      ]);
+
+      db.run(`INSERT INTO "Asset" ("id","userId","name","purchasePrice","purchaseDate","currentValue","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "asset_1",
+        USER_ID,
+        "لپ‌تاپ",
+        50000000,
+        now(),
+        40000000,
+        now(),
+        now(),
+      ]);
+
+      db.run(
+        `INSERT INTO "VirtualAssetEntry" ("id","userId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)`,
+        ["va_1", USER_ID, "cat_prod", 60, 100000, 100000, now(), now(), now()]
+      );
+
+      const capital = computeFounderCapital(db, USER_ID);
+      expect(capital.investedMinutes).toBe(60 + 20 + 40); // activity + habit + project-task
+      expect(capital.virtualAssetValue).toBe(100000);
+      expect(capital.skillCount).toBe(1); // one distinct category with a virtual asset entry
+      expect(capital.projectCount).toBe(1); // only the COMPLETED project counts
+      expect(capital.assetCount).toBe(1);
+      expect(capital.firstRecordAt).not.toBeNull();
+    });
+
+    it("investedMinutes and virtualAssetValue only increase as more records are added (monotonic accumulation)", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_prod", "PRODUCTIVE");
+      db.run(`INSERT INTO "Activity" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "a1",
+        USER_ID,
+        "cat_prod",
+        "کدنویسی",
+        now(),
+        now(),
+      ]);
+
+      let previous = computeFounderCapital(db, USER_ID);
+      expect(previous.investedMinutes).toBe(0);
+
+      for (let i = 0; i < 5; i++) {
+        db.run(`INSERT INTO "TimeEntry" ("id","activityId","startAt","durationMin","isRunning","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
+          `te_${i}`,
+          "a1",
+          now(),
+          10,
+          0,
+          now(),
+          now(),
+        ]);
+        db.run(
+          `INSERT INTO "VirtualAssetEntry" ("id","userId","categoryId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?)`,
+          [`va_${i}`, USER_ID, "cat_prod", 10, 50000, 5000, now(), now(), now()]
+        );
+
+        const current = computeFounderCapital(db, USER_ID);
+        expect(current.investedMinutes).toBeGreaterThan(previous.investedMinutes);
+        expect(current.virtualAssetValue).toBeGreaterThan(previous.virtualAssetValue);
+        previous = current;
+      }
+    });
   });
 });

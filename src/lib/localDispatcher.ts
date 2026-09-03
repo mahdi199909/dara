@@ -32,6 +32,7 @@ import {
   computeHiddenCostReport,
   computeHabitsReport,
   computeCategoryCalendar,
+  recordDailyCapitalSnapshot,
 } from "@/local/reportEngine";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
@@ -277,6 +278,13 @@ register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
   const { start, end } = jalaliMonthRange(jy, jm);
   const categories = computeCategoryCalendar(db, userId, start, end);
   return { categories, jy, jm };
+});
+
+// "سرمایه من" (Founder Capital) — see src/app/api/capital/route.ts for the web shape this mirrors.
+register("GET", "/api/capital", ({ db, userId }) => {
+  const capital = recordDailyCapitalSnapshot(db, userId);
+  const snapshots = db.all(`SELECT * FROM "CapitalSnapshot" WHERE "userId" = ? ORDER BY "date" DESC LIMIT 30`, [userId]).reverse();
+  return { capital, snapshots };
 });
 
 // --- Local-only: the one-time remote login/license cache (see src/lib/nativeOnboarding.ts) ---

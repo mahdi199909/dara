@@ -8,6 +8,7 @@ import { computeHourlyValue } from "@/lib/hourlyValue";
 import { computeTimeCost } from "@/lib/timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence, type HabitLike, type HabitCheckInLike } from "@/lib/habitStreak";
 import { dayKeyIso } from "@/lib/calendarGrid";
+import { toJalali, jalaliMonthRange, jalaliDateKey } from "@/lib/jalali";
 import type { LocalDb } from "./db";
 import { fetchByIds } from "./relations";
 
@@ -486,4 +487,105 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
     }
     return { categoryId: cat.id, name: cat.name, icon: cat.icon, color: cat.color, totalMinutes, totalDays: dayMap.size, days };
   });
+}
+
+// --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
+
+export interface FounderCapital {
+  investedMinutes: number;
+  virtualAssetValue: number;
+  skillCount: number;
+  projectCount: number;
+  assetCount: number;
+  firstRecordAt: Date | null;
+  todayDeltaMinutes: number;
+  monthDeltaMinutes: number;
+}
+
+/** Mirrors src/lib/reportEngine.ts's sumInvestedMinutes — see that file's doc comment for the
+ * three-source rationale. `fromIso` omitted means lifetime. */
+function sumInvestedMinutesLocal(db: LocalDb, userId: string, fromIso?: string): number {
+  const productive = db.get<{ total: number | null }>(
+    `SELECT SUM(te."durationMin") as total FROM "TimeEntry" te
+     JOIN "Activity" a ON a."id" = te."activityId"
+     JOIN "Category" c ON c."id" = a."categoryId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND c."kind" = 'PRODUCTIVE' AND te."durationMin" IS NOT NULL
+     ${fromIso ? `AND te."startAt" >= ?` : ""}`,
+    fromIso ? [userId, fromIso] : [userId]
+  );
+  const habits = db.get<{ total: number | null }>(
+    `SELECT SUM(hc."durationMin") as total FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."durationMin" IS NOT NULL
+     ${fromIso ? `AND hc."date" >= ?` : ""}`,
+    fromIso ? [userId, fromIso] : [userId]
+  );
+  const projectTasks = db.all<{ startAt: string; endAt: string }>(
+    `SELECT "startAt","endAt" FROM "Task"
+     WHERE "userId" = ? AND "deletedAt" IS NULL AND "projectId" IS NOT NULL AND "startAt" IS NOT NULL AND "endAt" IS NOT NULL
+     ${fromIso ? `AND "startAt" >= ?` : ""}`,
+    fromIso ? [userId, fromIso] : [userId]
+  );
+  const taskMin = projectTasks.reduce((s, t) => s + Math.max(0, Math.round((parseDate(t.endAt).getTime() - parseDate(t.startAt).getTime()) / 60000)), 0);
+
+  return (productive?.total ?? 0) + (habits?.total ?? 0) + taskMin;
+}
+
+export function computeFounderCapital(db: LocalDb, userId: string): FounderCapital {
+  const now = new Date();
+  const today = startOfDay(now);
+  const { jy, jm } = toJalali(now);
+  const monthStart = jalaliMonthRange(jy, jm).start;
+
+  const investedMinutes = sumInvestedMinutesLocal(db, userId);
+  const todayDeltaMinutes = sumInvestedMinutesLocal(db, userId, iso(today));
+  const monthDeltaMinutes = sumInvestedMinutesLocal(db, userId, iso(monthStart));
+
+  const vaRow = db.get<{ total: number | null }>(`SELECT SUM("totalValue") as total FROM "VirtualAssetEntry" WHERE "userId" = ?`, [userId]);
+  const skillRow = db.get<{ n: number }>(`SELECT COUNT(DISTINCT "categoryId") as n FROM "VirtualAssetEntry" WHERE "userId" = ? AND "categoryId" IS NOT NULL`, [userId]);
+  const projectRow = db.get<{ n: number }>(`SELECT COUNT(*) as n FROM "Project" WHERE "userId" = ? AND "deletedAt" IS NULL AND "status" = 'COMPLETED'`, [userId]);
+  const assetRow = db.get<{ n: number }>(`SELECT COUNT(*) as n FROM "Asset" WHERE "userId" = ? AND "deletedAt" IS NULL`, [userId]);
+
+  const firstActivity = db.get<{ createdAt: string | null }>(`SELECT MIN("createdAt") as "createdAt" FROM "Activity" WHERE "userId" = ? AND "deletedAt" IS NULL`, [userId]);
+  const firstHabitCheckIn = db.get<{ createdAt: string | null }>(
+    `SELECT MIN(hc."createdAt") as "createdAt" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId" WHERE h."userId" = ? AND h."deletedAt" IS NULL`,
+    [userId]
+  );
+  const firstVirtualAsset = db.get<{ createdAt: string | null }>(`SELECT MIN("createdAt") as "createdAt" FROM "VirtualAssetEntry" WHERE "userId" = ?`, [userId]);
+  const firstProjectTask = db.get<{ createdAt: string | null }>(
+    `SELECT MIN("createdAt") as "createdAt" FROM "Task" WHERE "userId" = ? AND "deletedAt" IS NULL AND "projectId" IS NOT NULL`,
+    [userId]
+  );
+
+  const firstDates = [firstActivity?.createdAt, firstHabitCheckIn?.createdAt, firstVirtualAsset?.createdAt, firstProjectTask?.createdAt]
+    .filter((d): d is string => !!d)
+    .map((d) => parseDate(d));
+  const firstRecordAt = firstDates.length > 0 ? new Date(Math.min(...firstDates.map((d) => d.getTime()))) : null;
+
+  return {
+    investedMinutes,
+    virtualAssetValue: vaRow?.total ?? 0,
+    skillCount: skillRow?.n ?? 0,
+    projectCount: projectRow?.n ?? 0,
+    assetCount: assetRow?.n ?? 0,
+    firstRecordAt,
+    todayDeltaMinutes,
+    monthDeltaMinutes,
+  };
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's recordDailyCapitalSnapshot — see its doc
+ * comment for the idempotent-upsert rationale. */
+export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): FounderCapital {
+  const capital = computeFounderCapital(db, userId);
+  const date = jalaliDateKey(new Date());
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO "CapitalSnapshot" ("id","userId","date","investedMinutes","virtualAssetValue","createdAt")
+     VALUES (?,?,?,?,?,?)
+     ON CONFLICT("userId","date") DO UPDATE SET
+       "investedMinutes" = excluded."investedMinutes",
+       "virtualAssetValue" = excluded."virtualAssetValue"`,
+    [crypto.randomUUID(), userId, date, capital.investedMinutes, capital.virtualAssetValue, now]
+  );
+  return capital;
 }

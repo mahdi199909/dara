@@ -3,6 +3,7 @@ import { computeHourlyValue } from "./hourlyValue";
 import { computeTimeCost } from "./timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence } from "./habitStreak";
 import { dayKeyIso } from "./calendarGrid";
+import { toJalali, jalaliMonthRange, jalaliDateKey } from "./jalali";
 
 export interface TimeAndMoneyReport {
   from: Date;
@@ -532,4 +533,123 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
       days,
     };
   });
+}
+
+// --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
+
+export interface FounderCapital {
+  investedMinutes: number;
+  virtualAssetValue: number;
+  skillCount: number;
+  projectCount: number;
+  assetCount: number;
+  firstRecordAt: Date | null;
+  todayDeltaMinutes: number;
+  monthDeltaMinutes: number;
+}
+
+/**
+ * Three additive, non-overlapping time sources, optionally restricted to rows on/after `from`
+ * (omit for lifetime): TimeEntry minutes logged under a PRODUCTIVE category, HabitCheckIn
+ * minutes (any category — a kept habit counts regardless of its category tag), and Task-level
+ * startAt/endAt minutes for tasks attached to a project (the Quick Capture "log time on a
+ * project task" path, which never creates an Activity/TimeEntry, so it can't double-count with
+ * the first term).
+ */
+async function sumInvestedMinutes(userId: string, from?: Date): Promise<number> {
+  const [productive, habitCheckIns, projectTasks] = await Promise.all([
+    prisma.timeEntry.aggregate({
+      _sum: { durationMin: true },
+      where: {
+        activity: { userId, deletedAt: null, category: { kind: "PRODUCTIVE" } },
+        durationMin: { not: null },
+        ...(from ? { startAt: { gte: from } } : {}),
+      },
+    }),
+    prisma.habitCheckIn.findMany({
+      where: { habit: { userId, deletedAt: null }, durationMin: { not: null }, ...(from ? { date: { gte: from } } : {}) },
+      select: { durationMin: true },
+    }),
+    prisma.task.findMany({
+      where: { userId, deletedAt: null, projectId: { not: null }, startAt: { not: null }, endAt: { not: null }, ...(from ? { startAt: { gte: from } } : {}) },
+      select: { startAt: true, endAt: true },
+    }),
+  ]);
+
+  const habitMin = habitCheckIns.reduce((s, c) => s + (c.durationMin ?? 0), 0);
+  const taskMin = projectTasks.reduce((s, t) => s + Math.max(0, Math.round((t.endAt!.getTime() - t.startAt!.getTime()) / 60000)), 0);
+
+  return (productive._sum.durationMin ?? 0) + habitMin + taskMin;
+}
+
+/**
+ * "سرمایه من": lifetime accumulation across every table that represents time or value the user
+ * has actually put in — deliberately the one dashboard number that only ever goes up (see the
+ * product brief). firstRecordAt is null (triggering the empty state) only when none of the
+ * contributing tables have a single row yet.
+ */
+export async function computeFounderCapital(userId: string): Promise<FounderCapital> {
+  const now = new Date();
+  const today = startOfDay(now);
+  const { jy, jm } = toJalali(now);
+  const monthStart = jalaliMonthRange(jy, jm).start;
+
+  const [
+    investedMinutes,
+    todayDeltaMinutes,
+    monthDeltaMinutes,
+    virtualAssetValue,
+    skillCategories,
+    projectCount,
+    assetCount,
+    firstActivity,
+    firstHabitCheckIn,
+    firstVirtualAsset,
+    firstProjectTask,
+  ] = await Promise.all([
+    sumInvestedMinutes(userId),
+    sumInvestedMinutes(userId, today),
+    sumInvestedMinutes(userId, monthStart),
+    prisma.virtualAssetEntry.aggregate({ _sum: { totalValue: true }, where: { userId } }).then((r) => r._sum.totalValue ?? 0),
+    prisma.virtualAssetEntry.findMany({ where: { userId, categoryId: { not: null } }, select: { categoryId: true }, distinct: ["categoryId"] }),
+    prisma.project.count({ where: { userId, deletedAt: null, status: "COMPLETED" } }),
+    prisma.asset.count({ where: { userId, deletedAt: null } }),
+    prisma.activity.findFirst({ where: { userId, deletedAt: null }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.habitCheckIn.findFirst({ where: { habit: { userId, deletedAt: null } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.virtualAssetEntry.findFirst({ where: { userId }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.task.findFirst({ where: { userId, deletedAt: null, projectId: { not: null } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+  ]);
+
+  const firstDates = [firstActivity, firstHabitCheckIn, firstVirtualAsset, firstProjectTask]
+    .map((r) => r?.createdAt)
+    .filter((d): d is Date => !!d);
+  const firstRecordAt = firstDates.length > 0 ? new Date(Math.min(...firstDates.map((d) => d.getTime()))) : null;
+
+  return {
+    investedMinutes,
+    virtualAssetValue,
+    skillCount: skillCategories.length,
+    projectCount,
+    assetCount,
+    firstRecordAt,
+    todayDeltaMinutes,
+    monthDeltaMinutes,
+  };
+}
+
+/**
+ * Idempotent upsert of today's (Jalali) CapitalSnapshot row — safe to call as often as the app
+ * likes in a day (first-run, boot, resume, or every /api/capital read); it always converges to
+ * the latest true totals for today rather than freezing at whatever the first call that day saw.
+ * Returns the freshly-computed capital so callers don't need to recompute it separately.
+ */
+export async function recordDailyCapitalSnapshot(userId: string): Promise<FounderCapital> {
+  const capital = await computeFounderCapital(userId);
+  const date = jalaliDateKey(new Date());
+  await prisma.capitalSnapshot.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, investedMinutes: capital.investedMinutes, virtualAssetValue: capital.virtualAssetValue },
+    update: { investedMinutes: capital.investedMinutes, virtualAssetValue: capital.virtualAssetValue },
+  });
+  return capital;
 }

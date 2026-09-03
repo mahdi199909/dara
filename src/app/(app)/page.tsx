@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureForm from "@/components/CaptureForm";
+import CapitalHeader from "@/components/CapitalHeader";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -92,6 +93,8 @@ export default function HomePage() {
   return (
     <div className="px-4 py-8 space-y-6">
       <h1 className="text-xl font-bold text-gray-800 text-center">{greeting} 👋</h1>
+
+      <CapitalHeader onEmptyCta={() => setShowForm(true)} />
 
       <DailyQuoteCard />
 
