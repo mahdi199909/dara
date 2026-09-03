@@ -598,6 +598,16 @@ export async function sumCategoryLifetimeMinutes(userId: string, categoryId: str
   return result._sum.durationMin ?? 0;
 }
 
+/** Same idea as sumCategoryLifetimeMinutes, filtered by project instead — insights.ts's
+ * milestoneHours checks both categories and projects for a crossed hour threshold. */
+export async function sumProjectLifetimeMinutes(userId: string, projectId: string): Promise<number> {
+  const result = await prisma.timeEntry.aggregate({
+    _sum: { durationMin: true },
+    where: { activity: { userId, deletedAt: null, projectId }, durationMin: { not: null } },
+  });
+  return result._sum.durationMin ?? 0;
+}
+
 /**
  * "سرمایه من": lifetime accumulation across every table that represents time or value the user
  * has actually put in — deliberately the one dashboard number that only ever goes up (see the
@@ -680,14 +690,10 @@ export async function recordDailyCapitalSnapshot(userId: string): Promise<Founde
  * today's time actually go", not "invested capital". HabitCheckIn is excluded (see dayBattery.ts's
  * own comment): it has a real duration but no real clock-time slot to place on a timeline.
  */
-export async function computeDayBattery(userId: string): Promise<DayBatteryResult> {
-  const now = new Date();
-  const settings = await prisma.settings.findUnique({ where: { userId } });
-  const wakeHour = settings?.wakeHour ?? 7;
-  const sleepHour = settings?.sleepHour ?? 23;
-  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
-  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
-
+/** Every logged interval for `userId` inside [wakeTime, sleepTime) — factored out of
+ * computeDayBattery so src/lib/insightsData.ts's unloggedGap wrapper can call it once per day
+ * for the last 7 days, not just for today. */
+export async function fetchDayIntervals(userId: string, wakeTime: Date, sleepTime: Date): Promise<TimedInterval[]> {
   const [timeEntries, tasks, completions] = await Promise.all([
     prisma.timeEntry.findMany({
       where: { activity: { userId, deletedAt: null }, startAt: { gte: wakeTime, lt: sleepTime }, durationMin: { not: null } },
@@ -703,7 +709,7 @@ export async function computeDayBattery(userId: string): Promise<DayBatteryResul
     }),
   ]);
 
-  const intervals: TimedInterval[] = [
+  return [
     ...timeEntries.map((te) => ({
       start: te.startAt,
       end: te.endAt!,
@@ -722,6 +728,16 @@ export async function computeDayBattery(userId: string): Promise<DayBatteryResul
         kind: (c.event.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
       })),
   ];
+}
 
+export async function computeDayBattery(userId: string): Promise<DayBatteryResult> {
+  const now = new Date();
+  const settings = await prisma.settings.findUnique({ where: { userId } });
+  const wakeHour = settings?.wakeHour ?? 7;
+  const sleepHour = settings?.sleepHour ?? 23;
+  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
+  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+
+  const intervals = await fetchDayIntervals(userId, wakeTime, sleepTime);
   return computeDaySegments(wakeTime, sleepTime, now, intervals);
 }

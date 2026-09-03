@@ -542,6 +542,16 @@ export function sumCategoryLifetimeMinutes(db: LocalDb, userId: string, category
   return row?.total ?? 0;
 }
 
+/** Same idea as sumCategoryLifetimeMinutes, filtered by project instead. */
+export function sumProjectLifetimeMinutes(db: LocalDb, userId: string, projectId: string): number {
+  const row = db.get<{ total: number | null }>(
+    `SELECT SUM(te."durationMin") as total FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND a."projectId" = ? AND te."durationMin" IS NOT NULL`,
+    [userId, projectId]
+  );
+  return row?.total ?? 0;
+}
+
 export function computeFounderCapital(db: LocalDb, userId: string): FounderCapital {
   const now = new Date();
   const today = startOfDay(now);
@@ -607,13 +617,9 @@ export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): Founder
 /** On-device mirror of src/lib/reportEngine.ts's computeDayBattery — see its doc comment for
  * why the source set differs from computeFounderCapital's (all categories, all tasks, no
  * project restriction; HabitCheckIn excluded — no real clock-time slot). */
-export function computeDayBattery(db: LocalDb, userId: string): DayBatteryResult {
-  const now = new Date();
-  const settingsRow = db.get<{ wakeHour: number | null; sleepHour: number | null }>(`SELECT "wakeHour","sleepHour" FROM "Settings" WHERE "userId" = ?`, [userId]);
-  const wakeHour = settingsRow?.wakeHour ?? 7;
-  const sleepHour = settingsRow?.sleepHour ?? 23;
-  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
-  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+/** On-device mirror of src/lib/reportEngine.ts's fetchDayIntervals — factored out so
+ * src/local/insightsData.ts's unloggedGap wrapper can call it once per day for the last 7 days. */
+export function fetchDayIntervals(db: LocalDb, userId: string, wakeTime: Date, sleepTime: Date): TimedInterval[] {
   const wakeIso = iso(wakeTime);
   const sleepIso = iso(sleepTime);
 
@@ -638,13 +644,23 @@ export function computeDayBattery(db: LocalDb, userId: string): DayBatteryResult
     [userId, wakeIso, sleepIso]
   );
 
-  const intervals: TimedInterval[] = [
+  return [
     ...timeEntryRows.map((r) => ({ start: parseDate(r.startAt), end: parseDate(r.endAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
     ...taskRows.map((r) => ({ start: parseDate(r.startAt), end: parseDate(r.endAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
     ...completionRows
       .filter((r) => !r.eventAllDay)
       .map((r) => ({ start: parseDate(r.eventStartAt), end: parseDate(r.eventEndAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
   ];
+}
 
+export function computeDayBattery(db: LocalDb, userId: string): DayBatteryResult {
+  const now = new Date();
+  const settingsRow = db.get<{ wakeHour: number | null; sleepHour: number | null }>(`SELECT "wakeHour","sleepHour" FROM "Settings" WHERE "userId" = ?`, [userId]);
+  const wakeHour = settingsRow?.wakeHour ?? 7;
+  const sleepHour = settingsRow?.sleepHour ?? 23;
+  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
+  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+
+  const intervals = fetchDayIntervals(db, userId, wakeTime, sleepTime);
   return computeDaySegments(wakeTime, sleepTime, now, intervals);
 }

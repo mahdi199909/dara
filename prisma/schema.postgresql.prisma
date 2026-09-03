@@ -50,6 +50,7 @@ model User {
   habits              Habit[]
   license             License?
   capitalSnapshots    CapitalSnapshot[]
+  shownInsights       ShownInsight[]
 }
 
 model Settings {
@@ -685,4 +686,19 @@ model CapitalSnapshot {
 
   @@unique([userId, date])
   @@index([userId])
+}
+
+// One row per (user, insight) — see src/lib/insights.ts's selectDailyInsight. `insightId`
+// (not the model's own `id`) is what carries the 30-day suppression: it's upserted, so
+// re-showing the same finding just refreshes `shownAt` rather than creating a duplicate row.
+model ShownInsight {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  insightId String
+  shownAt   DateTime
+
+  @@unique([userId, insightId])
+  @@index([userId, shownAt])
 }

@@ -36,6 +36,7 @@ import {
   computeDayBattery,
   sumCategoryLifetimeMinutes,
 } from "@/local/reportEngine";
+import { computeDailyInsight } from "@/local/insightsData";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
 import { jalaliMonthRange, toJalali } from "@/lib/jalali";
@@ -292,6 +293,8 @@ register("GET", "/api/capital", ({ db, userId }) => {
 });
 
 register("GET", "/api/day-battery", ({ db, userId }) => ({ battery: computeDayBattery(db, userId) }));
+
+register("GET", "/api/insights", ({ db, userId }) => ({ insight: computeDailyInsight(db, userId) }));
 
 // --- Local-only: the one-time remote login/license cache (see src/lib/nativeOnboarding.ts) ---
 // Not a mirror of any web route — this is Android-only bookkeeping, so there's no shared
