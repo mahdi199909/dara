@@ -13,7 +13,7 @@ import {
   sumProjectLifetimeMinutes,
   fetchDayIntervals,
 } from "./reportEngine";
-import { selectDailyInsight, type InsightContext, type DailyMinutes, type Insight } from "./insights";
+import { selectDailyInsight, onThisDay, personalRecord, milestoneHours, type InsightContext, type DailyMinutes, type Insight } from "./insights";
 
 const SHOWN_SUPPRESSION_DAYS = 30;
 
@@ -40,12 +40,18 @@ function buildDailyMinutes(categoryCalendar: { days: Record<string, number> }[])
   return Array.from(totals.entries()).map(([date, minutes]) => ({ date, minutes }));
 }
 
-/**
- * Today's insight pick for `userId`, or null if nothing clears the honesty gate or everything
- * eligible was already shown in the last 30 days. Recording which insight was shown (so it isn't
- * repeated) happens here too, right after selection — the one side effect this wrapper has.
- */
-export async function computeDailyInsight(userId: string): Promise<Insight | null> {
+interface BuiltContext {
+  ctx: InsightContext;
+  dailyMinutes90d: DailyMinutes[];
+  /** Already excludes anything recorded earlier TODAY (see the comment at its computation) —
+   * both computeDailyInsight and computeDailyMomentCandidates share this exact set. */
+  alreadyShownIds: Set<string>;
+}
+
+/** Everything both computeDailyInsight and computeDailyMomentCandidates need — factored out so
+ * the (expensive, many-query) context assembly happens exactly once per exported function, not
+ * once per caller of this module. */
+async function buildContext(userId: string): Promise<BuiltContext> {
   const now = new Date();
 
   const [settings, capital, report7d, report30d, report90d, reportPrevious30d, hiddenCost7d, categoryCalendar90d] = await Promise.all([
@@ -111,18 +117,57 @@ export async function computeDailyInsight(userId: string): Promise<Insight | nul
     where: { userId, shownAt: { gte: daysAgo(now, SHOWN_SUPPRESSION_DAYS), lt: startOfToday } },
     select: { insightId: true },
   });
-  const alreadyShownIds = new Set(shownRows.map((r) => r.insightId));
 
-  const dailyMinutes90d = buildDailyMinutes(categoryCalendar90d);
+  return { ctx, dailyMinutes90d: buildDailyMinutes(categoryCalendar90d), alreadyShownIds: new Set(shownRows.map((r) => r.insightId)) };
+}
+
+async function recordShown(userId: string, insight: Insight, now: Date): Promise<void> {
+  await prisma.shownInsight.upsert({
+    where: { userId_insightId: { userId, insightId: insight.id } },
+    create: { userId, insightId: insight.id, shownAt: now },
+    update: { shownAt: now },
+  });
+}
+
+/**
+ * Today's insight pick for `userId`, or null if nothing clears the honesty gate or everything
+ * eligible was already shown in the last 30 days. Recording which insight was shown (so it isn't
+ * repeated) happens here too, right after selection — the one side effect this wrapper has.
+ */
+export async function computeDailyInsight(userId: string): Promise<Insight | null> {
+  const { ctx, dailyMinutes90d, alreadyShownIds } = await buildContext(userId);
   const insight = selectDailyInsight(ctx, dailyMinutes90d, userId, alreadyShownIds);
-
-  if (insight) {
-    await prisma.shownInsight.upsert({
-      where: { userId_insightId: { userId, insightId: insight.id } },
-      create: { userId, insightId: insight.id, shownAt: now },
-      update: { shownAt: now },
-    });
-  }
-
+  if (insight) await recordShown(userId, insight, ctx.now);
   return insight;
+}
+
+export interface DailyMomentCandidates {
+  discovery: Insight | null;
+  onThisDay: Insight | null;
+  milestone: Insight | null;
+}
+
+/**
+ * The three insight-engine-sourced candidates for DailyMomentCard's "discovery" / "onThisDay" /
+ * "milestone" types (its "quote" type is a separate, pre-existing, client-side data source — see
+ * fetchDailyQuote — with no context in common with this module). All three non-null candidates
+ * get recorded as shown immediately, even though only one of the 4 types will actually be
+ * displayed once src/lib/dailyMoment.ts's weighted pick runs client-side: the alternative (a
+ * second round-trip to mark only the winner as shown) needs its own stateful call this pass
+ * doesn't add, and a milestone/record candidate specifically MUST be marked shown regardless —
+ * without it, a 30-day-rolling "before < threshold" window would otherwise report the same
+ * crossing as freshly-happened on every call for weeks.
+ */
+export async function computeDailyMomentCandidates(userId: string): Promise<DailyMomentCandidates> {
+  const { ctx, dailyMinutes90d, alreadyShownIds } = await buildContext(userId);
+
+  const discovery = selectDailyInsight(ctx, dailyMinutes90d, userId, alreadyShownIds);
+  const onThisDayRaw = onThisDay(ctx);
+  const onThisDayPick = onThisDayRaw && !alreadyShownIds.has(onThisDayRaw.id) ? onThisDayRaw : null;
+  const milestoneRaw = personalRecord(ctx) ?? milestoneHours(ctx);
+  const milestonePick = milestoneRaw && !alreadyShownIds.has(milestoneRaw.id) ? milestoneRaw : null;
+
+  await Promise.all([discovery, onThisDayPick, milestonePick].filter((i): i is Insight => i !== null).map((i) => recordShown(userId, i, ctx.now)));
+
+  return { discovery, onThisDay: onThisDayPick, milestone: milestonePick };
 }

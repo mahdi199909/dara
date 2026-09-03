@@ -330,6 +330,14 @@ export function collectCandidates(ctx: InsightContext, dailyMinutes90d: DailyMin
 function seededIndex(seed: string, max: number): number {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  // MurmurHash3-style finalizer — see src/lib/dailyMoment.ts's identical fix for why: a plain
+  // polynomial hash barely moves when only trailing characters differ, which is exactly what
+  // consecutive Jalali dates in this seed do.
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x85ebca6b) >>> 0;
+  hash ^= hash >>> 13;
+  hash = Math.imul(hash, 0xc2b2ae35) >>> 0;
+  hash ^= hash >>> 16;
   return hash % max;
 }
 

@@ -244,8 +244,8 @@ function PersonalTab() {
   const [saved, setSaved] = useState(false);
   const { unit, setUnit } = useCurrencyUnit();
 
-  async function toggleDailyQuote() {
-    await apiPatch("/api/settings", { dailyQuoteEnabled: !data.settings.dailyQuoteEnabled });
+  async function toggleDailyMoment() {
+    await apiPatch("/api/settings", { dailyMomentEnabled: !data.settings.dailyMomentEnabled });
     mutate();
   }
 
@@ -332,18 +332,18 @@ function PersonalTab() {
       {data && (
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-700">نمایش جمله روز</p>
+            <p className="text-sm text-gray-700">نمایش لحظه روزانه</p>
             <p className="text-xs text-gray-400">فقط برای کاربران ویژه، در صفحه اصلی نشان داده می‌شود.</p>
           </div>
           <button
             type="button"
-            onClick={toggleDailyQuote}
-            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.dailyQuoteEnabled ? "bg-brand-500" : "bg-gray-300"}`}
-            aria-label={data.settings.dailyQuoteEnabled ? "غیرفعال کردن جمله روز" : "فعال کردن جمله روز"}
+            onClick={toggleDailyMoment}
+            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.dailyMomentEnabled ? "bg-brand-500" : "bg-gray-300"}`}
+            aria-label={data.settings.dailyMomentEnabled ? "غیرفعال کردن لحظه روزانه" : "فعال کردن لحظه روزانه"}
           >
             <span
               className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
-              style={{ [data.settings.dailyQuoteEnabled ? "left" : "right"]: "3px" }}
+              style={{ [data.settings.dailyMomentEnabled ? "left" : "right"]: "3px" }}
             />
           </button>
         </div>

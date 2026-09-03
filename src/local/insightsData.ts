@@ -5,7 +5,7 @@
 // one computed daily pick.
 import { computeHourlyValue } from "@/lib/hourlyValue";
 import { jalaliDateKey } from "@/lib/jalali";
-import { selectDailyInsight, type InsightContext, type DailyMinutes, type Insight } from "@/lib/insights";
+import { selectDailyInsight, onThisDay, personalRecord, milestoneHours, type InsightContext, type DailyMinutes, type Insight } from "@/lib/insights";
 import type { LocalDb } from "./db";
 import {
   computeTimeAndMoneyReport,
@@ -39,7 +39,14 @@ function buildDailyMinutes(categoryCalendar: { days: Record<string, number> }[])
   return Array.from(totals.entries()).map(([date, minutes]) => ({ date, minutes }));
 }
 
-export function computeDailyInsight(db: LocalDb, userId: string): Insight | null {
+interface BuiltContext {
+  ctx: InsightContext;
+  dailyMinutes90d: DailyMinutes[];
+  alreadyShownIds: Set<string>;
+}
+
+/** On-device mirror of src/lib/insightsData.ts's buildContext. */
+function buildContext(db: LocalDb, userId: string): BuiltContext {
   const now = new Date();
 
   const settingsRow = db.get<{ wakeHour: number | null; sleepHour: number | null; monthlyIncome: number | null; workingHoursMonth: number | null; hourlyValueOverride: number | null }>(
@@ -98,18 +105,45 @@ export function computeDailyInsight(db: LocalDb, userId: string): Insight | null
     `SELECT "insightId" FROM "ShownInsight" WHERE "userId" = ? AND "shownAt" >= ? AND "shownAt" < ?`,
     [userId, sinceIso, startOfToday.toISOString()]
   );
-  const alreadyShownIds = new Set(shownRows.map((r) => r.insightId));
 
-  const dailyMinutes90d = buildDailyMinutes(categoryCalendar90d);
+  return { ctx, dailyMinutes90d: buildDailyMinutes(categoryCalendar90d), alreadyShownIds: new Set(shownRows.map((r) => r.insightId)) };
+}
+
+function recordShown(db: LocalDb, userId: string, insight: Insight, now: Date): void {
+  db.run(
+    `INSERT INTO "ShownInsight" ("id","userId","insightId","shownAt") VALUES (?,?,?,?)
+     ON CONFLICT("userId","insightId") DO UPDATE SET "shownAt" = excluded."shownAt"`,
+    [crypto.randomUUID(), userId, insight.id, now.toISOString()]
+  );
+}
+
+export function computeDailyInsight(db: LocalDb, userId: string): Insight | null {
+  const { ctx, dailyMinutes90d, alreadyShownIds } = buildContext(db, userId);
   const insight = selectDailyInsight(ctx, dailyMinutes90d, userId, alreadyShownIds);
+  if (insight) recordShown(db, userId, insight, ctx.now);
+  return insight;
+}
 
-  if (insight) {
-    db.run(
-      `INSERT INTO "ShownInsight" ("id","userId","insightId","shownAt") VALUES (?,?,?,?)
-       ON CONFLICT("userId","insightId") DO UPDATE SET "shownAt" = excluded."shownAt"`,
-      [crypto.randomUUID(), userId, insight.id, now.toISOString()]
-    );
+export interface DailyMomentCandidates {
+  discovery: Insight | null;
+  onThisDay: Insight | null;
+  milestone: Insight | null;
+}
+
+/** On-device mirror of src/lib/insightsData.ts's computeDailyMomentCandidates — see its doc
+ * comment for why all three non-null candidates get recorded as shown immediately. */
+export function computeDailyMomentCandidates(db: LocalDb, userId: string): DailyMomentCandidates {
+  const { ctx, dailyMinutes90d, alreadyShownIds } = buildContext(db, userId);
+
+  const discovery = selectDailyInsight(ctx, dailyMinutes90d, userId, alreadyShownIds);
+  const onThisDayRaw = onThisDay(ctx);
+  const onThisDayPick = onThisDayRaw && !alreadyShownIds.has(onThisDayRaw.id) ? onThisDayRaw : null;
+  const milestoneRaw = personalRecord(ctx) ?? milestoneHours(ctx);
+  const milestonePick = milestoneRaw && !alreadyShownIds.has(milestoneRaw.id) ? milestoneRaw : null;
+
+  for (const insight of [discovery, onThisDayPick, milestonePick]) {
+    if (insight) recordShown(db, userId, insight, ctx.now);
   }
 
-  return insight;
+  return { discovery, onThisDay: onThisDayPick, milestone: milestonePick };
 }
