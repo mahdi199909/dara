@@ -33,6 +33,7 @@ import {
   computeHabitsReport,
   computeCategoryCalendar,
   recordDailyCapitalSnapshot,
+  computeDayBattery,
 } from "@/local/reportEngine";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
@@ -286,6 +287,8 @@ register("GET", "/api/capital", ({ db, userId }) => {
   const snapshots = db.all(`SELECT * FROM "CapitalSnapshot" WHERE "userId" = ? ORDER BY "date" DESC LIMIT 30`, [userId]).reverse();
   return { capital, snapshots };
 });
+
+register("GET", "/api/day-battery", ({ db, userId }) => ({ battery: computeDayBattery(db, userId) }));
 
 // --- Local-only: the one-time remote login/license cache (see src/lib/nativeOnboarding.ts) ---
 // Not a mirror of any web route — this is Android-only bookkeeping, so there's no shared

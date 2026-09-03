@@ -17,11 +17,32 @@ function refreshAllCaches() {
   mutate((key) => typeof key === "string" && key.startsWith("/api/transactions"));
   mutate("/api/accounts");
   mutate((key) => typeof key === "string" && key.startsWith("/api/virtual-assets"));
+  mutate("/api/day-battery");
+  mutate("/api/capital");
 }
 
 type FlowType = "COST" | "INCOME";
 
-export default function CaptureForm({ onDone }: { onDone: () => void }) {
+// Plain ASCII "HH:MM", 24-hour — matches TimeScrollPicker's own value format, which submit()
+// below feeds straight into `new Date(\`${day10}T${startTime}:00\`)`. Not jalali.ts's formatTime:
+// that one applies toPersianDigits, which would break that exact Date-string parse.
+function hhmm(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export default function CaptureForm({
+  onDone,
+  initialStart,
+  initialEnd,
+}: {
+  onDone: () => void;
+  /** Pre-fills day/start/end — see DayBattery's "tap an unlogged gap" flow, the mandatory
+   * "path" in the pain→path→pride rule. Only meaningful together; a lone initialStart with no
+   * initialEnd is still honored (end just stays blank for the user to fill in). */
+  initialStart?: Date;
+  initialEnd?: Date;
+}) {
   const { categories } = useCategories();
 
   const [title, setTitle] = useState("");
@@ -29,9 +50,9 @@ export default function CaptureForm({ onDone }: { onDone: () => void }) {
   const [valueType, setValueType] = useState<ValueType>("EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [day, setDay] = useState(new Date());
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [day, setDay] = useState(initialStart ?? new Date());
+  const [startTime, setStartTime] = useState(initialStart ? hhmm(initialStart) : "");
+  const [endTime, setEndTime] = useState(initialEnd ? hhmm(initialEnd) : "");
   const [flowType, setFlowType] = useState<FlowType>("COST");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);

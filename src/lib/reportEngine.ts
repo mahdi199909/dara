@@ -4,6 +4,7 @@ import { computeTimeCost } from "./timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence } from "./habitStreak";
 import { dayKeyIso } from "./calendarGrid";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "./jalali";
+import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "./dayBattery";
 
 export interface TimeAndMoneyReport {
   from: Date;
@@ -652,4 +653,60 @@ export async function recordDailyCapitalSnapshot(userId: string): Promise<Founde
     update: { investedMinutes: capital.investedMinutes, virtualAssetValue: capital.virtualAssetValue },
   });
   return capital;
+}
+
+// --- computeDayBattery ("DayBattery") -------------------------------------------------------
+
+/**
+ * Today's waking-hours timeline (see src/lib/dayBattery.ts's computeDaySegments for the pure
+ * sweep algorithm this wraps). Three chronologically-positioned time sources, deliberately not
+ * the same set computeFounderCapital uses: ALL categories count here (not just PRODUCTIVE), and
+ * ALL tasks with a logged startAt/endAt count (not just project-linked ones) — this is "where did
+ * today's time actually go", not "invested capital". HabitCheckIn is excluded (see dayBattery.ts's
+ * own comment): it has a real duration but no real clock-time slot to place on a timeline.
+ */
+export async function computeDayBattery(userId: string): Promise<DayBatteryResult> {
+  const now = new Date();
+  const settings = await prisma.settings.findUnique({ where: { userId } });
+  const wakeHour = settings?.wakeHour ?? 7;
+  const sleepHour = settings?.sleepHour ?? 23;
+  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
+  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+
+  const [timeEntries, tasks, completions] = await Promise.all([
+    prisma.timeEntry.findMany({
+      where: { activity: { userId, deletedAt: null }, startAt: { gte: wakeTime, lt: sleepTime }, durationMin: { not: null } },
+      include: { activity: { include: { category: true } } },
+    }),
+    prisma.task.findMany({
+      where: { userId, deletedAt: null, startAt: { gte: wakeTime, lt: sleepTime }, endAt: { not: null } },
+      include: { category: true },
+    }),
+    prisma.eventCompletion.findMany({
+      where: { occurrenceDate: { gte: wakeTime, lt: sleepTime }, event: { userId, deletedAt: null } },
+      include: { event: { include: { category: true } } },
+    }),
+  ]);
+
+  const intervals: TimedInterval[] = [
+    ...timeEntries.map((te) => ({
+      start: te.startAt,
+      end: te.endAt!,
+      kind: (te.activity.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
+    })),
+    ...tasks.map((t) => ({
+      start: t.startAt!,
+      end: t.endAt!,
+      kind: (t.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
+    })),
+    ...completions
+      .filter((c) => !c.event.allDay)
+      .map((c) => ({
+        start: c.event.startAt,
+        end: c.event.endAt,
+        kind: (c.event.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
+      })),
+  ];
+
+  return computeDaySegments(wakeTime, sleepTime, now, intervals);
 }

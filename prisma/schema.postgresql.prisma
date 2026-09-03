@@ -70,6 +70,12 @@ model Settings {
   hourlyValueOverride Int?
   dashboardCardPrefs  String? // JSON: which dashboard cards are hidden
   dailyQuoteEnabled   Boolean @default(true) // Home page's quote-of-the-day section (server-sourced, license-gated)
+  // Waking-hours window for the Home page's DayBattery — literal same-day hour markers (0-23),
+  // no overnight/night-shift support (sleepHour <= wakeHour just yields a degenerate empty
+  // battery, see computeDaySegments). Plain Int with a literal default, unlike updatedAt's
+  // now() default — a numeric literal is always safely db-push-able onto an existing table.
+  wakeHour  Int @default(7)
+  sleepHour Int @default(23)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

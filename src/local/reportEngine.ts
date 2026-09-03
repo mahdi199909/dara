@@ -9,6 +9,7 @@ import { computeTimeCost } from "@/lib/timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence, type HabitLike, type HabitCheckInLike } from "@/lib/habitStreak";
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "@/lib/jalali";
+import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "@/lib/dayBattery";
 import type { LocalDb } from "./db";
 import { fetchByIds } from "./relations";
 
@@ -588,4 +589,51 @@ export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): Founder
     [crypto.randomUUID(), userId, date, capital.investedMinutes, capital.virtualAssetValue, now]
   );
   return capital;
+}
+
+// --- computeDayBattery ("DayBattery") -------------------------------------------------------
+
+/** On-device mirror of src/lib/reportEngine.ts's computeDayBattery — see its doc comment for
+ * why the source set differs from computeFounderCapital's (all categories, all tasks, no
+ * project restriction; HabitCheckIn excluded — no real clock-time slot). */
+export function computeDayBattery(db: LocalDb, userId: string): DayBatteryResult {
+  const now = new Date();
+  const settingsRow = db.get<{ wakeHour: number | null; sleepHour: number | null }>(`SELECT "wakeHour","sleepHour" FROM "Settings" WHERE "userId" = ?`, [userId]);
+  const wakeHour = settingsRow?.wakeHour ?? 7;
+  const sleepHour = settingsRow?.sleepHour ?? 23;
+  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
+  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+  const wakeIso = iso(wakeTime);
+  const sleepIso = iso(sleepTime);
+
+  const timeEntryRows = db.all<{ startAt: string; endAt: string; kind: string | null }>(
+    `SELECT te."startAt", te."endAt", c."kind" FROM "TimeEntry" te
+     JOIN "Activity" a ON a."id" = te."activityId"
+     LEFT JOIN "Category" c ON c."id" = a."categoryId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" < ? AND te."durationMin" IS NOT NULL`,
+    [userId, wakeIso, sleepIso]
+  );
+  const taskRows = db.all<{ startAt: string; endAt: string; kind: string | null }>(
+    `SELECT t."startAt", t."endAt", c."kind" FROM "Task" t
+     LEFT JOIN "Category" c ON c."id" = t."categoryId"
+     WHERE t."userId" = ? AND t."deletedAt" IS NULL AND t."startAt" >= ? AND t."startAt" < ? AND t."endAt" IS NOT NULL`,
+    [userId, wakeIso, sleepIso]
+  );
+  const completionRows = db.all<{ eventStartAt: string; eventEndAt: string; eventAllDay: number; kind: string | null }>(
+    `SELECT e."startAt" as "eventStartAt", e."endAt" as "eventEndAt", e."allDay" as "eventAllDay", c."kind"
+     FROM "EventCompletion" ec JOIN "Event" e ON e."id" = ec."eventId"
+     LEFT JOIN "Category" c ON c."id" = e."categoryId"
+     WHERE e."userId" = ? AND e."deletedAt" IS NULL AND ec."occurrenceDate" >= ? AND ec."occurrenceDate" < ?`,
+    [userId, wakeIso, sleepIso]
+  );
+
+  const intervals: TimedInterval[] = [
+    ...timeEntryRows.map((r) => ({ start: parseDate(r.startAt), end: parseDate(r.endAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
+    ...taskRows.map((r) => ({ start: parseDate(r.startAt), end: parseDate(r.endAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
+    ...completionRows
+      .filter((r) => !r.eventAllDay)
+      .map((r) => ({ start: parseDate(r.eventStartAt), end: parseDate(r.eventEndAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
+  ];
+
+  return computeDaySegments(wakeTime, sleepTime, now, intervals);
 }

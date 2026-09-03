@@ -18,6 +18,8 @@ interface SettingsRow {
   hourlyValueOverride: number | null;
   dashboardCardPrefs: string | null;
   dailyQuoteEnabled: number;
+  wakeHour: number;
+  sleepHour: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,9 +32,9 @@ function insertDefaultSettings(db: LocalDb, userId: string): SettingsRow {
   const id = crypto.randomUUID();
   const ts = now();
   db.run(
-    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?)`,
-    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, ts, ts]
+    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","wakeHour","sleepHour","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, 7, 23, ts, ts]
   );
   return db.get<SettingsRow>(`SELECT * FROM "Settings" WHERE "id" = ?`, [id])!;
 }
@@ -90,6 +92,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.workingHoursMonth !== undefined) set("workingHoursMonth", settingsBody.workingHoursMonth);
     if (settingsBody.hourlyValueOverride !== undefined) set("hourlyValueOverride", settingsBody.hourlyValueOverride);
     if (settingsBody.dailyQuoteEnabled !== undefined) set("dailyQuoteEnabled", settingsBody.dailyQuoteEnabled ? 1 : 0);
+    if (settingsBody.wakeHour !== undefined) set("wakeHour", settingsBody.wakeHour);
+    if (settingsBody.sleepHour !== undefined) set("sleepHour", settingsBody.sleepHour);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 
@@ -106,8 +110,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     const id = crypto.randomUUID();
     const ts = now();
     db.run(
-      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","createdAt","updatedAt")
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","wakeHour","sleepHour","createdAt","updatedAt")
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         userId,
@@ -119,6 +123,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
         settingsBody.workingHoursMonth ?? null,
         settingsBody.hourlyValueOverride ?? null,
         settingsBody.dailyQuoteEnabled === false ? 0 : 1,
+        settingsBody.wakeHour ?? 7,
+        settingsBody.sleepHour ?? 23,
         ts,
         ts,
       ]

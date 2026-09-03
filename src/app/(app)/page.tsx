@@ -6,6 +6,7 @@ import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureForm from "@/components/CaptureForm";
 import CapitalHeader from "@/components/CapitalHeader";
+import DayBattery from "@/components/DayBattery";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -60,6 +61,7 @@ function todayRange() {
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
+  const [capturePrefill, setCapturePrefill] = useState<{ start: Date; end: Date } | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
 
@@ -96,6 +98,13 @@ export default function HomePage() {
 
       <CapitalHeader onEmptyCta={() => setShowForm(true)} />
 
+      <DayBattery
+        onLogGap={(start, end) => {
+          setCapturePrefill({ start, end });
+          setShowForm(true);
+        }}
+      />
+
       <DailyQuoteCard />
 
       <Card className="p-5">
@@ -111,13 +120,22 @@ export default function HomePage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-gray-800 text-sm">ثبت کار</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 p-1">
+              <button
+                onClick={() => {
+                  setShowForm(false);
+                  setCapturePrefill(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
                 <XIcon className="w-4 h-4" />
               </button>
             </div>
             <CaptureForm
+              initialStart={capturePrefill?.start}
+              initialEnd={capturePrefill?.end}
               onDone={() => {
                 setShowForm(false);
+                setCapturePrefill(null);
                 mutate();
               }}
             />

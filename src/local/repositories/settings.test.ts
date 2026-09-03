@@ -95,4 +95,19 @@ describe("local settings repository", () => {
     const reread = getSettings(db, USER_ID);
     expect(reread.settings.dailyQuoteEnabled).toBe(false);
   });
+
+  it("defaults wakeHour/sleepHour to 7/23 and persists an explicit change", async () => {
+    const db = await freshDb();
+    const { settings: defaults } = getSettings(db, USER_ID);
+    expect(defaults.wakeHour).toBe(7);
+    expect(defaults.sleepHour).toBe(23);
+
+    const { settings } = updateSettings(db, USER_ID, { wakeHour: 6, sleepHour: 22 });
+    expect(settings.wakeHour).toBe(6);
+    expect(settings.sleepHour).toBe(22);
+
+    const reread = getSettings(db, USER_ID);
+    expect(reread.settings.wakeHour).toBe(6);
+    expect(reread.settings.sleepHour).toBe(22);
+  });
 });

@@ -14,5 +14,7 @@ export const updateSettingsSchema = z.object({
   hourlyValueOverride: z.number().int().min(0).nullable().optional(),
   dashboardCardPrefs: z.record(z.boolean()).optional(),
   dailyQuoteEnabled: z.boolean().optional(),
+  wakeHour: z.number().int().min(0).max(23).optional(),
+  sleepHour: z.number().int().min(0).max(23).optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
