@@ -14,7 +14,7 @@
 // Wiring this in is part of restructuring that layout in Phase 6, once there's a real Capacitor
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
-import { getCachedLicense, completeFirstRun, refreshLicenseStatus } from "@/lib/nativeOnboarding";
+import { getCachedLicense, completeFirstRun, refreshLicenseStatus, syncWithServer } from "@/lib/nativeOnboarding";
 import { ApiClientError } from "@/lib/apiClient";
 
 function isNativePlatform(): boolean {
@@ -85,8 +85,11 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
 
       // Fire-and-forget, deliberately not awaited: re-checking with the server shouldn't delay
       // showing the (already-cached) app by a network round trip. See refreshLicenseStatus's own
-      // doc comment for why a failure here is silent rather than surfaced.
+      // doc comment for why a failure here is silent rather than surfaced. Same reasoning for
+      // syncWithServer — WidgetQueueDrainer's resume handler is the trigger that awaits sync
+      // before revalidating visible data; this boot-time one just gets the cursors moving.
       void refreshLicenseStatus();
+      void syncWithServer();
     })()
       .catch((err) => {
         setReady(false);
