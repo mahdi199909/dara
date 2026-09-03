@@ -1,9 +1,10 @@
 // The Android app's ONE deliberate exception to "never talk to a server": on Capacitor, a
 // relative fetch("/api/...") resolves against the WebView's own bundled-asset origin
-// (capacitor://localhost), not the internet, so this is the only place in the app that builds
-// an ABSOLUTE URL and calls the real remote deployment directly — see src/lib/nativeOnboarding.ts,
-// which is the only caller. Every other /api/* call in the app goes through apiClient.ts's
-// local-dispatcher branching instead; this module must never be used for anything else.
+// (capacitor://localhost), not the internet, so absolute URLs against REMOTE_API_BASE are the
+// only way to reach the real remote deployment. This module's own functions are called only from
+// src/lib/nativeOnboarding.ts; src/local/sync.ts is the other, separate caller of REMOTE_API_BASE
+// (it needs raw fetch(), not the JSON-error-shape handling `handle()` below provides). Every
+// other /api/* call in the app goes through apiClient.ts's local-dispatcher branching instead.
 import { ApiClientError } from "./apiClient";
 
 // Overridable at build time (e.g. for a staging backend) via NEXT_PUBLIC_REMOTE_API_BASE.

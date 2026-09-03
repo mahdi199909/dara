@@ -17,6 +17,13 @@ export interface LicenseCache {
   // the user through FirstRunGate's login form again. Null for rows written before this field
   // existed, or if a future caller genuinely has no token — re-check just skips itself then.
   token: string | null;
+  // Sync cursors (see src/local/sync.ts) — null until this device's first successful sync of
+  // each direction. Deliberately NOT part of setLicenseCache's replace-everything write below:
+  // that function is called by the license-status refresh path, which knows nothing about sync
+  // and would otherwise silently wipe these back to null on every refresh. Use
+  // setLastPushedAt/setLastPulledAt instead.
+  lastPushedAt: string | null;
+  lastPulledAt: string | null;
   cachedAt: string;
 }
 
@@ -25,7 +32,9 @@ export function getLicenseCache(db: LocalDb): LicenseCache | null {
   return row ?? null;
 }
 
-export function setLicenseCache(db: LocalDb, data: Omit<LicenseCache, "cachedAt">): LicenseCache {
+type LicenseStatusFields = Omit<LicenseCache, "cachedAt" | "lastPushedAt" | "lastPulledAt">;
+
+export function setLicenseCache(db: LocalDb, data: LicenseStatusFields): LicenseStatusFields & { cachedAt: string } {
   const cachedAt = new Date().toISOString();
   db.run(
     `INSERT INTO "_local_license_cache" ("id","status","trialDaysRemaining","trialEndsAt","currentPeriodEnd","remoteUserId","remoteEmail","token","cachedAt")
@@ -52,6 +61,17 @@ export function setLicenseCache(db: LocalDb, data: Omit<LicenseCache, "cachedAt"
     ]
   );
   return { ...data, cachedAt };
+}
+
+/** Touches only lastPushedAt — see the field's doc comment on LicenseCache for why this stays
+ * separate from setLicenseCache. No-ops if the singleton row doesn't exist yet, which can't
+ * happen in practice: sync only ever runs with a token/remoteUserId read from this same row. */
+export function setLastPushedAt(db: LocalDb, lastPushedAt: string): void {
+  db.run(`UPDATE "_local_license_cache" SET "lastPushedAt" = ? WHERE "id" = ?`, [lastPushedAt, SINGLETON_ID]);
+}
+
+export function setLastPulledAt(db: LocalDb, lastPulledAt: string): void {
+  db.run(`UPDATE "_local_license_cache" SET "lastPulledAt" = ? WHERE "id" = ?`, [lastPulledAt, SINGLETON_ID]);
 }
 
 export function clearLicenseCache(db: LocalDb): void {

@@ -62,6 +62,20 @@ function bootstrap(db: LocalDb) {
   } catch {
     // column already exists
   }
+  // Two separate cursors, not one — see src/local/sync.ts. lastPushedAt is compared against this
+  // device's own clock (it filters a local SELECT), lastPulledAt against the server's (it's
+  // echoed back from /api/sync/pull's response) — collapsing them into one column would make a
+  // device with a slow/fast clock silently stop pushing or re-pull everything forever.
+  try {
+    db.execute(`ALTER TABLE "_local_license_cache" ADD COLUMN "lastPushedAt" TEXT;`);
+  } catch {
+    // column already exists
+  }
+  try {
+    db.execute(`ALTER TABLE "_local_license_cache" ADD COLUMN "lastPulledAt" TEXT;`);
+  } catch {
+    // column already exists
+  }
 }
 
 let instance: LocalDb | null = null;

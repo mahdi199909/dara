@@ -5,7 +5,7 @@
 import type { LocalDb } from "./db";
 import { DEFAULT_CATEGORIES } from "@/lib/defaultCategories";
 
-const LOCAL_USER_ID = "local-device-user";
+export const LOCAL_USER_ID = "local-device-user";
 
 export function getLocalUserId(db: LocalDb): string {
   const existing = db.get<{ id: string }>(`SELECT "id" FROM "User" WHERE "id" = ?`, [LOCAL_USER_ID]);
