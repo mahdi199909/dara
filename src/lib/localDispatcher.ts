@@ -35,8 +35,10 @@ import {
   recordDailyCapitalSnapshot,
   computeDayBattery,
   sumCategoryLifetimeMinutes,
+  comparePeriods,
 } from "@/local/reportEngine";
 import { computeDailyInsight, computeDailyMomentCandidates } from "@/local/insightsData";
+import { computeIdentityStatements } from "@/local/identityData";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
 import { jalaliMonthRange, toJalali } from "@/lib/jalali";
@@ -51,6 +53,7 @@ import { createActivitySchema, updateActivitySchema, addTimeEntrySchema } from "
 import { createEventSchema, updateEventSchema, toggleEventCompletionSchema, createReminderSchema } from "@/lib/schemas/events";
 import { createHabitSchema, updateHabitSchema, habitCheckInToggleSchema, habitCheckInDurationSchema } from "@/lib/schemas/habits";
 import { updateSettingsSchema } from "@/lib/schemas/settings";
+import { capitalRangeSchema } from "@/lib/schemas/capital";
 
 interface HandlerCtx {
   db: LocalDb;
@@ -236,6 +239,7 @@ register("PATCH", "/api/habits/:id/checkin", ({ db, userId, params, body }) =>
 );
 
 register("GET", "/api/virtual-assets", ({ db, userId }) => virtualAssetsRepo.listVirtualAssets(db, userId));
+register("GET", "/api/virtual-assets/latest-effect", ({ db, userId }) => ({ effect: virtualAssetsRepo.getLatestUpgradeEffect(db, userId) }));
 
 register("GET", "/api/settings", ({ db, userId }) => settingsRepo.getSettings(db, userId));
 register("PATCH", "/api/settings", ({ db, userId, body }) => settingsRepo.updateSettings(db, userId, updateSettingsSchema.parse(body)));
@@ -274,7 +278,8 @@ register("GET", "/api/reports", ({ db, userId, query }) => {
   const topProductive = [...report.timeByCategory].filter((c) => c.kind === "PRODUCTIVE").sort((a, b) => b.minutes - a.minutes)[0];
   const topCategoryLifetimeMinutes = topProductive ? sumCategoryLifetimeMinutes(db, userId, topProductive.categoryId) : 0;
   const narrative = generateNarrative(report, hiddenCost, topCategoryLifetimeMinutes);
-  return { report, netWorth, hiddenCost, habitsReport, narrative, label, from, to };
+  const comparison = comparePeriods(db, userId, from, to);
+  return { report, netWorth, hiddenCost, habitsReport, comparison, narrative, label, from, to };
 });
 register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
   const { jy: curJy, jm: curJm } = toJalali(new Date());
@@ -286,9 +291,14 @@ register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
 });
 
 // "سرمایه من" (Founder Capital) — see src/app/api/capital/route.ts for the web shape this mirrors.
-register("GET", "/api/capital", ({ db, userId }) => {
+const CAPITAL_RANGE_LIMIT: Record<string, number | null> = { "30": 30, "90": 90, all: null };
+register("GET", "/api/capital", ({ db, userId, query }) => {
+  const range = capitalRangeSchema.parse(query.get("range") ?? undefined);
+  const limit = CAPITAL_RANGE_LIMIT[range];
   const capital = recordDailyCapitalSnapshot(db, userId);
-  const snapshots = db.all(`SELECT * FROM "CapitalSnapshot" WHERE "userId" = ? ORDER BY "date" DESC LIMIT 30`, [userId]).reverse();
+  const snapshots = db
+    .all(`SELECT * FROM "CapitalSnapshot" WHERE "userId" = ? ORDER BY "date" DESC${limit ? ` LIMIT ${limit}` : ""}`, [userId])
+    .reverse();
   return { capital, snapshots };
 });
 
@@ -297,6 +307,8 @@ register("GET", "/api/day-battery", ({ db, userId }) => ({ battery: computeDayBa
 register("GET", "/api/insights", ({ db, userId }) => ({ insight: computeDailyInsight(db, userId) }));
 
 register("GET", "/api/daily-moment", ({ db, userId }) => ({ candidates: computeDailyMomentCandidates(db, userId) }));
+
+register("GET", "/api/identity", ({ db, userId }) => ({ statements: computeIdentityStatements(db, userId) }));
 
 // --- Local-only: the one-time remote login/license cache (see src/lib/nativeOnboarding.ts) ---
 // Not a mirror of any web route — this is Android-only bookkeeping, so there's no shared

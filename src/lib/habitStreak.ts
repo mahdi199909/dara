@@ -99,6 +99,29 @@ export function daysSinceLastCheckIn(checkIns: HabitCheckInLike[], habitCreatedA
   return Math.max(0, Math.round(ms / 86_400_000));
 }
 
+/**
+ * How many fully-completed 7-day periods, walking back from `today`, each had at least one
+ * check-in for this one habit — "3 هفته پشت‌سرهم" for src/lib/identity.ts. Deliberately excludes
+ * today and the still-in-progress current week entirely (starts counting from the 7 days ending
+ * yesterday) rather than guessing whether an empty current week is "not over yet" or a real gap —
+ * simpler and never overstates the streak.
+ */
+export function computeConsecutiveWeeksMaintained(checkInDates: Date[], today: Date): number {
+  const checkInKeys = new Set(checkInDates.map(toDayKey));
+  let streak = 0;
+  while (weekHasCheckIn(checkInKeys, today, streak)) streak++;
+  return streak;
+}
+
+function weekHasCheckIn(checkInKeys: Set<string>, today: Date, weeksAgo: number): boolean {
+  for (let d = 1; d <= 7; d++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - (weeksAgo * 7 + d));
+    if (checkInKeys.has(toDayKey(date))) return true;
+  }
+  return false;
+}
+
 /** A habit is "neglected" once it's gone `neglectThresholdDays` or more without a check-in. */
 export function isHabitNeglected(daysSince: number, neglectThresholdDays = 3): boolean {
   return daysSince >= neglectThresholdDays;

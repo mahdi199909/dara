@@ -1,4 +1,18 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
+
+const preferencesStore = new Map<string, string>();
+vi.mock("@capacitor/preferences", () => ({
+  Preferences: {
+    get: vi.fn(async ({ key }: { key: string }) => ({ value: preferencesStore.get(key) ?? null })),
+    set: vi.fn(async ({ key, value }: { key: string; value: string }) => {
+      preferencesStore.set(key, value);
+    }),
+    remove: vi.fn(async ({ key }: { key: string }) => {
+      preferencesStore.delete(key);
+    }),
+  },
+}));
+
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "./db";
 import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import {
@@ -8,6 +22,9 @@ import {
   computeHabitsReport,
   computeCategoryCalendar,
   computeFounderCapital,
+  computeUpgradeEffect,
+  comparePeriods,
+  recordDailyCapitalSnapshot,
 } from "./reportEngine";
 
 const USER_ID = "user_report_1";
@@ -37,6 +54,7 @@ function insertCategory(db: LocalDb, id: string, kind: string, generatesVirtualA
 describe("local reportEngine", () => {
   beforeEach(() => {
     resetLocalDbForTests();
+    preferencesStore.clear();
   });
 
   it("computeTimeAndMoneyReport aggregates task-logged time, transactions, and virtual assets like the web engine", async () => {
@@ -398,6 +416,248 @@ describe("local reportEngine", () => {
         expect(current.virtualAssetValue).toBeGreaterThan(previous.virtualAssetValue);
         previous = current;
       }
+    });
+  });
+
+  describe("computeUpgradeEffect", () => {
+    function insertSettings(db: LocalDb, hourlyValueOverride: number | null = 50000) {
+      db.run(`INSERT INTO "Settings" ("id","userId","hourlyValueOverride","createdAt","updatedAt") VALUES (?,?,?,?,?)`, [
+        "settings_1",
+        USER_ID,
+        hourlyValueOverride,
+        now(),
+        now(),
+      ]);
+    }
+
+    function insertEntry(db: LocalDb, id: string, opts: { categoryId?: string; projectId?: string; durationMin: number; totalValue: number }) {
+      db.run(
+        `INSERT INTO "VirtualAssetEntry" ("id","userId","categoryId","projectId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        [id, USER_ID, opts.categoryId ?? null, opts.projectId ?? null, opts.durationMin, 50000, opts.totalValue, now(), now(), now()]
+      );
+    }
+
+    it("attributes the entry to its category, summing durationMin/totalValue across every entry in that category (not just this one)", async () => {
+      const db = await freshDb();
+      insertSettings(db);
+      insertCategory(db, "cat_skill", "PRODUCTIVE");
+      insertEntry(db, "va_old", { categoryId: "cat_skill", durationMin: 300, totalValue: 250000 });
+      insertEntry(db, "va_new", { categoryId: "cat_skill", durationMin: 120, totalValue: 100000 });
+
+      const effect = computeUpgradeEffect(db, USER_ID, "va_new");
+
+      expect(effect).not.toBeNull();
+      expect(effect!.label).toBe("cat_skill");
+      expect(effect!.addedMinutes).toBe(120);
+      expect(effect!.addedValue).toBe(100000);
+      expect(effect!.categoryTotalMinutes).toBe(420);
+      expect(effect!.categoryTotalValue).toBe(350000);
+      expect(effect!.previousHourlyValue).toBe(effect!.newHourlyValue);
+    });
+
+    it("attributes the entry to its project when categoryId is unset", async () => {
+      const db = await freshDb();
+      insertSettings(db);
+      db.run(`INSERT INTO "Project" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["proj_1", USER_ID, "پروژه‌ی الف", now(), now()]);
+      insertEntry(db, "va_proj", { projectId: "proj_1", durationMin: 600, totalValue: 500000 });
+
+      const effect = computeUpgradeEffect(db, USER_ID, "va_proj");
+
+      expect(effect).not.toBeNull();
+      expect(effect!.label).toBe("پروژه‌ی الف");
+      expect(effect!.categoryTotalMinutes).toBe(600);
+      expect(effect!.categoryTotalValue).toBe(500000);
+    });
+
+    it("returns null rather than inventing a label when the entry has neither a category nor a project", async () => {
+      const db = await freshDb();
+      insertSettings(db);
+      insertEntry(db, "va_orphan", { durationMin: 60, totalValue: 50000 });
+
+      expect(computeUpgradeEffect(db, USER_ID, "va_orphan")).toBeNull();
+    });
+
+    it("throws rather than reporting another user's entry", async () => {
+      const db = await freshDb();
+      insertSettings(db);
+      insertCategory(db, "cat_skill", "PRODUCTIVE");
+      insertEntry(db, "va_1", { categoryId: "cat_skill", durationMin: 60, totalValue: 50000 });
+
+      expect(() => computeUpgradeEffect(db, "someone_else", "va_1")).toThrow();
+    });
+
+    describe("milestone boundaries", () => {
+      it("reports the next unreached threshold when the total sits just under it", async () => {
+        const db = await freshDb();
+        insertSettings(db);
+        insertCategory(db, "cat_skill", "PRODUCTIVE");
+        insertEntry(db, "va_1", { categoryId: "cat_skill", durationMin: 599, totalValue: 1 });
+
+        expect(computeUpgradeEffect(db, USER_ID, "va_1")!.nextMilestoneMinutes).toBe(600);
+      });
+
+      it("advances to the following threshold once the current one is exactly reached", async () => {
+        const db = await freshDb();
+        insertSettings(db);
+        insertCategory(db, "cat_skill", "PRODUCTIVE");
+        insertEntry(db, "va_1", { categoryId: "cat_skill", durationMin: 600, totalValue: 1 });
+
+        expect(computeUpgradeEffect(db, USER_ID, "va_1")!.nextMilestoneMinutes).toBe(1500);
+      });
+
+      it("returns null once past the highest (500h) threshold, rather than inventing a further milestone", async () => {
+        const db = await freshDb();
+        insertSettings(db);
+        insertCategory(db, "cat_skill", "PRODUCTIVE");
+        insertEntry(db, "va_1", { categoryId: "cat_skill", durationMin: 30000, totalValue: 1 });
+
+        expect(computeUpgradeEffect(db, USER_ID, "va_1")!.nextMilestoneMinutes).toBeNull();
+      });
+    });
+  });
+
+  describe("comparePeriods", () => {
+    it("computes delta as current-minus-previous for each metric", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_work", "PRODUCTIVE");
+      db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
+
+      // Previous period lands in (2026-01-03T23:59:59.999Z, 2026-01-07T23:59:59.999Z].
+      db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "task_prev",
+        USER_ID,
+        "کار قبلی",
+        "cat_work",
+        "2026-01-05T08:00:00.000Z",
+        "2026-01-05T08:40:00.000Z",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "Transaction" ("id","userId","type","amount","date","accountId","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "tx_prev",
+        USER_ID,
+        "EXPENSE",
+        30000,
+        "2026-01-05T09:00:00.000Z",
+        "acc_1",
+        now(),
+        now(),
+      ]);
+
+      // Current period: [2026-01-08T00:00:00.000Z, 2026-01-12T00:00:00.000Z).
+      db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "task_cur",
+        USER_ID,
+        "کار جدید",
+        "cat_work",
+        "2026-01-09T08:00:00.000Z",
+        "2026-01-09T09:00:00.000Z",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "Transaction" ("id","userId","type","amount","date","accountId","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "tx_cur",
+        USER_ID,
+        "EXPENSE",
+        50000,
+        "2026-01-09T09:00:00.000Z",
+        "acc_1",
+        now(),
+        now(),
+      ]);
+
+      const from = new Date("2026-01-08T00:00:00.000Z");
+      const to = new Date("2026-01-12T00:00:00.000Z");
+      const result = comparePeriods(db, USER_ID, from, to);
+
+      expect(result.current.totalDurationMin).toBe(60);
+      expect(result.previous.totalDurationMin).toBe(40);
+      expect(result.delta.totalMinutes).toBe(20);
+      expect(result.current.expense).toBe(50000);
+      expect(result.previous.expense).toBe(30000);
+      expect(result.delta.expense).toBe(20000);
+    });
+
+    describe("hasEnoughHistory", () => {
+      const from = new Date("2026-01-08T00:00:00.000Z");
+      const to = new Date("2026-01-12T00:00:00.000Z"); // 4-day period -> previous is also 4 days
+
+      async function dbWithHabit(): Promise<LocalDb> {
+        const db = await freshDb();
+        db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "عادت", now(), now()]);
+        return db;
+      }
+      function checkIn(db: LocalDb, id: string, dateIso: string) {
+        db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, [id, "habit_1", dateIso, now(), now()]);
+      }
+
+      it("is false with no previous-period activity at all", async () => {
+        const db = await dbWithHabit();
+        expect(comparePeriods(db, USER_ID, from, to).hasEnoughHistory).toBe(false);
+      });
+
+      it("is false when activity covers fewer than half the previous period's days", async () => {
+        const db = await dbWithHabit();
+        checkIn(db, "ci_1", "2026-01-04T12:00:00.000Z"); // 1 of 4 days
+        expect(comparePeriods(db, USER_ID, from, to).hasEnoughHistory).toBe(false);
+      });
+
+      it("is true at exactly the 50% boundary", async () => {
+        const db = await dbWithHabit();
+        checkIn(db, "ci_1", "2026-01-04T12:00:00.000Z");
+        checkIn(db, "ci_2", "2026-01-05T12:00:00.000Z"); // 2 of 4 days
+        expect(comparePeriods(db, USER_ID, from, to).hasEnoughHistory).toBe(true);
+      });
+
+      it("is true when the previous period is well-covered", async () => {
+        const db = await dbWithHabit();
+        checkIn(db, "ci_1", "2026-01-04T12:00:00.000Z");
+        checkIn(db, "ci_2", "2026-01-05T12:00:00.000Z");
+        checkIn(db, "ci_3", "2026-01-06T12:00:00.000Z");
+        checkIn(db, "ci_4", "2026-01-07T12:00:00.000Z"); // 4 of 4 days
+        expect(comparePeriods(db, USER_ID, from, to).hasEnoughHistory).toBe(true);
+      });
+    });
+  });
+
+  describe("recordDailyCapitalSnapshot — widget_capital_summary", () => {
+    it("writes today's and lifetime invested hours for CapitalWidgetProvider to read, rounded to whole hours", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_prod", "PRODUCTIVE");
+      db.run(`INSERT INTO "Activity" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+        "a1",
+        USER_ID,
+        "cat_prod",
+        "کدنویسی",
+        now(),
+        now(),
+      ]);
+      db.run(`INSERT INTO "TimeEntry" ("id","activityId","startAt","durationMin","isRunning","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
+        "te_1",
+        "a1",
+        now(),
+        150, // 2.5h, today — rounds to 3h
+        0,
+        now(),
+        now(),
+      ]);
+
+      recordDailyCapitalSnapshot(db, USER_ID);
+
+      const raw = preferencesStore.get("widget_capital_summary");
+      expect(raw).toBeDefined();
+      const summary = JSON.parse(raw!);
+      expect(summary.investedHoursToday).toBe(3);
+      expect(summary.investedHoursTotal).toBe(3);
+      expect(typeof summary.updatedAt).toBe("string");
+    });
+
+    it("never blocks or fails the snapshot itself when writing the widget summary", async () => {
+      const db = await freshDb();
+      expect(() => recordDailyCapitalSnapshot(db, USER_ID)).not.toThrow();
+      const capital = recordDailyCapitalSnapshot(db, USER_ID);
+      expect(capital.investedMinutes).toBe(0);
+      expect(JSON.parse(preferencesStore.get("widget_capital_summary")!).investedHoursTotal).toBe(0);
     });
   });
 });

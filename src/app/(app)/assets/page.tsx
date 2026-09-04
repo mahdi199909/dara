@@ -9,6 +9,21 @@ import { formatJalali } from "@/lib/jalali";
 import { PlusIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
+import MilestoneProgressBar from "@/components/MilestoneProgressBar";
+import { phraseMilestoneProgress } from "@/lib/phrasing";
+import { nextMilestoneMinutes } from "@/lib/milestones";
+
+function MilestoneCaption({ totalMinutes }: { totalMinutes: number }) {
+  const next = nextMilestoneMinutes(totalMinutes);
+  const nextHours = next !== null ? Math.round(next / 60) : null;
+  const remaining = next !== null ? next - totalMinutes : null;
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-gray-400">{phraseMilestoneProgress(totalMinutes, nextHours, remaining)}</p>
+      <MilestoneProgressBar totalMinutes={totalMinutes} nextMilestoneMinutes={next} />
+    </div>
+  );
+}
 
 interface VirtualAssetResponse {
   entries: any[];
@@ -103,10 +118,13 @@ export default function AssetsPage() {
           </p>
           <div className="grid grid-cols-1 gap-3">
             {vaData.projectEntries.map((e: any) => (
-              <Card key={e.id} className="p-4">
-                <p className="font-bold text-gray-800">{e.project?.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">تکمیل‌شده در {formatJalali(new Date(e.date))}</p>
-                <p className="text-base font-bold text-brand-700 mt-2">{format(e.totalValue, { withSuffix: true })}</p>
+              <Card key={e.id} className="p-4 space-y-2">
+                <div>
+                  <p className="font-bold text-gray-800">{e.project?.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">تکمیل‌شده در {formatJalali(new Date(e.date))}</p>
+                  <p className="text-base font-bold text-brand-700 mt-2">{format(e.totalValue, { withSuffix: true })}</p>
+                </div>
+                <MilestoneCaption totalMinutes={e.durationMin} />
               </Card>
             ))}
           </div>
@@ -137,6 +155,9 @@ export default function AssetsPage() {
                   </span>
                   <span className="text-sm font-bold text-brand-700">{format(bucket.total, { withSuffix: true })}</span>
                 </button>
+                <div className="px-4 pb-3">
+                  <MilestoneCaption totalMinutes={bucket.entries.reduce((s: number, e: any) => s + e.durationMin, 0)} />
+                </div>
                 {openCategory === bucket.categoryId && (
                   <ul className="divide-y divide-gray-50 border-t border-gray-50">
                     {bucket.entries.map((e: any) => (

@@ -272,6 +272,7 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
             JSONObject entry = new JSONObject();
             entry.put("habitId", habitId);
             entry.put("date", todayIsoUtc());
+            entry.put("source", "widget");
             queue.put(entry);
             prefs.edit().putString(PENDING_CHECKINS_KEY, queue.toString()).apply();
         } catch (Exception ignored) {

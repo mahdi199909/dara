@@ -3,6 +3,12 @@
 // relation instead of Prisma's `include`.
 import type { LocalDb } from "../db";
 import { fetchByIds } from "../relations";
+import { computeUpgradeEffect, type UpgradeEffect } from "../reportEngine";
+
+// On-device port of src/app/api/virtual-assets/latest-effect/route.ts's GET — same 15-second
+// freshness window, same "most recently created entry" lookup, using the device's own clock for
+// both createdAt and "now" since there's no server round trip to skew them apart.
+const FRESHNESS_WINDOW_MS = 15_000;
 
 interface VirtualAssetEntryRow {
   id: string;
@@ -92,6 +98,15 @@ export function listVirtualAssets(db: LocalDb, userId: string) {
     projectEntries,
     habitEntries,
   };
+}
+
+export function getLatestUpgradeEffect(db: LocalDb, userId: string): UpgradeEffect | null {
+  const latest = db.get<{ id: string; createdAt: string }>(
+    `SELECT "id", "createdAt" FROM "VirtualAssetEntry" WHERE "userId" = ? ORDER BY "createdAt" DESC LIMIT 1`,
+    [userId]
+  );
+  if (!latest || Date.now() - new Date(latest.createdAt).getTime() > FRESHNESS_WINDOW_MS) return null;
+  return computeUpgradeEffect(db, userId, latest.id);
 }
 
 function attachHabit(habitCheckIn: HabitCheckInRow | undefined, habitById: Map<string, RelatedRow>) {

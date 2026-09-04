@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as mutateGlobal } from "swr";
 import Link from "next/link";
 import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
@@ -115,6 +115,7 @@ export default function HomePage() {
   async function toggleHabitCheckIn(habitId: string) {
     await apiPost(`/api/habits/${habitId}/checkin`);
     mutateHabits();
+    mutateGlobal("/api/virtual-assets/latest-effect");
   }
 
   // Trial habits (BJ Fogg's 3-day experiments) live only on the dedicated /habits page —
@@ -244,7 +245,7 @@ export default function HomePage() {
         <HabitDurationModal
           habit={durationHabit}
           onClose={() => setDurationHabit(null)}
-          onSaved={() => { setDurationHabit(null); mutateHabits(); }}
+          onSaved={() => { setDurationHabit(null); mutateHabits(); mutateGlobal("/api/virtual-assets/latest-effect"); }}
         />
       )}
     </div>

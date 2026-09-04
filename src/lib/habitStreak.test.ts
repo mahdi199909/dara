@@ -6,6 +6,7 @@ import {
   isHabitNeglected,
   trialDayNumber,
   isTrialElapsed,
+  computeConsecutiveWeeksMaintained,
 } from "./habitStreak";
 
 const day = (d: number) => new Date(2026, 0, d);
@@ -123,5 +124,27 @@ describe("trialDayNumber / isTrialElapsed", () => {
     expect(isTrialElapsed(day(1), day(1))).toBe(false);
     expect(isTrialElapsed(day(1), day(3))).toBe(false);
     expect(isTrialElapsed(day(1), day(4))).toBe(true);
+  });
+});
+
+describe("computeConsecutiveWeeksMaintained", () => {
+  it("counts fully-completed weeks with at least one check-in, stopping at the first gap", () => {
+    // today = day(29): week 0 = [22..28], week 1 = [15..21], week 2 = [8..14].
+    const checkIns = [day(25), day(18)]; // one in week 0, one in week 1, none in week 2
+    expect(computeConsecutiveWeeksMaintained(checkIns, day(29))).toBe(2);
+  });
+
+  it("excludes today and the still-in-progress current week entirely", () => {
+    const checkIns = [day(29)]; // a check-in today, but nothing in the completed week before it
+    expect(computeConsecutiveWeeksMaintained(checkIns, day(29))).toBe(0);
+  });
+
+  it("only needs one check-in per week, not every day", () => {
+    const checkIns = [day(28), day(21), day(14)]; // one per week for 3 straight weeks
+    expect(computeConsecutiveWeeksMaintained(checkIns, day(29))).toBe(3);
+  });
+
+  it("is 0 with no check-ins at all", () => {
+    expect(computeConsecutiveWeeksMaintained([], day(29))).toBe(0);
   });
 });

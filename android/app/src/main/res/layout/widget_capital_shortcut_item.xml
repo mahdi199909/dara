@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/shortcut_button"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:layout_marginEnd="6dp"
+    android:background="@drawable/chip_unselected"
+    android:textColor="#374151"
+    android:textDirection="rtl"
+    android:textSize="12sp"
+    android:gravity="center"
+    android:maxLines="1"
+    android:ellipsize="end"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp" />

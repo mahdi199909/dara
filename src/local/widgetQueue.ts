@@ -25,11 +25,23 @@ const QUEUE_KEY = "widget_pending_captures";
 // same key for the native-side half of this contract.
 const HABIT_CHECKIN_QUEUE_KEY = "widget_pending_habit_checkins";
 
+// Purely informational provenance — no drain behavior branches on it today. Optional so every
+// entry queued by the native code before this field existed (structural detection, no
+// discriminator — see the const above) still validates and drains exactly as before; a future
+// notification-action entry (see NotificationActionReceiver, not yet built) is the first producer
+// of "notification", but the shape is ready for it now rather than needing a second migration.
+type QueueEntrySource = "widget" | "notification";
+
+function isValidSource(v: unknown): v is QueueEntrySource | undefined {
+  return v === undefined || v === "widget" || v === "notification";
+}
+
 interface QueuedCapture {
   title: string;
   categoryId: string | null;
   durationMinutes: number;
   startedAt: string;
+  source?: QueueEntrySource;
 }
 
 function isQueuedCapture(v: unknown): v is QueuedCapture {
@@ -38,7 +50,8 @@ function isQueuedCapture(v: unknown): v is QueuedCapture {
     typeof v === "object" &&
     typeof (v as QueuedCapture).title === "string" &&
     typeof (v as QueuedCapture).durationMinutes === "number" &&
-    typeof (v as QueuedCapture).startedAt === "string"
+    typeof (v as QueuedCapture).startedAt === "string" &&
+    isValidSource((v as QueuedCapture).source)
   );
 }
 
@@ -49,6 +62,7 @@ function isQueuedCapture(v: unknown): v is QueuedCapture {
 interface QueuedHabitCheckIn {
   habitId: string;
   date: string;
+  source?: QueueEntrySource;
 }
 
 function isQueuedHabitCheckIn(v: unknown): v is QueuedHabitCheckIn {
@@ -56,7 +70,8 @@ function isQueuedHabitCheckIn(v: unknown): v is QueuedHabitCheckIn {
     !!v &&
     typeof v === "object" &&
     typeof (v as QueuedHabitCheckIn).habitId === "string" &&
-    typeof (v as QueuedHabitCheckIn).date === "string"
+    typeof (v as QueuedHabitCheckIn).date === "string" &&
+    isValidSource((v as QueuedHabitCheckIn).source)
   );
 }
 
@@ -73,19 +88,27 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
   }
 
   const valid = entries.filter(isQueuedCapture);
+  let applied = 0;
   for (const entry of valid) {
-    const activity = createActivity(db, userId, {
-      title: entry.title,
-      categoryId: entry.categoryId ?? undefined,
-    });
-    addManualTimeEntry(db, activity.id, {
-      startAt: new Date(entry.startedAt),
-      durationMin: entry.durationMinutes,
-    });
+    try {
+      const activity = createActivity(db, userId, {
+        title: entry.title,
+        categoryId: entry.categoryId ?? undefined,
+      });
+      addManualTimeEntry(db, activity.id, {
+        startAt: new Date(entry.startedAt),
+        durationMin: entry.durationMinutes,
+      });
+      applied++;
+    } catch {
+      // A stale categoryId (e.g. deleted while the app was closed) throws a foreign-key error —
+      // skip this one entry rather than leave the whole queue stuck un-cleared, same
+      // fault-isolation as drainHabitCheckInQueue below already had.
+    }
   }
 
   await Preferences.remove({ key: QUEUE_KEY });
-  return valid.length;
+  return applied;
 }
 
 // Each queued entry is replayed as a plain toggle (the same call the in-app checklist UI makes),

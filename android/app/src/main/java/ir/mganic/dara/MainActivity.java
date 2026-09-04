@@ -50,6 +50,7 @@ public class MainActivity extends BridgeActivity {
     private static final Class<?>[] REFRESHABLE_WIDGET_PROVIDERS = {
         TodayEventsWidgetProvider.class,
         HabitsWidgetProvider.class,
+        CapitalWidgetProvider.class,
     };
 
     @Override

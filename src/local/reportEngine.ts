@@ -10,6 +10,8 @@ import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, typ
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "@/lib/jalali";
 import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "@/lib/dayBattery";
+import { nextMilestoneMinutes } from "@/lib/milestones";
+import { Preferences } from "@capacitor/preferences";
 import type { LocalDb } from "./db";
 import { fetchByIds } from "./relations";
 
@@ -552,6 +554,71 @@ export function sumProjectLifetimeMinutes(db: LocalDb, userId: string, projectId
   return row?.total ?? 0;
 }
 
+export interface UpgradeEffect {
+  entryId: string;
+  label: string;
+  addedMinutes: number;
+  addedValue: number;
+  categoryTotalMinutes: number;
+  categoryTotalValue: number;
+  nextMilestoneMinutes: number | null;
+  previousHourlyValue: number;
+  newHourlyValue: number;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's computeUpgradeEffect — see its doc comment for
+ * why totals sum VirtualAssetEntry directly (not TimeEntry) and why previousHourlyValue/
+ * newHourlyValue are always equal. */
+export function computeUpgradeEffect(db: LocalDb, userId: string, entryId: string): UpgradeEffect | null {
+  const entry = db.get<{ userId: string; categoryId: string | null; projectId: string | null; durationMin: number; totalValue: number }>(
+    `SELECT "userId", "categoryId", "projectId", "durationMin", "totalValue" FROM "VirtualAssetEntry" WHERE "id" = ?`,
+    [entryId]
+  );
+  if (!entry) throw new Error("VirtualAssetEntry not found");
+  if (entry.userId !== userId) throw new Error("VirtualAssetEntry does not belong to this user");
+
+  let label: string;
+  let totals: { total: number | null; totalValue: number | null } | undefined;
+  if (entry.categoryId) {
+    const category = db.get<{ name: string }>(`SELECT "name" FROM "Category" WHERE "id" = ?`, [entry.categoryId]);
+    if (!category) throw new Error("Category not found");
+    label = category.name;
+    totals = db.get<{ total: number | null; totalValue: number | null }>(
+      `SELECT SUM("durationMin") as total, SUM("totalValue") as totalValue FROM "VirtualAssetEntry" WHERE "userId" = ? AND "categoryId" = ?`,
+      [userId, entry.categoryId]
+    );
+  } else if (entry.projectId) {
+    const project = db.get<{ name: string }>(`SELECT "name" FROM "Project" WHERE "id" = ?`, [entry.projectId]);
+    if (!project) throw new Error("Project not found");
+    label = project.name;
+    totals = db.get<{ total: number | null; totalValue: number | null }>(
+      `SELECT SUM("durationMin") as total, SUM("totalValue") as totalValue FROM "VirtualAssetEntry" WHERE "userId" = ? AND "projectId" = ?`,
+      [userId, entry.projectId]
+    );
+  } else {
+    return null;
+  }
+
+  const categoryTotalMinutes = totals?.total ?? 0;
+  const settings = db.get<{ monthlyIncome: number | null; workingHoursMonth: number | null; hourlyValueOverride: number | null }>(
+    `SELECT * FROM "Settings" WHERE "userId" = ?`,
+    [userId]
+  );
+  const hourlyValue = computeHourlyValue(settings ?? {});
+
+  return {
+    entryId,
+    label,
+    addedMinutes: entry.durationMin,
+    addedValue: entry.totalValue,
+    categoryTotalMinutes,
+    categoryTotalValue: totals?.totalValue ?? 0,
+    nextMilestoneMinutes: nextMilestoneMinutes(categoryTotalMinutes),
+    previousHourlyValue: hourlyValue,
+    newHourlyValue: hourlyValue,
+  };
+}
+
 export function computeFounderCapital(db: LocalDb, userId: string): FounderCapital {
   const now = new Date();
   const today = startOfDay(now);
@@ -609,6 +676,22 @@ export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): Founder
        "virtualAssetValue" = excluded."virtualAssetValue"`,
     [crypto.randomUUID(), userId, date, capital.investedMinutes, capital.virtualAssetValue, now]
   );
+
+  // CapitalWidgetProvider.java reads this and only this — it never computes the number itself,
+  // so it's always exactly as fresh as the last boot/resume/capital-page-view that ran this
+  // function, never independently wrong. Fire-and-forget: this function is called synchronously
+  // (and its return value used immediately) at all three call sites (FirstRunGate, resume, the
+  // local /api/capital handler), so awaiting the write here would change its signature for all of
+  // them for a widget refresh none of them need to wait on.
+  void Preferences.set({
+    key: "widget_capital_summary",
+    value: JSON.stringify({
+      investedHoursToday: Math.round(capital.todayDeltaMinutes / 60),
+      investedHoursTotal: Math.round(capital.investedMinutes / 60),
+      updatedAt: now,
+    }),
+  });
+
   return capital;
 }
 
@@ -663,4 +746,75 @@ export function computeDayBattery(db: LocalDb, userId: string): DayBatteryResult
 
   const intervals = fetchDayIntervals(db, userId, wakeTime, sleepTime);
   return computeDaySegments(wakeTime, sleepTime, now, intervals);
+}
+
+export interface PeriodComparisonDelta {
+  totalMinutes: number;
+  productiveMinutes: number;
+  expense: number;
+  timeCost: number;
+  virtualAssetValue: number;
+  net: number;
+}
+
+export interface PeriodComparison {
+  current: TimeAndMoneyReport;
+  previous: TimeAndMoneyReport;
+  delta: PeriodComparisonDelta;
+  hasEnoughHistory: boolean;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's fetchActiveDayKeys — see its doc comment. */
+export function fetchActiveDayKeys(db: LocalDb, userId: string, from: Date, to: Date): Set<string> {
+  const fromIso = iso(from);
+  const toIso = iso(to);
+  const timeEntryDays = db.all<{ startAt: string }>(
+    `SELECT te."startAt" FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  const transactionDays = db.all<{ date: string }>(
+    `SELECT "date" FROM "Transaction" WHERE "userId" = ? AND "deletedAt" IS NULL AND "date" >= ? AND "date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  const habitCheckInDays = db.all<{ date: string }>(
+    `SELECT hc."date" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."date" >= ? AND hc."date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+
+  const days = new Set<string>();
+  for (const r of timeEntryDays) days.add(dayKeyIso(parseDate(r.startAt)));
+  for (const r of transactionDays) days.add(dayKeyIso(parseDate(r.date)));
+  for (const r of habitCheckInDays) days.add(dayKeyIso(parseDate(r.date)));
+  return days;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's comparePeriods — see its doc comment for why
+ * hasEnoughHistory exists and why the previous period is raw equal-duration, not a calendar unit. */
+export function comparePeriods(db: LocalDb, userId: string, from: Date, to: Date): PeriodComparison {
+  const durationMs = to.getTime() - from.getTime();
+  const previousTo = new Date(from.getTime() - 1);
+  const previousFrom = new Date(previousTo.getTime() - durationMs);
+
+  const current = computeTimeAndMoneyReport(db, userId, from, to);
+  const previous = computeTimeAndMoneyReport(db, userId, previousFrom, previousTo);
+  const activeDayKeys = fetchActiveDayKeys(db, userId, previousFrom, previousTo);
+
+  const totalDays = Math.max(1, Math.round(durationMs / 86_400_000));
+  const hasEnoughHistory = activeDayKeys.size / totalDays >= 0.5;
+
+  return {
+    current,
+    previous,
+    delta: {
+      totalMinutes: current.totalDurationMin - previous.totalDurationMin,
+      productiveMinutes: current.productiveMin - previous.productiveMin,
+      expense: current.expense - previous.expense,
+      timeCost: current.timeCost - previous.timeCost,
+      virtualAssetValue: current.virtualAssetValue - previous.virtualAssetValue,
+      net: current.net - previous.net,
+    },
+    hasEnoughHistory,
+  };
 }
