@@ -80,6 +80,17 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         console.error("widget queue drain failed", err);
       }
 
+      // Best-effort, same reasoning: today's "سرمایه من" snapshot (see reportEngine.ts's
+      // recordDailyCapitalSnapshot) shouldn't block getting into the app either. Idempotent —
+      // safe even if WidgetQueueDrainer's resume handler or a /api/capital read already did it
+      // today.
+      try {
+        const [{ getLocalUserId }, { recordDailyCapitalSnapshot }] = await Promise.all([import("@/local/localUser"), import("@/local/reportEngine")]);
+        recordDailyCapitalSnapshot(driver, getLocalUserId(driver));
+      } catch (err) {
+        console.error("capital snapshot on boot failed", err);
+      }
+
       const license = await getCachedLicense();
       setReady(!!license);
 

@@ -7,6 +7,7 @@ import { fetcher } from "@/lib/apiClient";
 import { formatDuration } from "@/lib/money";
 import { formatJalali } from "@/lib/jalali";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
+import IdentityStatements, { type IdentityStatementDto } from "@/components/IdentityStatements";
 
 export default function PrintReportPage() {
   return (
@@ -20,6 +21,7 @@ function PrintReportContent() {
   const params = useSearchParams();
   const preset = params.get("preset") ?? "month";
   const { data } = useSWR<any>(`/api/reports?preset=${preset}`, fetcher);
+  const { data: identityData } = useSWR<{ statements: IdentityStatementDto[] }>("/api/identity", fetcher);
   const { format } = useCurrencyUnit();
 
   if (!data) {
@@ -64,6 +66,16 @@ function PrintReportContent() {
         <h1 className="text-2xl font-bold text-brand-900">پنهان — گزارش {label}</h1>
         <p className="text-xs text-gray-400 mt-1">تاریخ تولید گزارش: {formatJalali(generatedAt, { withTime: true })}</p>
       </header>
+
+      {identityData && identityData.statements.length > 0 && (
+        <section className="mb-8">
+          <IdentityStatements
+            statements={identityData.statements.slice(0, 3)}
+            className="space-y-1"
+            itemClassName="block text-sm text-gray-700"
+          />
+        </section>
+      )}
 
       <section className="mb-8">
         <h2 className="text-base font-bold text-gray-800 mb-2">خلاصه</h2>
@@ -151,7 +163,7 @@ function PrintReportContent() {
         </section>
       )}
 
-      <section>
+      <section className={identityData?.statements[0] ? "mb-8" : ""}>
         <h2 className="text-base font-bold text-gray-800 mb-3">ارزش خالص دارایی</h2>
         <div className="grid grid-cols-4 gap-3">
           <SummaryBox label="دارایی واقعی" value={format(netWorth.realAssetsValue, { withSuffix: true })} />
@@ -160,6 +172,12 @@ function PrintReportContent() {
           <SummaryBox label="ارزش خالص" value={format(netWorth.netWorth, { withSuffix: true })} />
         </div>
       </section>
+
+      {identityData?.statements[0] && (
+        <section className="border-t-2 border-brand-800 pt-4">
+          <p className="text-sm font-medium text-brand-900">{identityData.statements[0].text}</p>
+        </section>
+      )}
     </div>
   );
 }

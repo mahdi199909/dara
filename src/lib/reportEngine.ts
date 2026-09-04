@@ -3,6 +3,9 @@ import { computeHourlyValue } from "./hourlyValue";
 import { computeTimeCost } from "./timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence } from "./habitStreak";
 import { dayKeyIso } from "./calendarGrid";
+import { toJalali, jalaliMonthRange, jalaliDateKey } from "./jalali";
+import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "./dayBattery";
+import { nextMilestoneMinutes } from "./milestones";
 
 export interface TimeAndMoneyReport {
   from: Date;
@@ -15,7 +18,7 @@ export interface TimeAndMoneyReport {
   wasteMin: number;
   productiveRatio: number; // 0-1
 
-  timeByCategory: { categoryId: string; name: string; color: string; minutes: number }[];
+  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number }[];
   timeByProject: { projectId: string; name: string; minutes: number }[];
 
   income: number;
@@ -73,7 +76,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
   let productiveMin = 0;
   let neutralMin = 0;
   let wasteMin = 0;
-  const byCategory = new Map<string, { name: string; color: string; minutes: number }>();
+  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number }>();
   const byProject = new Map<string, { name: string; minutes: number }>();
 
   for (const te of timeEntries) {
@@ -87,7 +90,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
     if (te.activity.category) {
       const cat = te.activity.category;
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -110,7 +113,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     else neutralMin += minutes;
 
     if (task.category) {
-      const entry = byCategory.get(task.category.id) ?? { name: task.category.name, color: task.category.color, minutes: 0 };
+      const entry = byCategory.get(task.category.id) ?? { name: task.category.name, color: task.category.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(task.category.id, entry);
     }
@@ -133,7 +136,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     else neutralMin += minutes;
 
     if (event.category) {
-      const entry = byCategory.get(event.category.id) ?? { name: event.category.name, color: event.category.color, minutes: 0 };
+      const entry = byCategory.get(event.category.id) ?? { name: event.category.name, color: event.category.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(event.category.id, entry);
     }
@@ -156,7 +159,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
     if (checkIn.habit.category) {
       const cat = checkIn.habit.category;
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -532,4 +535,355 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
       days,
     };
   });
+}
+
+// --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
+
+export interface FounderCapital {
+  investedMinutes: number;
+  virtualAssetValue: number;
+  skillCount: number;
+  projectCount: number;
+  assetCount: number;
+  firstRecordAt: Date | null;
+  todayDeltaMinutes: number;
+  monthDeltaMinutes: number;
+}
+
+/**
+ * Three additive, non-overlapping time sources, optionally restricted to rows on/after `from`
+ * (omit for lifetime): TimeEntry minutes logged under a PRODUCTIVE category, HabitCheckIn
+ * minutes (any category — a kept habit counts regardless of its category tag), and Task-level
+ * startAt/endAt minutes for tasks attached to a project (the Quick Capture "log time on a
+ * project task" path, which never creates an Activity/TimeEntry, so it can't double-count with
+ * the first term).
+ */
+async function sumInvestedMinutes(userId: string, from?: Date): Promise<number> {
+  const [productive, habitCheckIns, projectTasks] = await Promise.all([
+    prisma.timeEntry.aggregate({
+      _sum: { durationMin: true },
+      where: {
+        activity: { userId, deletedAt: null, category: { kind: "PRODUCTIVE" } },
+        durationMin: { not: null },
+        ...(from ? { startAt: { gte: from } } : {}),
+      },
+    }),
+    prisma.habitCheckIn.findMany({
+      where: { habit: { userId, deletedAt: null }, durationMin: { not: null }, ...(from ? { date: { gte: from } } : {}) },
+      select: { durationMin: true },
+    }),
+    prisma.task.findMany({
+      where: { userId, deletedAt: null, projectId: { not: null }, startAt: { not: null }, endAt: { not: null }, ...(from ? { startAt: { gte: from } } : {}) },
+      select: { startAt: true, endAt: true },
+    }),
+  ]);
+
+  const habitMin = habitCheckIns.reduce((s, c) => s + (c.durationMin ?? 0), 0);
+  const taskMin = projectTasks.reduce((s, t) => s + Math.max(0, Math.round((t.endAt!.getTime() - t.startAt!.getTime()) / 60000)), 0);
+
+  return (productive._sum.durationMin ?? 0) + habitMin + taskMin;
+}
+
+/**
+ * Lifetime TimeEntry minutes logged under one specific category — for narrative.ts's Act 3
+ * ("چه ساختی"), which names the period's top-productive category and reports its running total.
+ * Deliberately scoped to TimeEntry only (not the full TimeEntry+Task+Event+HabitCheckIn mix
+ * computeTimeAndMoneyReport's timeByCategory uses) — a lighter, targeted query for just the one
+ * category the narrative ends up naming, rather than recomputing the whole report lifetime-wide.
+ */
+export async function sumCategoryLifetimeMinutes(userId: string, categoryId: string): Promise<number> {
+  const result = await prisma.timeEntry.aggregate({
+    _sum: { durationMin: true },
+    where: { activity: { userId, deletedAt: null, categoryId }, durationMin: { not: null } },
+  });
+  return result._sum.durationMin ?? 0;
+}
+
+/** Same idea as sumCategoryLifetimeMinutes, filtered by project instead — insights.ts's
+ * milestoneHours checks both categories and projects for a crossed hour threshold. */
+export async function sumProjectLifetimeMinutes(userId: string, projectId: string): Promise<number> {
+  const result = await prisma.timeEntry.aggregate({
+    _sum: { durationMin: true },
+    where: { activity: { userId, deletedAt: null, projectId }, durationMin: { not: null } },
+  });
+  return result._sum.durationMin ?? 0;
+}
+
+export interface UpgradeEffect {
+  entryId: string;
+  label: string;
+  addedMinutes: number;
+  addedValue: number;
+  categoryTotalMinutes: number;
+  categoryTotalValue: number;
+  nextMilestoneMinutes: number | null;
+  previousHourlyValue: number;
+  newHourlyValue: number;
+}
+
+// Sums VirtualAssetEntry's own durationMin/totalValue directly (not TimeEntry, unlike
+// sumCategoryLifetimeMinutes above) — this entry IS the record of time+value invested, and every
+// creation path (Activity/Task/Event/HabitCheckIn/Project-completion) writes a real durationMin
+// to it, so summing it directly guarantees categoryTotalMinutes always includes the entry that
+// triggered this computation. Reusing the TimeEntry-only helpers instead would under-count for
+// Task- or HabitCheckIn-sourced entries (whose minutes never appear in TimeEntry at all), which
+// could show a total smaller than the amount just added — a broken-looking, dishonest toast.
+async function sumVirtualAssetTotals(userId: string, filter: { categoryId: string } | { projectId: string }): Promise<{ minutes: number; value: number }> {
+  const result = await prisma.virtualAssetEntry.aggregate({
+    _sum: { durationMin: true, totalValue: true },
+    where: { userId, ...filter },
+  });
+  return { minutes: result._sum.durationMin ?? 0, value: result._sum.totalValue ?? 0 };
+}
+
+/**
+ * The honest "این ثبت چه اثری روی سرمایه‌ات داشت" effect of one just-created VirtualAssetEntry —
+ * how much it added to its category or project's running total, and how far that total now is
+ * from the next hour milestone. Returns null when the entry has neither a categoryId nor a
+ * projectId (an activity/task/event logged with no category and not tied to a project) — there's
+ * no named asset to attribute growth to, and constraint #1 forbids inventing one.
+ *
+ * previousHourlyValue/newHourlyValue are both computeHourlyValue(currentSettings) — there's no
+ * real "hourly value before this entry" to diff against (computeHourlyValue is purely
+ * Settings-derived and this one entry doesn't touch Settings), so reporting them equal is the
+ * honest behavior rather than fabricating a rate increase this entry didn't actually cause.
+ */
+export async function computeUpgradeEffect(userId: string, entryId: string): Promise<UpgradeEffect | null> {
+  const entry = await prisma.virtualAssetEntry.findUniqueOrThrow({ where: { id: entryId } });
+  if (entry.userId !== userId) throw new Error("VirtualAssetEntry does not belong to this user");
+
+  let label: string;
+  let totals: { minutes: number; value: number };
+  if (entry.categoryId) {
+    const category = await prisma.category.findUniqueOrThrow({ where: { id: entry.categoryId } });
+    label = category.name;
+    totals = await sumVirtualAssetTotals(userId, { categoryId: entry.categoryId });
+  } else if (entry.projectId) {
+    const project = await prisma.project.findUniqueOrThrow({ where: { id: entry.projectId } });
+    label = project.name;
+    totals = await sumVirtualAssetTotals(userId, { projectId: entry.projectId });
+  } else {
+    return null;
+  }
+
+  const settings = await prisma.settings.findUnique({ where: { userId } });
+  const hourlyValue = computeHourlyValue(settings ?? {});
+
+  return {
+    entryId,
+    label,
+    addedMinutes: entry.durationMin,
+    addedValue: entry.totalValue,
+    categoryTotalMinutes: totals.minutes,
+    categoryTotalValue: totals.value,
+    nextMilestoneMinutes: nextMilestoneMinutes(totals.minutes),
+    previousHourlyValue: hourlyValue,
+    newHourlyValue: hourlyValue,
+  };
+}
+
+/**
+ * "سرمایه من": lifetime accumulation across every table that represents time or value the user
+ * has actually put in — deliberately the one dashboard number that only ever goes up (see the
+ * product brief). firstRecordAt is null (triggering the empty state) only when none of the
+ * contributing tables have a single row yet.
+ */
+export async function computeFounderCapital(userId: string): Promise<FounderCapital> {
+  const now = new Date();
+  const today = startOfDay(now);
+  const { jy, jm } = toJalali(now);
+  const monthStart = jalaliMonthRange(jy, jm).start;
+
+  const [
+    investedMinutes,
+    todayDeltaMinutes,
+    monthDeltaMinutes,
+    virtualAssetValue,
+    skillCategories,
+    projectCount,
+    assetCount,
+    firstActivity,
+    firstHabitCheckIn,
+    firstVirtualAsset,
+    firstProjectTask,
+  ] = await Promise.all([
+    sumInvestedMinutes(userId),
+    sumInvestedMinutes(userId, today),
+    sumInvestedMinutes(userId, monthStart),
+    prisma.virtualAssetEntry.aggregate({ _sum: { totalValue: true }, where: { userId } }).then((r) => r._sum.totalValue ?? 0),
+    prisma.virtualAssetEntry.findMany({ where: { userId, categoryId: { not: null } }, select: { categoryId: true }, distinct: ["categoryId"] }),
+    prisma.project.count({ where: { userId, deletedAt: null, status: "COMPLETED" } }),
+    prisma.asset.count({ where: { userId, deletedAt: null } }),
+    prisma.activity.findFirst({ where: { userId, deletedAt: null }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.habitCheckIn.findFirst({ where: { habit: { userId, deletedAt: null } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.virtualAssetEntry.findFirst({ where: { userId }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+    prisma.task.findFirst({ where: { userId, deletedAt: null, projectId: { not: null } }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
+  ]);
+
+  const firstDates = [firstActivity, firstHabitCheckIn, firstVirtualAsset, firstProjectTask]
+    .map((r) => r?.createdAt)
+    .filter((d): d is Date => !!d);
+  const firstRecordAt = firstDates.length > 0 ? new Date(Math.min(...firstDates.map((d) => d.getTime()))) : null;
+
+  return {
+    investedMinutes,
+    virtualAssetValue,
+    skillCount: skillCategories.length,
+    projectCount,
+    assetCount,
+    firstRecordAt,
+    todayDeltaMinutes,
+    monthDeltaMinutes,
+  };
+}
+
+/**
+ * Idempotent upsert of today's (Jalali) CapitalSnapshot row — safe to call as often as the app
+ * likes in a day (first-run, boot, resume, or every /api/capital read); it always converges to
+ * the latest true totals for today rather than freezing at whatever the first call that day saw.
+ * Returns the freshly-computed capital so callers don't need to recompute it separately.
+ */
+export async function recordDailyCapitalSnapshot(userId: string): Promise<FounderCapital> {
+  const capital = await computeFounderCapital(userId);
+  const date = jalaliDateKey(new Date());
+  await prisma.capitalSnapshot.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, investedMinutes: capital.investedMinutes, virtualAssetValue: capital.virtualAssetValue },
+    update: { investedMinutes: capital.investedMinutes, virtualAssetValue: capital.virtualAssetValue },
+  });
+  return capital;
+}
+
+// --- computeDayBattery ("DayBattery") -------------------------------------------------------
+
+/**
+ * Today's waking-hours timeline (see src/lib/dayBattery.ts's computeDaySegments for the pure
+ * sweep algorithm this wraps). Three chronologically-positioned time sources, deliberately not
+ * the same set computeFounderCapital uses: ALL categories count here (not just PRODUCTIVE), and
+ * ALL tasks with a logged startAt/endAt count (not just project-linked ones) — this is "where did
+ * today's time actually go", not "invested capital". HabitCheckIn is excluded (see dayBattery.ts's
+ * own comment): it has a real duration but no real clock-time slot to place on a timeline.
+ */
+/** Every logged interval for `userId` inside [wakeTime, sleepTime) — factored out of
+ * computeDayBattery so src/lib/insightsData.ts's unloggedGap wrapper can call it once per day
+ * for the last 7 days, not just for today. */
+export async function fetchDayIntervals(userId: string, wakeTime: Date, sleepTime: Date): Promise<TimedInterval[]> {
+  const [timeEntries, tasks, completions] = await Promise.all([
+    prisma.timeEntry.findMany({
+      where: { activity: { userId, deletedAt: null }, startAt: { gte: wakeTime, lt: sleepTime }, durationMin: { not: null } },
+      include: { activity: { include: { category: true } } },
+    }),
+    prisma.task.findMany({
+      where: { userId, deletedAt: null, startAt: { gte: wakeTime, lt: sleepTime }, endAt: { not: null } },
+      include: { category: true },
+    }),
+    prisma.eventCompletion.findMany({
+      where: { occurrenceDate: { gte: wakeTime, lt: sleepTime }, event: { userId, deletedAt: null } },
+      include: { event: { include: { category: true } } },
+    }),
+  ]);
+
+  return [
+    ...timeEntries.map((te) => ({
+      start: te.startAt,
+      end: te.endAt!,
+      kind: (te.activity.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
+    })),
+    ...tasks.map((t) => ({
+      start: t.startAt!,
+      end: t.endAt!,
+      kind: (t.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
+    })),
+    ...completions
+      .filter((c) => !c.event.allDay)
+      .map((c) => ({
+        start: c.event.startAt,
+        end: c.event.endAt,
+        kind: (c.event.category?.kind ?? "NEUTRAL") as CategoryKindForBattery,
+      })),
+  ];
+}
+
+export async function computeDayBattery(userId: string): Promise<DayBatteryResult> {
+  const now = new Date();
+  const settings = await prisma.settings.findUnique({ where: { userId } });
+  const wakeHour = settings?.wakeHour ?? 7;
+  const sleepHour = settings?.sleepHour ?? 23;
+  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
+  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+
+  const intervals = await fetchDayIntervals(userId, wakeTime, sleepTime);
+  return computeDaySegments(wakeTime, sleepTime, now, intervals);
+}
+
+export interface PeriodComparisonDelta {
+  totalMinutes: number;
+  productiveMinutes: number;
+  expense: number;
+  timeCost: number;
+  virtualAssetValue: number;
+  net: number;
+}
+
+export interface PeriodComparison {
+  current: TimeAndMoneyReport;
+  previous: TimeAndMoneyReport;
+  delta: PeriodComparisonDelta;
+  hasEnoughHistory: boolean;
+}
+
+/**
+ * Distinct calendar days with any real activity in range — a day counts if it has a logged
+ * TimeEntry, Transaction, or HabitCheckIn; deliberately the same three signals
+ * computeTimeAndMoneyReport itself reads, not a new activity concept. Used both as
+ * comparePeriods's hasEnoughHistory denominator and as identity.ts's loggingStreak input —
+ * exported (returning the key set, not just a count) so both can share the one query.
+ */
+export async function fetchActiveDayKeys(userId: string, from: Date, to: Date): Promise<Set<string>> {
+  const [timeEntries, transactions, habitCheckIns] = await Promise.all([
+    prisma.timeEntry.findMany({ where: { activity: { userId, deletedAt: null }, startAt: { gte: from, lte: to } }, select: { startAt: true } }),
+    prisma.transaction.findMany({ where: { userId, deletedAt: null, date: { gte: from, lte: to } }, select: { date: true } }),
+    prisma.habitCheckIn.findMany({ where: { habit: { userId, deletedAt: null }, date: { gte: from, lte: to } }, select: { date: true } }),
+  ]);
+  const days = new Set<string>();
+  for (const t of timeEntries) days.add(dayKeyIso(t.startAt));
+  for (const t of transactions) days.add(dayKeyIso(t.date));
+  for (const h of habitCheckIns) days.add(dayKeyIso(h.date));
+  return days;
+}
+
+/**
+ * Compares a period against the period of equal length immediately before it — the only
+ * comparison this product ever makes (see the product's global voice constraints: never against
+ * other users, benchmarks, or targets). hasEnoughHistory is false when the previous period has
+ * real activity on fewer than half its days; callers must show no delta at all in that case
+ * rather than comparing against a mostly-empty baseline.
+ */
+export async function comparePeriods(userId: string, from: Date, to: Date): Promise<PeriodComparison> {
+  const durationMs = to.getTime() - from.getTime();
+  const previousTo = new Date(from.getTime() - 1);
+  const previousFrom = new Date(previousTo.getTime() - durationMs);
+
+  const [current, previous, activeDayKeys] = await Promise.all([
+    computeTimeAndMoneyReport(userId, from, to),
+    computeTimeAndMoneyReport(userId, previousFrom, previousTo),
+    fetchActiveDayKeys(userId, previousFrom, previousTo),
+  ]);
+
+  const totalDays = Math.max(1, Math.round(durationMs / 86_400_000));
+  const hasEnoughHistory = activeDayKeys.size / totalDays >= 0.5;
+
+  return {
+    current,
+    previous,
+    delta: {
+      totalMinutes: current.totalDurationMin - previous.totalDurationMin,
+      productiveMinutes: current.productiveMin - previous.productiveMin,
+      expense: current.expense - previous.expense,
+      timeCost: current.timeCost - previous.timeCost,
+      virtualAssetValue: current.virtualAssetValue - previous.virtualAssetValue,
+      net: current.net - previous.net,
+    },
+    hasEnoughHistory,
+  };
 }

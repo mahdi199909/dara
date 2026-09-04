@@ -12,6 +12,52 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import { FlameIcon, ChevronRightIcon, ChevronLeftIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
+import DeltaChip, { type DeltaPolarity } from "@/components/DeltaChip";
+import { phraseDeltaPride, phraseSamePeriodTasksCompleted, phraseSamePeriodVirtualAsset } from "@/lib/phrasing";
+
+// The only comparison this product ever shows (its own past period — see comparePeriods). Each
+// entry's polarity says which direction is "good"; totalMinutes carries no polarity — logging
+// more or less total time isn't inherently good or bad — so it's excluded from the pride search
+// below, though it still gets a DeltaChip (rendered neutral) next to its own stat.
+const COMPARISON_METRICS: { reportKey: string; label: string; polarity: DeltaPolarity }[] = [
+  { reportKey: "totalDurationMin", label: "کل زمان", polarity: "neutral" },
+  { reportKey: "productiveMin", label: "زمان مفید", polarity: "higherIsBetter" },
+  { reportKey: "expense", label: "هزینه", polarity: "lowerIsBetter" },
+  { reportKey: "timeCost", label: "هزینه زمانی", polarity: "lowerIsBetter" },
+  { reportKey: "virtualAssetValue", label: "دارایی مجازی", polarity: "higherIsBetter" },
+  { reportKey: "net", label: "سود خالص", polarity: "higherIsBetter" },
+];
+
+/**
+ * Pain→path→pride for the reports page: if any of the metrics above moved the "bad" way this
+ * period, this line makes sure the page doesn't end on that. Names the metric with the strongest
+ * real improvement; if nothing improved, falls back to an absolute (non-comparative) achievement
+ * from the same period — never fabricates a positive spin when there genuinely isn't one, and
+ * returns null (rendering nothing) rather than force a claim that isn't there.
+ */
+function computePrideLine(comparison: any): string | null {
+  if (!comparison?.hasEnoughHistory) return null;
+  const { current, previous } = comparison;
+
+  let best: { label: string; percent: number; direction: "increased" | "decreased" } | null = null;
+  for (const m of COMPARISON_METRICS) {
+    if (m.polarity === "neutral") continue;
+    const prev = previous[m.reportKey];
+    const cur = current[m.reportKey];
+    if (!prev) continue;
+    const percent = ((cur - prev) / Math.abs(prev)) * 100;
+    const isGood = m.polarity === "higherIsBetter" ? percent > 0 : percent < 0;
+    if (!isGood) continue;
+    if (!best || Math.abs(percent) > Math.abs(best.percent)) {
+      best = { label: m.label, percent, direction: percent > 0 ? "increased" : "decreased" };
+    }
+  }
+  if (best) return phraseDeltaPride(best.label, best.percent, best.direction);
+
+  if (current.tasksCompleted > 0) return phraseSamePeriodTasksCompleted(current.tasksCompleted);
+  if (current.virtualAssetValue > 0) return phraseSamePeriodVirtualAsset(current.virtualAssetValue);
+  return null;
+}
 
 const PRESETS = [
   { key: "today", label: "امروز" },
@@ -146,8 +192,17 @@ export default function ReportsPage() {
             <Card className="p-5">
               <h3 className="font-bold text-gray-800 text-sm mb-3">زمان</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <StatItem label="کل زمان" value={formatDuration(data.report.totalDurationMin)} />
-                <StatItem label="زمان مفید" value={formatDuration(data.report.productiveMin)} tone="positive" />
+                <StatItem
+                  label="کل زمان"
+                  value={formatDuration(data.report.totalDurationMin)}
+                  extra={data.comparison?.hasEnoughHistory && <DeltaChip current={data.report.totalDurationMin} previous={data.comparison.previous.totalDurationMin} polarity="neutral" />}
+                />
+                <StatItem
+                  label="زمان مفید"
+                  value={formatDuration(data.report.productiveMin)}
+                  tone="positive"
+                  extra={data.comparison?.hasEnoughHistory && <DeltaChip current={data.report.productiveMin} previous={data.comparison.previous.productiveMin} polarity="higherIsBetter" />}
+                />
                 <StatItem label="زمان هدررفته" value={formatDuration(data.report.wasteMin)} tone="negative" />
                 <StatItem label="نسبت مفید بودن" value={`${Math.round(data.report.productiveRatio * 100)}٪`} />
               </div>
@@ -169,9 +224,30 @@ export default function ReportsPage() {
               <h3 className="font-bold text-gray-800 text-sm mb-3">مالی</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <StatItem label="درآمد" value={format(data.report.income, { withSuffix: true })} tone="positive" />
-                <StatItem label="هزینه" value={format(data.report.expense, { withSuffix: true })} tone="negative" />
-                <StatItem label="هزینه زمانی" value={format(data.report.timeCost, { withSuffix: true })} />
+                <StatItem
+                  label="هزینه"
+                  value={format(data.report.expense, { withSuffix: true })}
+                  tone="negative"
+                  extra={data.comparison?.hasEnoughHistory && <DeltaChip current={data.report.expense} previous={data.comparison.previous.expense} polarity="lowerIsBetter" />}
+                />
+                <StatItem
+                  label="هزینه زمانی"
+                  value={format(data.report.timeCost, { withSuffix: true })}
+                  extra={data.comparison?.hasEnoughHistory && <DeltaChip current={data.report.timeCost} previous={data.comparison.previous.timeCost} polarity="lowerIsBetter" />}
+                />
                 <StatItem label="هزینه واقعی" value={format(data.report.realCost, { withSuffix: true })} tone="negative" />
+                <StatItem
+                  label="سود خالص"
+                  value={format(data.report.net, { withSuffix: true })}
+                  tone={data.report.net >= 0 ? "positive" : "negative"}
+                  extra={data.comparison?.hasEnoughHistory && <DeltaChip current={data.report.net} previous={data.comparison.previous.net} polarity="higherIsBetter" />}
+                />
+                <StatItem
+                  label="دارایی مجازی"
+                  value={format(data.report.virtualAssetValue, { withSuffix: true })}
+                  tone="positive"
+                  extra={data.comparison?.hasEnoughHistory && <DeltaChip current={data.report.virtualAssetValue} previous={data.comparison.previous.virtualAssetValue} polarity="higherIsBetter" />}
+                />
               </div>
               {data.report.expenseByCategory.length > 0 && (
                 <ResponsiveContainer width="100%" height={180}>
@@ -187,6 +263,15 @@ export default function ReportsPage() {
               )}
             </Card>
           </div>
+
+          {(() => {
+            const prideLine = computePrideLine(data.comparison);
+            return prideLine ? (
+              <Card className="p-4">
+                <p className="text-sm text-brand-700">{prideLine}</p>
+              </Card>
+            ) : null;
+          })()}
 
           <Card className="p-5">
             <h3 className="font-bold text-gray-800 text-sm mb-3">هزینه فرصت زمان‌های اتلافی</h3>

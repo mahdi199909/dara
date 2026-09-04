@@ -11,13 +11,24 @@ export function CardHeader({ title, action }: { title: string; action?: React.Re
   );
 }
 
-export function StatItem({ label, value, tone = "default" }: { label: string; value: React.ReactNode; tone?: "default" | "positive" | "negative" | "muted" }) {
+export function StatItem({
+  label,
+  value,
+  tone = "default",
+  extra,
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "positive" | "negative" | "muted";
+  extra?: React.ReactNode;
+}) {
   const toneClass =
     tone === "positive" ? "text-brand-700" : tone === "negative" ? "text-waste-600" : tone === "muted" ? "text-gray-400" : "text-gray-800";
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-gray-500">{label}</span>
       <span className={`text-base font-bold ${toneClass}`}>{value}</span>
+      {extra}
     </div>
   );
 }

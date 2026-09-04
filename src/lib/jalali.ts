@@ -77,6 +77,14 @@ export function jalaliMonthRange(jy: number, jm: number): { start: Date; end: Da
   return { start, end };
 }
 
+/** A sortable, ASCII Jalali day key like "1405-06-12" — for storage/uniqueness keys (e.g.
+ * CapitalSnapshot's one-row-per-user-per-day constraint), never for display (use formatJalali). */
+export function jalaliDateKey(date: Date): string {
+  const { jy, jm, jd } = toJalali(date);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${jy}-${pad(jm)}-${pad(jd)}`;
+}
+
 export function weekdayNameFa(date: Date): string {
   return WEEKDAYS_FA[date.getDay()];
 }

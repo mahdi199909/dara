@@ -8,6 +8,10 @@ import { computeHourlyValue } from "@/lib/hourlyValue";
 import { computeTimeCost } from "@/lib/timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence, type HabitLike, type HabitCheckInLike } from "@/lib/habitStreak";
 import { dayKeyIso } from "@/lib/calendarGrid";
+import { toJalali, jalaliMonthRange, jalaliDateKey } from "@/lib/jalali";
+import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "@/lib/dayBattery";
+import { nextMilestoneMinutes } from "@/lib/milestones";
+import { Preferences } from "@capacitor/preferences";
 import type { LocalDb } from "./db";
 import { fetchByIds } from "./relations";
 
@@ -29,7 +33,7 @@ export interface TimeAndMoneyReport {
   neutralMin: number;
   wasteMin: number;
   productiveRatio: number;
-  timeByCategory: { categoryId: string; name: string; color: string; minutes: number }[];
+  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number }[];
   timeByProject: { projectId: string; name: string; minutes: number }[];
   income: number;
   expense: number;
@@ -115,7 +119,7 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
   let productiveMin = 0;
   let neutralMin = 0;
   let wasteMin = 0;
-  const byCategory = new Map<string, { name: string; color: string; minutes: number }>();
+  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number }>();
   const byProject = new Map<string, { name: string; minutes: number }>();
 
   function addTime(categoryId: string | null, projectId: string | null, minutes: number) {
@@ -127,7 +131,7 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
     else neutralMin += minutes;
 
     if (cat) {
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -486,4 +490,331 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
     }
     return { categoryId: cat.id, name: cat.name, icon: cat.icon, color: cat.color, totalMinutes, totalDays: dayMap.size, days };
   });
+}
+
+// --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
+
+export interface FounderCapital {
+  investedMinutes: number;
+  virtualAssetValue: number;
+  skillCount: number;
+  projectCount: number;
+  assetCount: number;
+  firstRecordAt: Date | null;
+  todayDeltaMinutes: number;
+  monthDeltaMinutes: number;
+}
+
+/** Mirrors src/lib/reportEngine.ts's sumInvestedMinutes — see that file's doc comment for the
+ * three-source rationale. `fromIso` omitted means lifetime. */
+function sumInvestedMinutesLocal(db: LocalDb, userId: string, fromIso?: string): number {
+  const productive = db.get<{ total: number | null }>(
+    `SELECT SUM(te."durationMin") as total FROM "TimeEntry" te
+     JOIN "Activity" a ON a."id" = te."activityId"
+     JOIN "Category" c ON c."id" = a."categoryId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND c."kind" = 'PRODUCTIVE' AND te."durationMin" IS NOT NULL
+     ${fromIso ? `AND te."startAt" >= ?` : ""}`,
+    fromIso ? [userId, fromIso] : [userId]
+  );
+  const habits = db.get<{ total: number | null }>(
+    `SELECT SUM(hc."durationMin") as total FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."durationMin" IS NOT NULL
+     ${fromIso ? `AND hc."date" >= ?` : ""}`,
+    fromIso ? [userId, fromIso] : [userId]
+  );
+  const projectTasks = db.all<{ startAt: string; endAt: string }>(
+    `SELECT "startAt","endAt" FROM "Task"
+     WHERE "userId" = ? AND "deletedAt" IS NULL AND "projectId" IS NOT NULL AND "startAt" IS NOT NULL AND "endAt" IS NOT NULL
+     ${fromIso ? `AND "startAt" >= ?` : ""}`,
+    fromIso ? [userId, fromIso] : [userId]
+  );
+  const taskMin = projectTasks.reduce((s, t) => s + Math.max(0, Math.round((parseDate(t.endAt).getTime() - parseDate(t.startAt).getTime()) / 60000)), 0);
+
+  return (productive?.total ?? 0) + (habits?.total ?? 0) + taskMin;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's sumCategoryLifetimeMinutes — see its doc
+ * comment for why this is TimeEntry-only, not the full timeByCategory source mix. */
+export function sumCategoryLifetimeMinutes(db: LocalDb, userId: string, categoryId: string): number {
+  const row = db.get<{ total: number | null }>(
+    `SELECT SUM(te."durationMin") as total FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND a."categoryId" = ? AND te."durationMin" IS NOT NULL`,
+    [userId, categoryId]
+  );
+  return row?.total ?? 0;
+}
+
+/** Same idea as sumCategoryLifetimeMinutes, filtered by project instead. */
+export function sumProjectLifetimeMinutes(db: LocalDb, userId: string, projectId: string): number {
+  const row = db.get<{ total: number | null }>(
+    `SELECT SUM(te."durationMin") as total FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND a."projectId" = ? AND te."durationMin" IS NOT NULL`,
+    [userId, projectId]
+  );
+  return row?.total ?? 0;
+}
+
+export interface UpgradeEffect {
+  entryId: string;
+  label: string;
+  addedMinutes: number;
+  addedValue: number;
+  categoryTotalMinutes: number;
+  categoryTotalValue: number;
+  nextMilestoneMinutes: number | null;
+  previousHourlyValue: number;
+  newHourlyValue: number;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's computeUpgradeEffect — see its doc comment for
+ * why totals sum VirtualAssetEntry directly (not TimeEntry) and why previousHourlyValue/
+ * newHourlyValue are always equal. */
+export function computeUpgradeEffect(db: LocalDb, userId: string, entryId: string): UpgradeEffect | null {
+  const entry = db.get<{ userId: string; categoryId: string | null; projectId: string | null; durationMin: number; totalValue: number }>(
+    `SELECT "userId", "categoryId", "projectId", "durationMin", "totalValue" FROM "VirtualAssetEntry" WHERE "id" = ?`,
+    [entryId]
+  );
+  if (!entry) throw new Error("VirtualAssetEntry not found");
+  if (entry.userId !== userId) throw new Error("VirtualAssetEntry does not belong to this user");
+
+  let label: string;
+  let totals: { total: number | null; totalValue: number | null } | undefined;
+  if (entry.categoryId) {
+    const category = db.get<{ name: string }>(`SELECT "name" FROM "Category" WHERE "id" = ?`, [entry.categoryId]);
+    if (!category) throw new Error("Category not found");
+    label = category.name;
+    totals = db.get<{ total: number | null; totalValue: number | null }>(
+      `SELECT SUM("durationMin") as total, SUM("totalValue") as totalValue FROM "VirtualAssetEntry" WHERE "userId" = ? AND "categoryId" = ?`,
+      [userId, entry.categoryId]
+    );
+  } else if (entry.projectId) {
+    const project = db.get<{ name: string }>(`SELECT "name" FROM "Project" WHERE "id" = ?`, [entry.projectId]);
+    if (!project) throw new Error("Project not found");
+    label = project.name;
+    totals = db.get<{ total: number | null; totalValue: number | null }>(
+      `SELECT SUM("durationMin") as total, SUM("totalValue") as totalValue FROM "VirtualAssetEntry" WHERE "userId" = ? AND "projectId" = ?`,
+      [userId, entry.projectId]
+    );
+  } else {
+    return null;
+  }
+
+  const categoryTotalMinutes = totals?.total ?? 0;
+  const settings = db.get<{ monthlyIncome: number | null; workingHoursMonth: number | null; hourlyValueOverride: number | null }>(
+    `SELECT * FROM "Settings" WHERE "userId" = ?`,
+    [userId]
+  );
+  const hourlyValue = computeHourlyValue(settings ?? {});
+
+  return {
+    entryId,
+    label,
+    addedMinutes: entry.durationMin,
+    addedValue: entry.totalValue,
+    categoryTotalMinutes,
+    categoryTotalValue: totals?.totalValue ?? 0,
+    nextMilestoneMinutes: nextMilestoneMinutes(categoryTotalMinutes),
+    previousHourlyValue: hourlyValue,
+    newHourlyValue: hourlyValue,
+  };
+}
+
+export function computeFounderCapital(db: LocalDb, userId: string): FounderCapital {
+  const now = new Date();
+  const today = startOfDay(now);
+  const { jy, jm } = toJalali(now);
+  const monthStart = jalaliMonthRange(jy, jm).start;
+
+  const investedMinutes = sumInvestedMinutesLocal(db, userId);
+  const todayDeltaMinutes = sumInvestedMinutesLocal(db, userId, iso(today));
+  const monthDeltaMinutes = sumInvestedMinutesLocal(db, userId, iso(monthStart));
+
+  const vaRow = db.get<{ total: number | null }>(`SELECT SUM("totalValue") as total FROM "VirtualAssetEntry" WHERE "userId" = ?`, [userId]);
+  const skillRow = db.get<{ n: number }>(`SELECT COUNT(DISTINCT "categoryId") as n FROM "VirtualAssetEntry" WHERE "userId" = ? AND "categoryId" IS NOT NULL`, [userId]);
+  const projectRow = db.get<{ n: number }>(`SELECT COUNT(*) as n FROM "Project" WHERE "userId" = ? AND "deletedAt" IS NULL AND "status" = 'COMPLETED'`, [userId]);
+  const assetRow = db.get<{ n: number }>(`SELECT COUNT(*) as n FROM "Asset" WHERE "userId" = ? AND "deletedAt" IS NULL`, [userId]);
+
+  const firstActivity = db.get<{ createdAt: string | null }>(`SELECT MIN("createdAt") as "createdAt" FROM "Activity" WHERE "userId" = ? AND "deletedAt" IS NULL`, [userId]);
+  const firstHabitCheckIn = db.get<{ createdAt: string | null }>(
+    `SELECT MIN(hc."createdAt") as "createdAt" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId" WHERE h."userId" = ? AND h."deletedAt" IS NULL`,
+    [userId]
+  );
+  const firstVirtualAsset = db.get<{ createdAt: string | null }>(`SELECT MIN("createdAt") as "createdAt" FROM "VirtualAssetEntry" WHERE "userId" = ?`, [userId]);
+  const firstProjectTask = db.get<{ createdAt: string | null }>(
+    `SELECT MIN("createdAt") as "createdAt" FROM "Task" WHERE "userId" = ? AND "deletedAt" IS NULL AND "projectId" IS NOT NULL`,
+    [userId]
+  );
+
+  const firstDates = [firstActivity?.createdAt, firstHabitCheckIn?.createdAt, firstVirtualAsset?.createdAt, firstProjectTask?.createdAt]
+    .filter((d): d is string => !!d)
+    .map((d) => parseDate(d));
+  const firstRecordAt = firstDates.length > 0 ? new Date(Math.min(...firstDates.map((d) => d.getTime()))) : null;
+
+  return {
+    investedMinutes,
+    virtualAssetValue: vaRow?.total ?? 0,
+    skillCount: skillRow?.n ?? 0,
+    projectCount: projectRow?.n ?? 0,
+    assetCount: assetRow?.n ?? 0,
+    firstRecordAt,
+    todayDeltaMinutes,
+    monthDeltaMinutes,
+  };
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's recordDailyCapitalSnapshot — see its doc
+ * comment for the idempotent-upsert rationale. */
+export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): FounderCapital {
+  const capital = computeFounderCapital(db, userId);
+  const date = jalaliDateKey(new Date());
+  const now = new Date().toISOString();
+  db.run(
+    `INSERT INTO "CapitalSnapshot" ("id","userId","date","investedMinutes","virtualAssetValue","createdAt")
+     VALUES (?,?,?,?,?,?)
+     ON CONFLICT("userId","date") DO UPDATE SET
+       "investedMinutes" = excluded."investedMinutes",
+       "virtualAssetValue" = excluded."virtualAssetValue"`,
+    [crypto.randomUUID(), userId, date, capital.investedMinutes, capital.virtualAssetValue, now]
+  );
+
+  // CapitalWidgetProvider.java reads this and only this — it never computes the number itself,
+  // so it's always exactly as fresh as the last boot/resume/capital-page-view that ran this
+  // function, never independently wrong. Fire-and-forget: this function is called synchronously
+  // (and its return value used immediately) at all three call sites (FirstRunGate, resume, the
+  // local /api/capital handler), so awaiting the write here would change its signature for all of
+  // them for a widget refresh none of them need to wait on.
+  void Preferences.set({
+    key: "widget_capital_summary",
+    value: JSON.stringify({
+      investedHoursToday: Math.round(capital.todayDeltaMinutes / 60),
+      investedHoursTotal: Math.round(capital.investedMinutes / 60),
+      updatedAt: now,
+    }),
+  });
+
+  return capital;
+}
+
+// --- computeDayBattery ("DayBattery") -------------------------------------------------------
+
+/** On-device mirror of src/lib/reportEngine.ts's computeDayBattery — see its doc comment for
+ * why the source set differs from computeFounderCapital's (all categories, all tasks, no
+ * project restriction; HabitCheckIn excluded — no real clock-time slot). */
+/** On-device mirror of src/lib/reportEngine.ts's fetchDayIntervals — factored out so
+ * src/local/insightsData.ts's unloggedGap wrapper can call it once per day for the last 7 days. */
+export function fetchDayIntervals(db: LocalDb, userId: string, wakeTime: Date, sleepTime: Date): TimedInterval[] {
+  const wakeIso = iso(wakeTime);
+  const sleepIso = iso(sleepTime);
+
+  const timeEntryRows = db.all<{ startAt: string; endAt: string; kind: string | null }>(
+    `SELECT te."startAt", te."endAt", c."kind" FROM "TimeEntry" te
+     JOIN "Activity" a ON a."id" = te."activityId"
+     LEFT JOIN "Category" c ON c."id" = a."categoryId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" < ? AND te."durationMin" IS NOT NULL`,
+    [userId, wakeIso, sleepIso]
+  );
+  const taskRows = db.all<{ startAt: string; endAt: string; kind: string | null }>(
+    `SELECT t."startAt", t."endAt", c."kind" FROM "Task" t
+     LEFT JOIN "Category" c ON c."id" = t."categoryId"
+     WHERE t."userId" = ? AND t."deletedAt" IS NULL AND t."startAt" >= ? AND t."startAt" < ? AND t."endAt" IS NOT NULL`,
+    [userId, wakeIso, sleepIso]
+  );
+  const completionRows = db.all<{ eventStartAt: string; eventEndAt: string; eventAllDay: number; kind: string | null }>(
+    `SELECT e."startAt" as "eventStartAt", e."endAt" as "eventEndAt", e."allDay" as "eventAllDay", c."kind"
+     FROM "EventCompletion" ec JOIN "Event" e ON e."id" = ec."eventId"
+     LEFT JOIN "Category" c ON c."id" = e."categoryId"
+     WHERE e."userId" = ? AND e."deletedAt" IS NULL AND ec."occurrenceDate" >= ? AND ec."occurrenceDate" < ?`,
+    [userId, wakeIso, sleepIso]
+  );
+
+  return [
+    ...timeEntryRows.map((r) => ({ start: parseDate(r.startAt), end: parseDate(r.endAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
+    ...taskRows.map((r) => ({ start: parseDate(r.startAt), end: parseDate(r.endAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
+    ...completionRows
+      .filter((r) => !r.eventAllDay)
+      .map((r) => ({ start: parseDate(r.eventStartAt), end: parseDate(r.eventEndAt), kind: (r.kind ?? "NEUTRAL") as CategoryKindForBattery })),
+  ];
+}
+
+export function computeDayBattery(db: LocalDb, userId: string): DayBatteryResult {
+  const now = new Date();
+  const settingsRow = db.get<{ wakeHour: number | null; sleepHour: number | null }>(`SELECT "wakeHour","sleepHour" FROM "Settings" WHERE "userId" = ?`, [userId]);
+  const wakeHour = settingsRow?.wakeHour ?? 7;
+  const sleepHour = settingsRow?.sleepHour ?? 23;
+  const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), wakeHour, 0, 0, 0);
+  const sleepTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sleepHour, 0, 0, 0);
+
+  const intervals = fetchDayIntervals(db, userId, wakeTime, sleepTime);
+  return computeDaySegments(wakeTime, sleepTime, now, intervals);
+}
+
+export interface PeriodComparisonDelta {
+  totalMinutes: number;
+  productiveMinutes: number;
+  expense: number;
+  timeCost: number;
+  virtualAssetValue: number;
+  net: number;
+}
+
+export interface PeriodComparison {
+  current: TimeAndMoneyReport;
+  previous: TimeAndMoneyReport;
+  delta: PeriodComparisonDelta;
+  hasEnoughHistory: boolean;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's fetchActiveDayKeys — see its doc comment. */
+export function fetchActiveDayKeys(db: LocalDb, userId: string, from: Date, to: Date): Set<string> {
+  const fromIso = iso(from);
+  const toIso = iso(to);
+  const timeEntryDays = db.all<{ startAt: string }>(
+    `SELECT te."startAt" FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  const transactionDays = db.all<{ date: string }>(
+    `SELECT "date" FROM "Transaction" WHERE "userId" = ? AND "deletedAt" IS NULL AND "date" >= ? AND "date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  const habitCheckInDays = db.all<{ date: string }>(
+    `SELECT hc."date" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."date" >= ? AND hc."date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+
+  const days = new Set<string>();
+  for (const r of timeEntryDays) days.add(dayKeyIso(parseDate(r.startAt)));
+  for (const r of transactionDays) days.add(dayKeyIso(parseDate(r.date)));
+  for (const r of habitCheckInDays) days.add(dayKeyIso(parseDate(r.date)));
+  return days;
+}
+
+/** On-device mirror of src/lib/reportEngine.ts's comparePeriods — see its doc comment for why
+ * hasEnoughHistory exists and why the previous period is raw equal-duration, not a calendar unit. */
+export function comparePeriods(db: LocalDb, userId: string, from: Date, to: Date): PeriodComparison {
+  const durationMs = to.getTime() - from.getTime();
+  const previousTo = new Date(from.getTime() - 1);
+  const previousFrom = new Date(previousTo.getTime() - durationMs);
+
+  const current = computeTimeAndMoneyReport(db, userId, from, to);
+  const previous = computeTimeAndMoneyReport(db, userId, previousFrom, previousTo);
+  const activeDayKeys = fetchActiveDayKeys(db, userId, previousFrom, previousTo);
+
+  const totalDays = Math.max(1, Math.round(durationMs / 86_400_000));
+  const hasEnoughHistory = activeDayKeys.size / totalDays >= 0.5;
+
+  return {
+    current,
+    previous,
+    delta: {
+      totalMinutes: current.totalDurationMin - previous.totalDurationMin,
+      productiveMinutes: current.productiveMin - previous.productiveMin,
+      expense: current.expense - previous.expense,
+      timeCost: current.timeCost - previous.timeCost,
+      virtualAssetValue: current.virtualAssetValue - previous.virtualAssetValue,
+      net: current.net - previous.net,
+    },
+    hasEnoughHistory,
+  };
 }

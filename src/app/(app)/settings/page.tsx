@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as mutateGlobal } from "swr";
 import { fetcher, apiPatch, apiPost, apiDelete } from "@/lib/apiClient";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { formatJalali } from "@/lib/jalali";
 import { computeHourlyValue } from "@/lib/hourlyValue";
+import { toPersianDigits } from "@/lib/money";
 import { CATEGORY_KINDS, CATEGORY_KIND_LABELS, type CategoryKind, VALUE_TYPES, VALUE_TYPE_LABELS, type ValueType, CURRENCY_UNITS, CURRENCY_UNIT_LABELS, type CurrencyUnit } from "@/lib/types";
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
@@ -232,15 +233,19 @@ function MembershipUpgradeCard() {
   );
 }
 
+const HOURS_0_23 = Array.from({ length: 24 }, (_, h) => h);
+
 function PersonalTab() {
   const { data, mutate } = useSWR<any>("/api/settings", fetcher);
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Tehran");
+  const [wakeHour, setWakeHour] = useState(7);
+  const [sleepHour, setSleepHour] = useState(23);
   const [saved, setSaved] = useState(false);
   const { unit, setUnit } = useCurrencyUnit();
 
-  async function toggleDailyQuote() {
-    await apiPatch("/api/settings", { dailyQuoteEnabled: !data.settings.dailyQuoteEnabled });
+  async function toggleDailyMoment() {
+    await apiPatch("/api/settings", { dailyMomentEnabled: !data.settings.dailyMomentEnabled });
     mutate();
   }
 
@@ -248,13 +253,16 @@ function PersonalTab() {
     if (data) {
       setName(data.user?.name ?? "");
       setTimezone(data.settings.timezone);
+      setWakeHour(data.settings.wakeHour ?? 7);
+      setSleepHour(data.settings.sleepHour ?? 23);
     }
   }, [data]);
 
   async function save() {
-    await apiPatch("/api/settings", { name, timezone });
+    await apiPatch("/api/settings", { name, timezone, wakeHour, sleepHour });
     setSaved(true);
     mutate();
+    mutateGlobal("/api/day-battery");
     setTimeout(() => setSaved(false), 2000);
   }
 
@@ -270,6 +278,35 @@ function PersonalTab() {
       <div>
         <label className="block text-sm text-gray-600 mb-1">منطقه زمانی</label>
         <input value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" dir="ltr" />
+      </div>
+      <div>
+        <label className="block text-sm text-gray-600 mb-1">ساعت‌های بیداری</label>
+        <div className="flex items-center gap-2">
+          <select
+            value={wakeHour}
+            onChange={(e) => setWakeHour(Number(e.target.value))}
+            className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+          >
+            {HOURS_0_23.map((h) => (
+              <option key={h} value={h}>
+                {toPersianDigits(`${h}:00`)}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-400 shrink-0">تا</span>
+          <select
+            value={sleepHour}
+            onChange={(e) => setSleepHour(Number(e.target.value))}
+            className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+          >
+            {HOURS_0_23.map((h) => (
+              <option key={h} value={h}>
+                {toPersianDigits(`${h}:00`)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-gray-400 mt-1">ظرفیت نوار «روز» در صفحه اصلی بر همین بازه حساب می‌شود.</p>
       </div>
       <div>
         <label className="block text-sm text-gray-600 mb-1">واحد پول</label>
@@ -295,18 +332,18 @@ function PersonalTab() {
       {data && (
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-700">نمایش جمله روز</p>
+            <p className="text-sm text-gray-700">نمایش لحظه روزانه</p>
             <p className="text-xs text-gray-400">فقط برای کاربران ویژه، در صفحه اصلی نشان داده می‌شود.</p>
           </div>
           <button
             type="button"
-            onClick={toggleDailyQuote}
-            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.dailyQuoteEnabled ? "bg-brand-500" : "bg-gray-300"}`}
-            aria-label={data.settings.dailyQuoteEnabled ? "غیرفعال کردن جمله روز" : "فعال کردن جمله روز"}
+            onClick={toggleDailyMoment}
+            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.dailyMomentEnabled ? "bg-brand-500" : "bg-gray-300"}`}
+            aria-label={data.settings.dailyMomentEnabled ? "غیرفعال کردن لحظه روزانه" : "فعال کردن لحظه روزانه"}
           >
             <span
               className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
-              style={{ [data.settings.dailyQuoteEnabled ? "left" : "right"]: "3px" }}
+              style={{ [data.settings.dailyMomentEnabled ? "left" : "right"]: "3px" }}
             />
           </button>
         </div>

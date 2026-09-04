@@ -175,6 +175,7 @@ public class QuickCaptureActivity extends Activity {
             entry.put("categoryId", selectedCategoryId == null ? JSONObject.NULL : selectedCategoryId);
             entry.put("durationMinutes", selectedDurationMin);
             entry.put("startedAt", isoNow());
+            entry.put("source", "widget");
 
             SharedPreferences prefs = getSharedPreferences(PREFS_GROUP, Context.MODE_PRIVATE);
             String existingRaw = prefs.getString(QUEUE_KEY, "[]");

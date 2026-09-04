@@ -110,6 +110,41 @@ describe("drainWidgetQueue", () => {
     const activities = listActivities(db, USER_ID);
     expect(activities.map((a) => a.title).sort()).toEqual(["اول", "دوم"]);
   });
+
+  it("skips a capture with a stale categoryId instead of failing the whole drain", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([
+        { title: "دسته حذف‌شده", categoryId: "does-not-exist", durationMinutes: 45, startedAt: "2026-08-20T08:00:00.000Z" },
+        { title: "معتبر", categoryId: "cat_1", durationMinutes: 30, startedAt: "2026-08-20T09:00:00.000Z" },
+      ])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+    expect(store.has("widget_pending_captures")).toBe(false);
+    const activities = listActivities(db, USER_ID);
+    expect(activities.map((a) => a.title)).toEqual(["معتبر"]);
+  });
+
+  it("accepts entries with an optional source field ('widget' or 'notification'), old entries without it, and rejects an invalid value", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([
+        { title: "بدون source", categoryId: "cat_1", durationMinutes: 10, startedAt: "2026-08-20T07:00:00.000Z" },
+        { title: "از ویجت", categoryId: "cat_1", durationMinutes: 20, startedAt: "2026-08-20T08:00:00.000Z", source: "widget" },
+        { title: "از نوتیفیکیشن", categoryId: "cat_1", durationMinutes: 30, startedAt: "2026-08-20T09:00:00.000Z", source: "notification" },
+        { title: "source نامعتبر", categoryId: "cat_1", durationMinutes: 40, startedAt: "2026-08-20T10:00:00.000Z", source: "bogus" },
+      ])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(3);
+    const activities = listActivities(db, USER_ID);
+    expect(activities.map((a) => a.title).sort()).toEqual(["از نوتیفیکیشن", "از ویجت", "بدون source"]);
+  });
 });
 
 describe("drainWidgetQueue — habit check-in toggles", () => {
@@ -173,6 +208,21 @@ describe("drainWidgetQueue — habit check-in toggles", () => {
     const count = await drainWidgetQueue(db, USER_ID);
     expect(count).toBe(0);
     expect(store.has("widget_pending_habit_checkins")).toBe(false);
+  });
+
+  it("accepts an optional source field on a habit check-in entry too, old entries without it", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "آب خوردن" });
+    const todayIso = new Date().toISOString();
+    store.set(
+      "widget_pending_habit_checkins",
+      JSON.stringify([{ habitId: habit.id, date: todayIso, source: "widget" }])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+    const { habits } = listHabits(db, USER_ID);
+    expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
   });
 
   it("drains queued captures and habit check-ins together in one call", async () => {

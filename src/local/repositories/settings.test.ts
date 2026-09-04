@@ -36,7 +36,7 @@ describe("local settings repository", () => {
     expect(settings.currency).toBe("IRT");
     expect(settings.currencyDisplayUnit).toBe("TOMAN");
     expect(settings.calendarType).toBe("jalali");
-    expect(settings.dailyQuoteEnabled).toBe(true);
+    expect(settings.dailyMomentEnabled).toBe(true);
     expect(user?.name).toBe("Settings Tester");
     expect(hourlyValue).toBe(0); // no monthlyIncome/workingHoursMonth/override yet
 
@@ -86,13 +86,28 @@ describe("local settings repository", () => {
     expect(JSON.parse(settings.dashboardCardPrefs!)).toEqual({ netWorth: false, habits: true });
   });
 
-  it("turns dailyQuoteEnabled off and persists it as a real boolean, not 0/1", async () => {
+  it("turns dailyMomentEnabled off and persists it as a real boolean, not 0/1", async () => {
     const db = await freshDb();
     getSettings(db, USER_ID);
-    const { settings } = updateSettings(db, USER_ID, { dailyQuoteEnabled: false });
-    expect(settings.dailyQuoteEnabled).toBe(false);
+    const { settings } = updateSettings(db, USER_ID, { dailyMomentEnabled: false });
+    expect(settings.dailyMomentEnabled).toBe(false);
 
     const reread = getSettings(db, USER_ID);
-    expect(reread.settings.dailyQuoteEnabled).toBe(false);
+    expect(reread.settings.dailyMomentEnabled).toBe(false);
+  });
+
+  it("defaults wakeHour/sleepHour to 7/23 and persists an explicit change", async () => {
+    const db = await freshDb();
+    const { settings: defaults } = getSettings(db, USER_ID);
+    expect(defaults.wakeHour).toBe(7);
+    expect(defaults.sleepHour).toBe(23);
+
+    const { settings } = updateSettings(db, USER_ID, { wakeHour: 6, sleepHour: 22 });
+    expect(settings.wakeHour).toBe(6);
+    expect(settings.sleepHour).toBe(22);
+
+    const reread = getSettings(db, USER_ID);
+    expect(reread.settings.wakeHour).toBe(6);
+    expect(reread.settings.sleepHour).toBe(22);
   });
 });

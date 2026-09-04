@@ -1,26 +1,46 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as mutateGlobal } from "swr";
+import Link from "next/link";
 import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureForm from "@/components/CaptureForm";
+import CapitalHeader from "@/components/CapitalHeader";
+import DayBattery from "@/components/DayBattery";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { formatTime } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
+import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
 import { ClockIcon, PlusIcon, XIcon, CheckSquareIcon } from "@/components/icons";
+
+interface DailyMomentInsight {
+  text: string;
+  href?: string;
+}
+interface DailyMomentCandidatesDto {
+  discovery: DailyMomentInsight | null;
+  onThisDay: DailyMomentInsight | null;
+  milestone: DailyMomentInsight | null;
+}
 
 // Native-only, and only for non-FREE license statuses (TRIAL/SUBSCRIBED/LIFETIME all count as
 // "ویژه" — trial users get the full premium feel, same as every other trial-gated feature in
-// this app). Also respects Settings' own dailyQuoteEnabled toggle. Renders nothing until every
-// check has actually resolved, rather than showing then hiding, to avoid a layout flash.
-function DailyQuoteCard() {
+// this app). Also respects Settings' own dailyMomentEnabled toggle. Renders nothing until every
+// check (license, quote, and the three insight-engine candidates) has actually resolved, rather
+// than showing then swapping content, to avoid both a layout flash and a visible type-switch.
+//
+// Rotates between 4 reward types (see src/lib/dailyMoment.ts) instead of always showing a quote —
+// a predictable reward habituates and stops drawing the eye back; variability is what does.
+function DailyMomentCard() {
   const [ready, setReady] = useState(false);
   const [isSpecial, setIsSpecial] = useState(false);
+  const [remoteUserId, setRemoteUserId] = useState<string | null>(null);
   const [quote, setQuote] = useState<string | null>(null);
-  const { data: settingsData } = useSWR<{ settings: { dailyQuoteEnabled: boolean } }>("/api/settings", fetcher);
+  const { data: settingsData } = useSWR<{ settings: { dailyMomentEnabled: boolean } }>("/api/settings", fetcher);
+  const { data: momentData } = useSWR<{ candidates: DailyMomentCandidatesDto }>(ready && isSpecial ? "/api/daily-moment" : null, fetcher);
 
   useEffect(() => {
     const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
@@ -34,20 +54,31 @@ function DailyQuoteCard() {
     ])
       .then(([license, fetchedQuote]) => {
         setIsSpecial(!!license && license.status !== "FREE");
+        setRemoteUserId(license?.remoteUserId ?? null);
         setQuote(fetchedQuote);
       })
       .catch(() => {})
       .finally(() => setReady(true));
   }, []);
 
-  const quoteEnabled = settingsData ? settingsData.settings.dailyQuoteEnabled !== false : false;
-  if (!ready || !isSpecial || !quoteEnabled || !quote) return null;
+  const momentEnabled = settingsData ? settingsData.settings.dailyMomentEnabled !== false : false;
+  if (!ready || !isSpecial || !momentEnabled || !remoteUserId || momentData === undefined) return null;
 
-  return (
+  const candidates: Partial<Record<DailyMomentType, DailyMomentCandidate>> = {};
+  if (momentData.candidates.discovery) candidates.discovery = { type: "discovery", ...momentData.candidates.discovery };
+  if (quote) candidates.quote = { type: "quote", text: quote };
+  if (momentData.candidates.onThisDay) candidates.onThisDay = { type: "onThisDay", ...momentData.candidates.onThisDay };
+  if (momentData.candidates.milestone) candidates.milestone = { type: "milestone", ...momentData.candidates.milestone };
+
+  const picked = selectDailyMoment(candidates, dailyMomentSeed(remoteUserId, new Date()));
+  if (!picked) return null;
+
+  const card = (
     <Card className="p-4 bg-brand-50 border border-brand-100">
-      <p className="text-sm text-brand-700 leading-relaxed text-center">{quote}</p>
+      <p className="text-sm text-brand-700 leading-relaxed text-center">{picked.text}</p>
     </Card>
   );
+  return picked.href ? <Link href={picked.href}>{card}</Link> : card;
 }
 
 function todayRange() {
@@ -59,6 +90,7 @@ function todayRange() {
 
 export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
+  const [capturePrefill, setCapturePrefill] = useState<{ start: Date; end: Date } | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
 
@@ -83,6 +115,7 @@ export default function HomePage() {
   async function toggleHabitCheckIn(habitId: string) {
     await apiPost(`/api/habits/${habitId}/checkin`);
     mutateHabits();
+    mutateGlobal("/api/virtual-assets/latest-effect");
   }
 
   // Trial habits (BJ Fogg's 3-day experiments) live only on the dedicated /habits page —
@@ -93,7 +126,16 @@ export default function HomePage() {
     <div className="px-4 py-8 space-y-6">
       <h1 className="text-xl font-bold text-gray-800 text-center">{greeting} 👋</h1>
 
-      <DailyQuoteCard />
+      <CapitalHeader onEmptyCta={() => setShowForm(true)} />
+
+      <DayBattery
+        onLogGap={(start, end) => {
+          setCapturePrefill({ start, end });
+          setShowForm(true);
+        }}
+      />
+
+      <DailyMomentCard />
 
       <Card className="p-5">
         {!showForm ? (
@@ -108,13 +150,22 @@ export default function HomePage() {
           <>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-gray-800 text-sm">ثبت کار</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600 p-1">
+              <button
+                onClick={() => {
+                  setShowForm(false);
+                  setCapturePrefill(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
                 <XIcon className="w-4 h-4" />
               </button>
             </div>
             <CaptureForm
+              initialStart={capturePrefill?.start}
+              initialEnd={capturePrefill?.end}
               onDone={() => {
                 setShowForm(false);
+                setCapturePrefill(null);
                 mutate();
               }}
             />
@@ -194,7 +245,7 @@ export default function HomePage() {
         <HabitDurationModal
           habit={durationHabit}
           onClose={() => setDurationHabit(null)}
-          onSaved={() => { setDurationHabit(null); mutateHabits(); }}
+          onSaved={() => { setDurationHabit(null); mutateHabits(); mutateGlobal("/api/virtual-assets/latest-effect"); }}
         />
       )}
     </div>
