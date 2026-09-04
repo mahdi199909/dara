@@ -18,7 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SWRProvider>
         <WidgetQueueDrainer />
         <div className="min-h-screen bg-[#f8f9fb]" dir="rtl">
-          <AppTopBar />
+          <AppTopBar userName="کاربر پنهان" />
           <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
           <GlobalCaptureFab />
           <BottomNav userName="کاربر پنهان" />

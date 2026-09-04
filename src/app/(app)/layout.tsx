@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <SWRProvider>
       <div className="min-h-screen bg-[#f8f9fb]" dir="rtl">
-        <AppTopBar />
+        <AppTopBar userName={user.name} />
         <UpgradeToast />
         <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
         <GlobalCaptureFab />
