@@ -17,17 +17,20 @@ import { phraseCaptureReaction, type CaptureReactionKind } from "@/lib/phrasing"
 import { useCompanion } from "@/components/companion/useCompanion";
 import CompanionFace from "@/components/companion/CompanionFace";
 import { MOOD_FA_LABEL } from "@/components/companion/moodTokens";
-import { ClockIcon, PlusIcon, CheckSquareIcon } from "@/components/icons";
+import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
 
 type CaptureReaction = { kind: CaptureReactionKind; minutes?: number; amount?: number };
 
 /**
- * The Companion row — face on the right, message + achieved/target line on the left, the whole
- * row itself the tap target (see the product brief: pain→path→pride means an unlogged gap or a
- * behind-pace day always sits right next to its own one-tap fix, never alone). BLINDFOLDED's tap
- * pre-fills the day's biggest unlogged gap instead of opening a blank form — DayBattery.tsx's
- * own onLogGap shape, reused here rather than inventing a second convention.
+ * The Companion section — message + achieved/target line, the face, and the (now small) capture
+ * button all in one row, button at the leading edge. Only the button is a tap target now (not
+ * the whole row) — a clear, explicit action beside the companion rather than a secret hit-area.
+ * The button's own label/action still follows the companion's mood (see computeCompanionState):
+ * "پر کردن بازه" during BLINDFOLDED, pre-filling the day's biggest unlogged gap instead of
+ * opening a blank form (DayBattery.tsx's own onLogGap shape, reused rather than inventing a
+ * second convention) — but it's never hidden outright even in ASLEEP, since this is now Home's
+ * only capture entry point (GlobalCaptureFab is deliberately absent from Home).
  */
 function CompanionRow({
   reaction,
@@ -45,6 +48,7 @@ function CompanionRow({
 
   const message = reaction ? phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state.remainingMinutes }) : state.message;
   const ariaLabel = `آدمک: ${MOOD_FA_LABEL[state.mood]}، ${formatDuration(state.achievedMinutes)} از ${formatDuration(state.targetMinutes)}`;
+  const buttonLabel = state.action.label || "ثبت کار";
 
   function handleClick() {
     if (state!.mood === "BLINDFOLDED" && largestUnloggedGap) {
@@ -55,21 +59,24 @@ function CompanionRow({
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="shrink-0 w-full flex items-center gap-3 rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-1.5 text-right"
-    >
-      <div className="flex-1 min-w-0">
+    <div className="shrink-0 w-full flex items-center gap-2 rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-1.5">
+      <div className="flex-1 min-w-0 text-right">
         <p className="text-xs text-gray-600 leading-snug line-clamp-2">{message}</p>
         <p className="text-[11px] text-gray-400 mt-0.5">
           {formatDuration(state.achievedMinutes)} از {formatDuration(state.targetMinutes)}
         </p>
       </div>
       <span key={bounceKey} className={bounceKey > 0 ? "companion-pop-once shrink-0" : "shrink-0"}>
-        <CompanionFace mood={state.mood} completion={state.completion} size={64} variant="face" label={ariaLabel} />
+        <CompanionFace mood={state.mood} completion={state.completion} size={56} variant="face" label={ariaLabel} />
       </span>
-    </button>
+      <button
+        type="button"
+        onClick={handleClick}
+        className="shrink-0 rounded-xl bg-brand-600 text-white px-3 py-2 text-xs font-bold active:scale-[0.98] transition"
+      >
+        {buttonLabel}
+      </button>
+    </div>
   );
 }
 
@@ -210,14 +217,6 @@ export default function HomePage() {
         onOpenCapture={() => openCapture()}
         onLogGap={(start, end) => openCapture({ start, end })}
       />
-
-      <button
-        onClick={() => openCapture()}
-        className="shrink-0 w-full flex items-center justify-center gap-2 rounded-2xl bg-brand-600 text-white py-3.5 font-bold text-sm shadow-md shadow-brand-600/25 active:scale-[0.98] transition"
-      >
-        <PlusIcon className="w-5 h-5" />
-        ثبت کار
-      </button>
 
       <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-gray-100 shadow-card">
         <h2 className="shrink-0 font-bold text-gray-800 text-sm px-4 pt-3 pb-2">رویدادهای امروز</h2>
