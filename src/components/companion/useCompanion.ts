@@ -32,6 +32,10 @@ interface SettingsDto {
 export interface UseCompanionResult {
   state: CompanionState | null;
   enabled: boolean;
+  /** The day's single largest UNLOGGED segment, if any — feeds the BLINDFOLDED action's
+   * "پر کردن بازه" click (see Home's wiring), the same onLogGap(start, end) shape
+   * DayBattery.tsx's own tap-a-gap flow uses. */
+  largestUnloggedGap: { start: Date; end: Date } | null;
 }
 
 function sumByKind(segments: DayBatterySegmentDto[], kind: DaySegmentKindFilter): number {
@@ -45,9 +49,13 @@ export function useCompanion(): UseCompanionResult {
   const { habits } = useHabits();
 
   const enabled = settingsData ? settingsData.settings.companionEnabled !== false : false;
-  if (!batteryData || !settingsData || !enabled) return { state: null, enabled };
+  if (!batteryData || !settingsData || !enabled) return { state: null, enabled, largestUnloggedGap: null };
 
   const { battery } = batteryData;
+  const largestUnloggedSegment = battery.segments
+    .filter((s) => s.kind === "UNLOGGED")
+    .sort((a, b) => b.minutes - a.minutes)[0];
+  const largestUnloggedGap = largestUnloggedSegment ? { start: new Date(largestUnloggedSegment.start), end: new Date(largestUnloggedSegment.end) } : null;
   const { settings, user } = settingsData;
   const now = new Date();
   const wakeTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), settings.wakeHour, 0, 0, 0);
@@ -75,5 +83,5 @@ export function useCompanion(): UseCompanionResult {
     seed
   );
 
-  return { state, enabled };
+  return { state, enabled, largestUnloggedGap };
 }

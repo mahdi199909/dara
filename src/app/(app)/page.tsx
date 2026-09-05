@@ -6,14 +6,72 @@ import Link from "next/link";
 import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureFormModal from "@/components/CaptureFormModal";
+import type { CaptureSummary } from "@/components/CaptureForm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import { EmptyState } from "@/components/ui/Card";
 import { formatTime } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
+import { phraseCaptureReaction, type CaptureReactionKind } from "@/lib/phrasing";
+import { useCompanion } from "@/components/companion/useCompanion";
+import CompanionFace from "@/components/companion/CompanionFace";
+import { MOOD_FA_LABEL } from "@/components/companion/moodTokens";
 import { ClockIcon, PlusIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
+
+type CaptureReaction = { kind: CaptureReactionKind; minutes?: number; amount?: number };
+
+/**
+ * The Companion row — face on the right, message + achieved/target line on the left, the whole
+ * row itself the tap target (see the product brief: pain→path→pride means an unlogged gap or a
+ * behind-pace day always sits right next to its own one-tap fix, never alone). BLINDFOLDED's tap
+ * pre-fills the day's biggest unlogged gap instead of opening a blank form — DayBattery.tsx's
+ * own onLogGap shape, reused here rather than inventing a second convention.
+ */
+function CompanionRow({
+  reaction,
+  bounceKey,
+  onOpenCapture,
+  onLogGap,
+}: {
+  reaction: CaptureReaction | null;
+  bounceKey: number;
+  onOpenCapture: () => void;
+  onLogGap: (start: Date, end: Date) => void;
+}) {
+  const { state, enabled, largestUnloggedGap } = useCompanion();
+  if (!enabled || !state) return null;
+
+  const message = reaction ? phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state.remainingMinutes }) : state.message;
+  const ariaLabel = `آدمک: ${MOOD_FA_LABEL[state.mood]}، ${formatDuration(state.achievedMinutes)} از ${formatDuration(state.targetMinutes)}`;
+
+  function handleClick() {
+    if (state!.mood === "BLINDFOLDED" && largestUnloggedGap) {
+      onLogGap(largestUnloggedGap.start, largestUnloggedGap.end);
+    } else {
+      onOpenCapture();
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="shrink-0 w-full flex items-center gap-3 rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-1.5 text-right"
+    >
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-gray-600 leading-snug line-clamp-2">{message}</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">
+          {formatDuration(state.achievedMinutes)} از {formatDuration(state.targetMinutes)}
+        </p>
+      </div>
+      <span key={bounceKey} className={bounceKey > 0 ? "companion-pop-once shrink-0" : "shrink-0"}>
+        <CompanionFace mood={state.mood} completion={state.completion} size={64} variant="face" label={ariaLabel} />
+      </span>
+    </button>
+  );
+}
 
 interface DailyMomentInsight {
   text: string;
@@ -89,6 +147,9 @@ function todayRange() {
 
 export default function HomePage() {
   const [showCapture, setShowCapture] = useState(false);
+  const [captureRange, setCaptureRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [reaction, setReaction] = useState<CaptureReaction | null>(null);
+  const [bounceKey, setBounceKey] = useState(0);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
 
@@ -117,6 +178,25 @@ export default function HomePage() {
   // Home stays to committed habits, checked off like any other daily item.
   const activeHabits = habits.filter((h: any) => h.isActive && !h.isTrial);
 
+  function openCapture(range?: { start: Date; end: Date }) {
+    setCaptureRange(range ?? null);
+    setShowCapture(true);
+  }
+
+  // The Companion's own reaction (bounce + a temporary delta bubble) — see phraseCaptureReaction.
+  // Virtual-asset captures aren't handled here at all (CaptureForm never reports that kind);
+  // UpgradeToast already reacts to those via /api/virtual-assets/latest-effect.
+  function handleCaptureDone(summary?: CaptureSummary) {
+    setShowCapture(false);
+    setCaptureRange(null);
+    mutate();
+    if (summary) {
+      setReaction(summary);
+      setBounceKey((k) => k + 1);
+      setTimeout(() => setReaction(null), 3000);
+    }
+  }
+
   return (
     <div
       className="flex flex-col gap-2 px-4 py-2 overflow-hidden"
@@ -124,8 +204,15 @@ export default function HomePage() {
     >
       <DailyMomentCard />
 
+      <CompanionRow
+        reaction={reaction}
+        bounceKey={bounceKey}
+        onOpenCapture={() => openCapture()}
+        onLogGap={(start, end) => openCapture({ start, end })}
+      />
+
       <button
-        onClick={() => setShowCapture(true)}
+        onClick={() => openCapture()}
         className="shrink-0 w-full flex items-center justify-center gap-2 rounded-2xl bg-brand-600 text-white py-3.5 font-bold text-sm shadow-md shadow-brand-600/25 active:scale-[0.98] transition"
       >
         <PlusIcon className="w-5 h-5" />
@@ -200,7 +287,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      <CaptureFormModal open={showCapture} onClose={() => setShowCapture(false)} onDone={() => { setShowCapture(false); mutate(); }} />
+      <CaptureFormModal
+        open={showCapture}
+        onClose={() => setShowCapture(false)}
+        onDone={handleCaptureDone}
+        initialStart={captureRange?.start}
+        initialEnd={captureRange?.end}
+      />
 
       {durationHabit && (
         <HabitDurationModal

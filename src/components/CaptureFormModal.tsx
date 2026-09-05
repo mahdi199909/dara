@@ -1,12 +1,26 @@
 "use client";
 
-import CaptureForm from "./CaptureForm";
+import CaptureForm, { type CaptureSummary } from "./CaptureForm";
 import { XIcon } from "./icons";
 
 /** The bottom-sheet capture form — shared by GlobalCaptureFab (every page except Home) and
  * Home's own dedicated "ثبت کار" button, so the two entry points stay visually/behaviorally
  * identical rather than drifting apart as two hand-rolled copies. */
-export default function CaptureFormModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: () => void }) {
+export default function CaptureFormModal({
+  open,
+  onClose,
+  onDone,
+  initialStart,
+  initialEnd,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onDone: (summary?: CaptureSummary) => void;
+  /** See CaptureForm's own doc comment — the Companion's "پر کردن بازه" (BLINDFOLDED) action
+   * opens this modal pre-filled to the day's largest unlogged gap. */
+  initialStart?: Date;
+  initialEnd?: Date;
+}) {
   if (!open) return null;
 
   return (
@@ -22,7 +36,7 @@ export default function CaptureFormModal({ open, onClose, onDone }: { open: bool
           </button>
         </div>
         <div className="p-5">
-          <CaptureForm onDone={onDone} />
+          <CaptureForm onDone={onDone} initialStart={initialStart} initialEnd={initialEnd} />
         </div>
       </div>
     </div>

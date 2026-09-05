@@ -9,6 +9,8 @@ import {
   phraseDeltaPride,
   phraseSamePeriodTasksCompleted,
   phraseSamePeriodVirtualAsset,
+  phraseCaptureReaction,
+  phraseCompanion,
 } from "./phrasing";
 
 describe("phraseSpend", () => {
@@ -119,5 +121,47 @@ describe("phraseSamePeriodVirtualAsset", () => {
     const result = phraseSamePeriodVirtualAsset(120000);
     expect(result).toContain("۱۲۰,۰۰۰ تومان");
     expect(result).toContain("در همین بازه");
+  });
+});
+
+describe("phraseCaptureReaction", () => {
+  it("shows a real toman amount for EXPENSE, never a fabricated one", () => {
+    const result = phraseCaptureReaction("EXPENSE", { amount: 240000 });
+    expect(result).toContain("۲۴۰,۰۰۰ تومان");
+    expect(result).not.toContain("پنهان");
+  });
+
+  it("never criticizes WASTE — same warmth as any other honest entry", () => {
+    const result = phraseCaptureReaction("WASTE", {});
+    expect(result).not.toMatch(/متأسفانه|نباید|چرا/);
+  });
+
+  it("includes the real delta and remaining-to-target for PRODUCTIVE", () => {
+    const result = phraseCaptureReaction("PRODUCTIVE", { minutes: 90, remainingMinutes: 120 });
+    expect(result).toContain("۱ ساعت و ۳۰ دقیقه");
+    expect(result).toContain("۲ ساعت");
+    expect(result).toContain("تا هدف");
+  });
+
+  it("omits the remaining-to-target clause once the target is already met", () => {
+    const result = phraseCaptureReaction("PRODUCTIVE", { minutes: 90, remainingMinutes: 0 });
+    expect(result).not.toContain("تا هدف");
+  });
+});
+
+describe("phraseCompanion", () => {
+  it("never returns an empty string for any mood", () => {
+    const moods = ["ASLEEP", "FRESH", "BLINDFOLDED", "CELEBRATING", "HAPPY", "CONTENT", "NEUTRAL", "SLEEPY"] as const;
+    for (const mood of moods) {
+      const result = phraseCompanion(mood, { achievedMinutes: 90, targetMinutes: 360, remainingMinutes: 270, unloggedMinutes: 60 }, "seed:1405-06-15");
+      expect(result.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("is stable for the same seed+mood but can vary across different seeds", () => {
+    const nums = { achievedMinutes: 90, targetMinutes: 360, remainingMinutes: 270, unloggedMinutes: 60 };
+    const a = phraseCompanion("CONTENT", nums, "same-seed");
+    const b = phraseCompanion("CONTENT", nums, "same-seed");
+    expect(a).toBe(b);
   });
 });

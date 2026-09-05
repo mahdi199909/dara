@@ -31,12 +31,21 @@ function hhmm(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** What CaptureForm just submitted, for the Companion's immediate reaction (see its Home
+ * wiring) — deliberately omits a "virtual asset" case, since that reaction already exists
+ * (UpgradeToast, watching /api/virtual-assets/latest-effect) and would otherwise double up. */
+export interface CaptureSummary {
+  kind: "PRODUCTIVE" | "EXPENSE" | "WASTE";
+  minutes?: number;
+  amount?: number;
+}
+
 export default function CaptureForm({
   onDone,
   initialStart,
   initialEnd,
 }: {
-  onDone: () => void;
+  onDone: (summary?: CaptureSummary) => void;
   /** Pre-fills day/start/end — see DayBattery's "tap an unlogged gap" flow, the mandatory
    * "path" in the pain→path→pride rule. Only meaningful together; a lone initialStart with no
    * initialEnd is still honored (end just stays blank for the user to fill in). */
@@ -145,7 +154,19 @@ export default function CaptureForm({
       }
 
       refreshAllCaches();
-      onDone();
+
+      const pickedCategory = categoryId ? categories.find((c: any) => c.id === categoryId) : null;
+      const durationMin = startTime && endTime ? Math.round((new Date(`${day10}T${endTime}:00`).getTime() - new Date(`${day10}T${startTime}:00`).getTime()) / 60000) : undefined;
+      let summary: CaptureSummary | undefined;
+      if (flowType === "COST" && amountNum && amountNum > 0) {
+        summary = { kind: "EXPENSE", amount: amountNum };
+      } else if (pickedCategory?.kind === "WASTE") {
+        summary = { kind: "WASTE" };
+      } else if (pickedCategory?.kind === "PRODUCTIVE" && durationMin && durationMin > 0) {
+        summary = { kind: "PRODUCTIVE", minutes: durationMin };
+      }
+
+      onDone(summary);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "ثبت انجام نشد.");
     } finally {

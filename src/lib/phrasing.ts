@@ -145,6 +145,33 @@ function hashToIndex(seed: string, count: number): number {
   return hash % count;
 }
 
+/**
+ * The Companion's immediate reaction right after a capture succeeds — a real delta, shown for a
+ * few seconds in place of its usual mood message (see Companion's Home wiring). Waste gets the
+ * exact same warmth as productive time: an honest waste entry is a transparency win, not
+ * something to go quiet about — the whole hidden-cost mechanic depends on people actually
+ * logging it. Virtual-asset value already has its own reaction (UpgradeToast, existing), so
+ * that case isn't duplicated here.
+ */
+export type CaptureReactionKind = "PRODUCTIVE" | "EXPENSE" | "WASTE";
+
+export function phraseCaptureReaction(
+  kind: CaptureReactionKind,
+  opts: { minutes?: number; amount?: number; remainingMinutes?: number }
+): string {
+  if (kind === "EXPENSE") {
+    return `${formatToman(opts.amount ?? 0, { withSuffix: true })} ثبت شد. حالا دیده می‌شود.`;
+  }
+  if (kind === "WASTE") {
+    return "ثبت شد. حساب امروزت کامل‌تر شد.";
+  }
+  const added = `+${formatDuration(opts.minutes ?? 0)}`;
+  if (opts.remainingMinutes !== undefined && opts.remainingMinutes > 0) {
+    return `${added}. ${formatDuration(opts.remainingMinutes)} تا هدف.`;
+  }
+  return `${added} ثبت شد.`;
+}
+
 export function phraseCompanion(
   mood: CompanionMood,
   nums: { achievedMinutes: number; targetMinutes: number; remainingMinutes: number; unloggedMinutes: number },
