@@ -19,6 +19,17 @@ export default function BottomNav({ userName }: { userName: string }) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   async function logout() {
+    const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    if (native) {
+      // No server session to clear on-device (see nativeOnboarding.ts) — apiPost("/api/auth/logout")
+      // would route through dispatchLocal to a nonexistent web-only concept and do nothing, and
+      // "/login" isn't a real screen here (FirstRunGate owns the logged-out UI). Clear the cached
+      // license/token instead and reload, so FirstRunGate's boot check finds nothing cached.
+      const { dispatchLocal } = await import("@/lib/localDispatcher");
+      dispatchLocal("POST", "/api/local/logout");
+      window.location.href = "/";
+      return;
+    }
     await apiPost("/api/auth/logout");
     router.push("/login");
     router.refresh();

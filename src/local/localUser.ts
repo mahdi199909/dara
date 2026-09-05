@@ -34,3 +34,22 @@ export function getLocalUserId(db: LocalDb): string {
 
   return LOCAL_USER_ID;
 }
+
+/** Adds any DEFAULT_CATEGORIES the local user doesn't already have (matched by name), for
+ * devices whose install predates a category added here later — getLocalUserId above only ever
+ * seeds the full list once, on first-ever creation. Safe to call on every boot: skips names that
+ * already exist, so it never duplicates or touches a category the user has renamed or removed. */
+export function ensureDefaultCategories(db: LocalDb, userId: string): void {
+  const existingNames = new Set(
+    db.all<{ name: string }>(`SELECT "name" FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL`, [userId]).map((r) => r.name)
+  );
+  const now = new Date().toISOString();
+  for (const c of DEFAULT_CATEGORIES) {
+    if (existingNames.has(c.name)) continue;
+    db.run(
+      `INSERT INTO "Category" ("id","userId","name","icon","color","kind","valueType","isActive","generatesVirtualAsset","createdAt","updatedAt")
+       VALUES (?,?,?,?,?,?,?,1,0,?,?)`,
+      [crypto.randomUUID(), userId, c.name, c.icon, c.color, c.kind, c.valueType, now, now]
+    );
+  }
+}

@@ -10,6 +10,7 @@ import { parseQuickCapture } from "@/lib/parser";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { resolveDefaultAccountId } from "../accounts";
+import { syncActivityDirectCostTransaction } from "../directCostSync";
 
 export interface QuickCaptureInput {
   text: string;
@@ -65,6 +66,7 @@ export function quickCapture(
     );
     // durationMinutes is intentionally NOT turned into a TimeEntry yet — see file-level comment.
     void durationMinutes;
+    if (directCost > 0) syncActivityDirectCostTransaction(db, id);
     const activity = db.get(`SELECT * FROM "Activity" WHERE "id" = ?`, [id]);
     writeLocalAuditLog(db, { userId, action: "CREATE", entityType: "Activity", entityId: id, newValue: activity, metadata: { source: "quick_capture", rawText: input.text } });
     result = { entityType: "Activity", entity: activity };

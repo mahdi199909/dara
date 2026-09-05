@@ -18,6 +18,7 @@ export const DEFAULT_CATEGORIES: Array<{
   { name: "تفریح", icon: "🎮", color: "#b0a24a", kind: "NEUTRAL", valueType: "EXPENSE" },
   { name: "شبکه‌های اجتماعی", icon: "📱", color: "#c95a4c", kind: "WASTE", valueType: "EXPENSE" },
   { name: "خرید", icon: "🛍️", color: "#8a7ac9", kind: "NEUTRAL", valueType: "EXPENSE" },
+  { name: "رفت و آمد", icon: "🚗", color: "#4a90c9", kind: "NEUTRAL", valueType: "EXPENSE" },
   { name: "مالی", icon: "💰", color: "#c9a13a", kind: "NEUTRAL", valueType: "EXPENSE" },
   { name: "شخصی", icon: "🙂", color: "#6b8a9c", kind: "NEUTRAL", valueType: "EXPENSE" },
 ];

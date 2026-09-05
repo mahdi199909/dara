@@ -94,7 +94,7 @@ export default function ReportsPage() {
         const { dispatchLocal } = await import("@/lib/localDispatcher");
         const res = dispatchLocal("GET", `/api/export/${entity}`);
         if (res.status >= 400) throw new Error((res.json as { error?: string })?.error ?? `HTTP ${res.status}`);
-        csv = res.json as string;
+        csv = (res.json as { csv: string }).csv;
       } else {
         const res = await fetch(`/api/export/${entity}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);

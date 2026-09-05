@@ -91,6 +91,16 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         console.error("capital snapshot on boot failed", err);
       }
 
+      // Best-effort: backfills any default category added after this device's install (see
+      // ensureDefaultCategories's own doc comment) — a install-time-only concern, so this
+      // shouldn't block getting into the app either if it somehow fails.
+      try {
+        const { getLocalUserId, ensureDefaultCategories } = await import("@/local/localUser");
+        ensureDefaultCategories(driver, getLocalUserId(driver));
+      } catch (err) {
+        console.error("ensure default categories on boot failed", err);
+      }
+
       const license = await getCachedLicense();
       setReady(!!license);
 

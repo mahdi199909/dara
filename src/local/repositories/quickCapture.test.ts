@@ -40,6 +40,19 @@ describe("local quickCapture", () => {
     expect(db.all(`SELECT * FROM "FinanceAccount" WHERE "userId" = ?`, [USER_ID])).toHaveLength(1);
   });
 
+  it("creates an ACTIVITY with a directCost and syncs it to a linked EXPENSE Transaction", async () => {
+    const db = await freshDb();
+    const result = quickCapture(db, USER_ID, { text: "تعمیر ماشین", type: "ACTIVITY", amount: 400000 });
+    expect(result.entityType).toBe("Activity");
+    expect((result.entity as any).directCost).toBe(400000);
+
+    const transactions = db.all<{ amount: number; type: string; activityId: string }>(`SELECT * FROM "Transaction" WHERE "userId" = ?`, [USER_ID]);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0].amount).toBe(400000);
+    expect(transactions[0].type).toBe("EXPENSE");
+    expect(transactions[0].activityId).toBe((result.entity as any).id);
+  });
+
   it("creates an EVENT with computed endAt from durationMinutes", async () => {
     const db = await freshDb();
     const result = quickCapture(db, USER_ID, { text: "جلسه تیم", type: "EVENT", durationMinutes: 30, date: new Date("2026-05-01T10:00:00.000Z").toISOString() });

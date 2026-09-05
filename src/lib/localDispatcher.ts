@@ -318,6 +318,15 @@ register("POST", "/api/local/license-cache", ({ db, body }) => ({
   license: licenseCacheRepo.setLicenseCache(db, body as licenseCacheRepo.LicenseCache),
 }));
 
+// Android's "log out": there's no server session to invalidate (see nativeOnboarding.ts) — this
+// just clears the cached license/token singleton so FirstRunGate's next boot-time check finds
+// nothing cached and shows the login form again. See BottomNav.tsx's native branch, which
+// reloads the app right after this so that re-check actually runs.
+register("POST", "/api/local/logout", ({ db }) => {
+  licenseCacheRepo.clearLicenseCache(db);
+  return { ok: true };
+});
+
 // -----------------------------------------------------------------------------------------
 
 let driverOverride: LocalDb | null = null;
