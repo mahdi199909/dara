@@ -47,3 +47,31 @@ body {
 .animate-in {
   animation: slide-in-from-right 0.2s ease-out;
 }
+
+/* Companion (src/components/companion/**) — see doc/companion-preview.html for the approved
+   reference these mirror exactly. No other animation should be added to the face; it must not
+   fidget. */
+.companion-ring {
+  transition: stroke-dashoffset 450ms ease;
+}
+@keyframes companion-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.companion-bob {
+  animation: companion-bob 1.6s ease-in-out infinite;
+}
+@keyframes companion-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.companion-confetti-dot {
+  animation: companion-pop 0.5s ease-out backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .companion-face *, .companion-ring {
+    animation: none !important;
+    transition: none !important;
+  }
+}
