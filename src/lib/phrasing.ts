@@ -8,6 +8,7 @@
 // know they'd built. phraseHidden and phraseBuild ARE those two moments, so they're the only
 // functions here that use the word; phraseSpend and phraseCapital never do.
 import { toPersianDigits, formatToman, formatDuration } from "./money";
+import type { CompanionMood } from "./companion";
 
 /** "پرداخت" — a specific spend of time (and, when there's a real hourly rate, its Toman
  * equivalent) against one named thing. Omits the Toman clause entirely rather than showing
@@ -90,4 +91,66 @@ export function phraseSamePeriodTasksCompleted(count: number): string {
  * still built this period. */
 export function phraseSamePeriodVirtualAsset(tomans: number): string {
   return `در همین بازه ${formatToman(tomans, { withSuffix: true })} دارایی مجازی ساختی.`;
+}
+
+/**
+ * Companion mood messages (src/lib/companion.ts) — 3-4 variants per mood, picked deterministically
+ * per (day, mood) via companionMessageSeed so the line stays put across refreshes today but isn't
+ * the exact same sentence every day. ASLEEP is the one mood with a single, number-free variant —
+ * there's genuinely nothing to report yet, which isn't the same thing as an empty motivational
+ * placeholder (see the file header's no-fabricated-number rule: this states a fact, not a claim).
+ */
+const COMPANION_MESSAGES: Record<CompanionMood, ((achieved: number, target: number, remaining: number, unlogged: number) => string)[]> = {
+  ASLEEP: [() => "روز هنوز شروع نشده."],
+  FRESH: [
+    (_achieved, _target, remaining) => `روزِ تازه. ${formatDuration(remaining)} تا هدف امروز.`,
+    (_achieved, target) => `صبح زود است. هدف امروز ${formatDuration(target)} است.`,
+    (_achieved, _target, remaining) => `${formatDuration(remaining)} تا هدف امروز — وقت زیاد مونده.`,
+  ],
+  BLINDFOLDED: [
+    (_achieved, _target, _remaining, unlogged) => `${formatDuration(unlogged)} از امروز رو نمی‌بینم. یکی‌شون رو بهم بگو.`,
+    (_achieved, _target, _remaining, unlogged) => `${formatDuration(unlogged)} از امروز ثبت نشده. یه بازه رو انتخاب کن.`,
+    (_achieved, _target, _remaining, unlogged) => `بخشی از امروز (${formatDuration(unlogged)}) هنوز روی دفتر نیست.`,
+  ],
+  CELEBRATING: [
+    (achieved) => `${formatDuration(achieved)}. امروز از خودت جلو زدی.`,
+    (achieved) => `${formatDuration(achieved)} امروز — بیشتر از یک روز معمولی.`,
+    (achieved) => `از هدف امروز عبور کردی. ${formatDuration(achieved)} تا الان.`,
+  ],
+  HAPPY: [
+    (achieved) => `${formatDuration(achieved)} کار مفید. هدف امروز رسید.`,
+    (_achieved, target) => `به هدف امروز (${formatDuration(target)}) رسیدی.`,
+    (achieved) => `${formatDuration(achieved)} ثبت شده — دقیقاً هدف امروز.`,
+  ],
+  CONTENT: [
+    (_achieved, _target, remaining) => `روی خط هستی. ${formatDuration(remaining)} تا هدف.`,
+    (_achieved, _target, remaining) => `${formatDuration(remaining)} تا هدف امروز مونده.`,
+    (_achieved, _target, remaining) => `پیشرفتت با روز هماهنگ است. ${formatDuration(remaining)} باقی است.`,
+  ],
+  NEUTRAL: [
+    (achieved, target) => `${formatDuration(achieved)} از ${formatDuration(target)}.`,
+    (achieved, target) => `تا الان ${formatDuration(achieved)} ثبت شده، از ${formatDuration(target)} هدف امروز.`,
+    (achieved) => `${formatDuration(achieved)} روی دفتر امروزته.`,
+  ],
+  SLEEPY: [
+    (achieved) => `تا الان ${formatDuration(achieved)} ثبت شده. هنوز وقت هست.`,
+    (achieved) => `${formatDuration(achieved)} امروز ثبت شده — هنوز زوده برای جمع‌بندی روز.`,
+    (achieved) => `${formatDuration(achieved)} تا الان. باقی روز جلوته.`,
+  ],
+};
+
+function hashToIndex(seed: string, count: number): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  return hash % count;
+}
+
+export function phraseCompanion(
+  mood: CompanionMood,
+  nums: { achievedMinutes: number; targetMinutes: number; remainingMinutes: number; unloggedMinutes: number },
+  seed: string
+): string {
+  const variants = COMPANION_MESSAGES[mood];
+  const pick = variants[hashToIndex(seed, variants.length)];
+  return pick(nums.achievedMinutes, nums.targetMinutes, nums.remainingMinutes, nums.unloggedMinutes);
 }
