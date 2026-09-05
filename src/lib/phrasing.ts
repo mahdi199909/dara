@@ -151,6 +151,9 @@ export function phraseCompanion(
   seed: string
 ): string {
   const variants = COMPANION_MESSAGES[mood];
-  const pick = variants[hashToIndex(seed, variants.length)];
+  // Mixes mood into the hash (the caller's seed is mood-independent — see companionMessageSeed)
+  // so a mood change picks a fresh variant instead of reusing whatever index the previous mood
+  // happened to land on.
+  const pick = variants[hashToIndex(`${seed}:${mood}`, variants.length)];
   return pick(nums.achievedMinutes, nums.targetMinutes, nums.remainingMinutes, nums.unloggedMinutes);
 }

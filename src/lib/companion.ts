@@ -101,10 +101,10 @@ export function computeCompanionState(input: CompanionInput, seed: string): Comp
   return { mood, completion, pace, achievedMinutes: achieved, targetMinutes: input.targetMinutes, remainingMinutes, message, action };
 }
 
-/** Same seeding convention as dailyMomentSeed — stable within a day for a given mood (so the
- * bubble doesn't reword itself on every refresh), but rotates across days and whenever the mood
- * itself changes, so a brand-new mood isn't stuck echoing whatever variant index yesterday's
- * different mood happened to land on. */
-export function companionMessageSeed(userId: string, now: Date, mood: CompanionMood): string {
-  return `${userId}:${jalaliDateKey(now)}:companion:${mood}`;
+/** Same seeding convention as dailyMomentSeed — stable within a day, mood-independent (mood
+ * mixes in separately inside phraseCompanion) so callers can build this before the mood itself
+ * is known, which computeCompanionState's own caller must do since mood is an output, not an
+ * input, of this module. */
+export function companionMessageSeed(userId: string, now: Date): string {
+  return `${userId}:${jalaliDateKey(now)}:companion`;
 }
