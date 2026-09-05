@@ -31,6 +31,13 @@ const config: Config = {
           500: "#c95a4c",
           600: "#a8473b",
         },
+        // "Attention" color for the Companion's BLINDFOLDED mood only — deliberately not
+        // `waste`: missing data isn't waste, and this mood is never about judging the user.
+        signal: {
+          100: "#f7eeda",
+          500: "#c9862e",
+          700: "#8a5f16",
+        },
       },
       borderRadius: {
         xl: "0.875rem",
