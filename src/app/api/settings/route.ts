@@ -20,6 +20,8 @@ const updateSchema = z.object({
   dailyMomentEnabled: z.boolean().optional(),
   wakeHour: z.number().int().min(0).max(23).optional(),
   sleepHour: z.number().int().min(0).max(23).optional(),
+  dailyProductiveTargetMin: z.number().int().min(30).max(900).optional(),
+  companionEnabled: z.boolean().optional(),
 });
 
 export async function GET() {

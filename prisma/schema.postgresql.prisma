@@ -82,6 +82,10 @@ model Settings {
   wakeHour  Int @default(7)
   sleepHour Int @default(23)
 
+  // Companion mood engine (src/lib/companion.ts) — see schema.prisma's copy of this comment.
+  dailyProductiveTargetMin Int     @default(360)
+  companionEnabled         Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

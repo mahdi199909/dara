@@ -24,6 +24,8 @@ interface SettingsRow {
   dailyQuoteEnabled: number;
   wakeHour: number;
   sleepHour: number;
+  dailyProductiveTargetMin: number;
+  companionEnabled: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,9 +38,9 @@ function insertDefaultSettings(db: LocalDb, userId: string): SettingsRow {
   const id = crypto.randomUUID();
   const ts = now();
   db.run(
-    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","wakeHour","sleepHour","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, 7, 23, ts, ts]
+    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","wakeHour","sleepHour","dailyProductiveTargetMin","companionEnabled","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, 7, 23, 360, 1, ts, ts]
   );
   return db.get<SettingsRow>(`SELECT * FROM "Settings" WHERE "id" = ?`, [id])!;
 }
@@ -63,11 +65,11 @@ export function getSettings(db: LocalDb, userId: string) {
 
   const user = db.get<{ id: string; name: string; email: string }>(`SELECT "id","name","email" FROM "User" WHERE "id" = ?`, [userId]);
 
-  const { dailyQuoteEnabled, ...settingsRest } = settings;
+  const { dailyQuoteEnabled, companionEnabled, ...settingsRest } = settings;
   return {
     // Comes back from SQLite as 0/1 (no native boolean type); coerced here so the shape matches
     // what Prisma returns for the same (now dailyMomentEnabled-named) field on the web route.
-    settings: { ...settingsRest, dailyMomentEnabled: !!dailyQuoteEnabled },
+    settings: { ...settingsRest, dailyMomentEnabled: !!dailyQuoteEnabled, companionEnabled: !!companionEnabled },
     user: user ?? null,
     hourlyValue: computeHourlyValue(settings),
   };
@@ -99,6 +101,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.dailyMomentEnabled !== undefined) set("dailyQuoteEnabled", settingsBody.dailyMomentEnabled ? 1 : 0);
     if (settingsBody.wakeHour !== undefined) set("wakeHour", settingsBody.wakeHour);
     if (settingsBody.sleepHour !== undefined) set("sleepHour", settingsBody.sleepHour);
+    if (settingsBody.dailyProductiveTargetMin !== undefined) set("dailyProductiveTargetMin", settingsBody.dailyProductiveTargetMin);
+    if (settingsBody.companionEnabled !== undefined) set("companionEnabled", settingsBody.companionEnabled ? 1 : 0);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 
@@ -115,8 +119,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     const id = crypto.randomUUID();
     const ts = now();
     db.run(
-      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","wakeHour","sleepHour","createdAt","updatedAt")
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","wakeHour","sleepHour","dailyProductiveTargetMin","companionEnabled","createdAt","updatedAt")
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         userId,
@@ -130,6 +134,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
         settingsBody.dailyMomentEnabled === false ? 0 : 1,
         settingsBody.wakeHour ?? 7,
         settingsBody.sleepHour ?? 23,
+        settingsBody.dailyProductiveTargetMin ?? 360,
+        settingsBody.companionEnabled === false ? 0 : 1,
         ts,
         ts,
       ]
@@ -146,6 +152,9 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     newValue: settings,
   });
 
-  const { dailyQuoteEnabled, ...settingsRest } = settings;
-  return { settings: { ...settingsRest, dailyMomentEnabled: !!dailyQuoteEnabled }, hourlyValue: computeHourlyValue(settings) };
+  const { dailyQuoteEnabled, companionEnabled, ...settingsRest } = settings;
+  return {
+    settings: { ...settingsRest, dailyMomentEnabled: !!dailyQuoteEnabled, companionEnabled: !!companionEnabled },
+    hourlyValue: computeHourlyValue(settings),
+  };
 }

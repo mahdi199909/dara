@@ -241,11 +241,17 @@ function PersonalTab() {
   const [timezone, setTimezone] = useState("Asia/Tehran");
   const [wakeHour, setWakeHour] = useState(7);
   const [sleepHour, setSleepHour] = useState(23);
+  const [targetHours, setTargetHours] = useState("6");
   const [saved, setSaved] = useState(false);
   const { unit, setUnit } = useCurrencyUnit();
 
   async function toggleDailyMoment() {
     await apiPatch("/api/settings", { dailyMomentEnabled: !data.settings.dailyMomentEnabled });
+    mutate();
+  }
+
+  async function toggleCompanion() {
+    await apiPatch("/api/settings", { companionEnabled: !data.settings.companionEnabled });
     mutate();
   }
 
@@ -255,11 +261,13 @@ function PersonalTab() {
       setTimezone(data.settings.timezone);
       setWakeHour(data.settings.wakeHour ?? 7);
       setSleepHour(data.settings.sleepHour ?? 23);
+      setTargetHours(String((data.settings.dailyProductiveTargetMin ?? 360) / 60));
     }
   }, [data]);
 
   async function save() {
-    await apiPatch("/api/settings", { name, timezone, wakeHour, sleepHour });
+    const dailyProductiveTargetMin = Math.round(Math.max(0.5, Number(targetHours) || 6) * 60);
+    await apiPatch("/api/settings", { name, timezone, wakeHour, sleepHour, dailyProductiveTargetMin });
     setSaved(true);
     mutate();
     mutateGlobal("/api/day-battery");
@@ -309,6 +317,19 @@ function PersonalTab() {
         <p className="text-xs text-gray-400 mt-1">ظرفیت نوار «روز» در صفحه اصلی بر همین بازه حساب می‌شود.</p>
       </div>
       <div>
+        <label className="block text-sm text-gray-600 mb-1">هدف روزانه کار مفید (ساعت)</label>
+        <input
+          type="number"
+          dir="ltr"
+          min={0.5}
+          step={0.5}
+          value={targetHours}
+          onChange={(e) => setTargetHours(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-right"
+        />
+        <p className="text-xs text-gray-400 mt-1">آدمک صفحه اصلی پیشرفت امروزت را نسبت به همین عدد نشان می‌دهد.</p>
+      </div>
+      <div>
         <label className="block text-sm text-gray-600 mb-1">واحد پول</label>
         <div className="flex gap-2">
           {CURRENCY_UNITS.map((u) => (
@@ -344,6 +365,25 @@ function PersonalTab() {
             <span
               className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
               style={{ [data.settings.dailyMomentEnabled ? "left" : "right"]: "3px" }}
+            />
+          </button>
+        </div>
+      )}
+      {data && (
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-700">نمایش آدمک</p>
+            <p className="text-xs text-gray-400">آدمک همراه در صفحه اصلی، بازتاب پیشرفت روزانه‌ات.</p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleCompanion}
+            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.companionEnabled ? "bg-brand-500" : "bg-gray-300"}`}
+            aria-label={data.settings.companionEnabled ? "غیرفعال کردن آدمک" : "فعال کردن آدمک"}
+          >
+            <span
+              className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
+              style={{ [data.settings.companionEnabled ? "left" : "right"]: "3px" }}
             />
           </button>
         </div>

@@ -79,6 +79,13 @@ model Settings {
   wakeHour  Int @default(7)
   sleepHour Int @default(23)
 
+  // Companion mood engine (src/lib/companion.ts) — daily target in minutes for the "achieved"
+  // side of its pace/completion math, and a per-user kill switch for the whole feature. Both
+  // plain literal-default columns, db-push-safe onto an existing table (see the updatedAt
+  // comment elsewhere in this file for why that distinction matters).
+  dailyProductiveTargetMin Int     @default(360)
+  companionEnabled         Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
