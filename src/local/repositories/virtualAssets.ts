@@ -1,8 +1,10 @@
 // On-device port of src/app/api/virtual-assets/route.ts's GET — aggregates VirtualAssetEntry
 // rows by category, plus separate project/habit buckets, using fetchByIds for every joined
 // relation instead of Prisma's `include`.
+import { ApiError } from "@/lib/apiErrorBase";
 import type { LocalDb } from "../db";
 import { fetchByIds } from "../relations";
+import { writeLocalAuditLog } from "../audit";
 import { computeUpgradeEffect, type UpgradeEffect } from "../reportEngine";
 
 // On-device port of src/app/api/virtual-assets/latest-effect/route.ts's GET — same 15-second
@@ -98,6 +100,16 @@ export function listVirtualAssets(db: LocalDb, userId: string) {
     projectEntries,
     habitEntries,
   };
+}
+
+// See the web route's own comment (src/app/api/virtual-assets/[id]/route.ts) on why this is
+// delete-only, no edit.
+export function deleteVirtualAssetEntry(db: LocalDb, userId: string, id: string): { ok: true } {
+  const existing = db.get<VirtualAssetEntryRow>(`SELECT * FROM "VirtualAssetEntry" WHERE "id" = ? AND "userId" = ?`, [id, userId]);
+  if (!existing) throw new ApiError("دارایی مجازی پیدا نشد.", 404);
+  db.run(`DELETE FROM "VirtualAssetEntry" WHERE "id" = ?`, [id]);
+  writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "VirtualAssetEntry", entityId: id, oldValue: existing });
+  return { ok: true };
 }
 
 export function getLatestUpgradeEffect(db: LocalDb, userId: string): UpgradeEffect | null {

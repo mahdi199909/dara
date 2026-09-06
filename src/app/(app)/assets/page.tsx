@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { fetcher, apiPost } from "@/lib/apiClient";
+import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatDuration } from "@/lib/money";
 import { formatJalali } from "@/lib/jalali";
-import { PlusIcon } from "@/components/icons";
+import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import MilestoneProgressBar from "@/components/MilestoneProgressBar";
@@ -35,13 +35,24 @@ interface VirtualAssetResponse {
 
 export default function AssetsPage() {
   const { data: assetsData, mutate: mutateAssets } = useSWR<{ assets: any[] }>("/api/assets", fetcher);
-  const { data: vaData } = useSWR<VirtualAssetResponse>("/api/virtual-assets", fetcher);
+  const { data: vaData, mutate: mutateVa } = useSWR<VirtualAssetResponse>("/api/virtual-assets", fetcher);
   const [showForm, setShowForm] = useState(false);
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const { format } = useCurrencyUnit();
 
   const realTotal = assetsData?.assets.reduce((s, a) => s + a.currentValue, 0) ?? 0;
   const virtualTotal = vaData?.total ?? 0;
+
+  async function deleteAsset(id: string) {
+    await apiDelete(`/api/assets/${id}`);
+    mutateAssets();
+  }
+
+  async function deleteVirtualEntry(id: string) {
+    await apiDelete(`/api/virtual-assets/${id}`);
+    mutateVa();
+  }
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -71,19 +82,40 @@ export default function AssetsPage() {
           </button>
         </div>
 
-        {showForm && <NewAssetForm onDone={() => { setShowForm(false); mutateAssets(); }} />}
+        {showForm && <AssetForm onDone={() => { setShowForm(false); mutateAssets(); }} onCancel={() => setShowForm(false)} />}
 
         <div className="grid grid-cols-1 gap-3">
-          {assetsData?.assets.map((a) => (
-            <Card key={a.id} className="p-4">
-              <p className="font-bold text-gray-800">{a.name}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{a.category || "—"} · خرید {formatJalali(new Date(a.purchaseDate))}</p>
-              <div className="flex items-center justify-between mt-3">
-                <span className="text-xs text-gray-400">قیمت خرید: {format(a.purchasePrice, { withSuffix: true })}</span>
-                <span className="text-base font-bold text-brand-700">{format(a.currentValue, { withSuffix: true })}</span>
-              </div>
-            </Card>
-          ))}
+          {assetsData?.assets.map((a) =>
+            editingAssetId === a.id ? (
+              <AssetForm
+                key={a.id}
+                asset={a}
+                onDone={() => { setEditingAssetId(null); mutateAssets(); }}
+                onCancel={() => setEditingAssetId(null)}
+              />
+            ) : (
+              <Card key={a.id} className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800">{a.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{a.category || "—"} · خرید {formatJalali(new Date(a.purchaseDate))}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setEditingAssetId(a.id)} aria-label="ویرایش" className="p-1.5 text-gray-400 hover:text-brand-600 transition">
+                      <EditIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteAsset(a.id)} aria-label="حذف" className="p-1.5 text-gray-400 hover:text-waste-600 transition">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-xs text-gray-400">قیمت خرید: {format(a.purchasePrice, { withSuffix: true })}</span>
+                  <span className="text-base font-bold text-brand-700">{format(a.currentValue, { withSuffix: true })}</span>
+                </div>
+              </Card>
+            )
+          )}
           {assetsData?.assets.length === 0 && <EmptyState message="هنوز دارایی واقعی ثبت نکرده‌اید." />}
         </div>
       </section>
@@ -102,7 +134,12 @@ export default function AssetsPage() {
                     <p className="text-sm text-gray-700">{e.habitCheckIn?.habit?.icon} {e.habitCheckIn?.habit?.title}</p>
                     <p className="text-xs text-gray-400">{formatJalali(new Date(e.date))}</p>
                   </div>
-                  <span className="text-sm text-gray-600">{format(e.totalValue, { withSuffix: true })}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">{format(e.totalValue, { withSuffix: true })}</span>
+                    <button onClick={() => deleteVirtualEntry(e.id)} aria-label="حذف" className="p-1 text-gray-300 hover:text-waste-600 transition">
+                      <TrashIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -119,10 +156,15 @@ export default function AssetsPage() {
           <div className="grid grid-cols-1 gap-3">
             {vaData.projectEntries.map((e: any) => (
               <Card key={e.id} className="p-4 space-y-2">
-                <div>
-                  <p className="font-bold text-gray-800">{e.project?.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">تکمیل‌شده در {formatJalali(new Date(e.date))}</p>
-                  <p className="text-base font-bold text-brand-700 mt-2">{format(e.totalValue, { withSuffix: true })}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-gray-800">{e.project?.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">تکمیل‌شده در {formatJalali(new Date(e.date))}</p>
+                    <p className="text-base font-bold text-brand-700 mt-2">{format(e.totalValue, { withSuffix: true })}</p>
+                  </div>
+                  <button onClick={() => deleteVirtualEntry(e.id)} aria-label="حذف" className="p-1.5 text-gray-300 hover:text-waste-600 transition shrink-0">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
                 </div>
                 <MilestoneCaption totalMinutes={e.durationMin} />
               </Card>
@@ -166,7 +208,12 @@ export default function AssetsPage() {
                           <p className="text-sm text-gray-700">{(e.activity ?? e.task)?.title}</p>
                           <p className="text-xs text-gray-400">{formatDuration(e.durationMin)} · {formatJalali(new Date(e.date))}</p>
                         </div>
-                        <span className="text-sm text-gray-600">{format(e.totalValue, { withSuffix: true })}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">{format(e.totalValue, { withSuffix: true })}</span>
+                          <button onClick={() => deleteVirtualEntry(e.id)} aria-label="حذف" className="p-1 text-gray-300 hover:text-waste-600 transition">
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -180,23 +227,32 @@ export default function AssetsPage() {
   );
 }
 
-function NewAssetForm({ onDone }: { onDone: () => void }) {
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
-  const [purchasePrice, setPurchasePrice] = useState("");
-  const [currentValue, setCurrentValue] = useState("");
+function AssetForm({ asset, onDone, onCancel }: { asset?: any; onDone: () => void; onCancel: () => void }) {
+  const isEdit = !!asset;
+  const [name, setName] = useState(asset?.name ?? "");
+  const [category, setCategory] = useState(asset?.category ?? "");
+  const [purchasePrice, setPurchasePrice] = useState(asset ? String(asset.purchasePrice) : "");
+  const [currentValue, setCurrentValue] = useState(asset ? String(asset.currentValue) : "");
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      await apiPost("/api/assets", {
-        name,
-        category: category || undefined,
-        purchasePrice: Number(purchasePrice),
-        currentValue: currentValue ? Number(currentValue) : undefined,
-      });
+      if (isEdit) {
+        await apiPatch(`/api/assets/${asset.id}`, {
+          name,
+          category: category || null,
+          currentValue: currentValue ? Number(currentValue) : undefined,
+        });
+      } else {
+        await apiPost("/api/assets", {
+          name,
+          category: category || undefined,
+          purchasePrice: Number(purchasePrice),
+          currentValue: currentValue ? Number(currentValue) : undefined,
+        });
+      }
       onDone();
     } finally {
       setLoading(false);
@@ -209,12 +265,19 @@ function NewAssetForm({ onDone }: { onDone: () => void }) {
         <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="نام دارایی" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
         <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="دسته‌بندی (اختیاری)" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
         <div className="grid grid-cols-2 gap-2">
-          <MoneyInput value={purchasePrice} onChange={setPurchasePrice} placeholder="قیمت خرید" required />
+          <MoneyInput value={purchasePrice} onChange={setPurchasePrice} placeholder="قیمت خرید" required disabled={isEdit} />
           <MoneyInput value={currentValue} onChange={setCurrentValue} placeholder="ارزش فعلی (اختیاری)" />
         </div>
-        <button type="submit" disabled={loading} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
-          ثبت دارایی
-        </button>
+        <div className="flex gap-2">
+          {isEdit && (
+            <button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-gray-200 text-gray-500 py-2 text-sm hover:bg-gray-50">
+              انصراف
+            </button>
+          )}
+          <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
+            {loading ? "در حال ثبت..." : isEdit ? "ذخیره تغییرات" : "ثبت دارایی"}
+          </button>
+        </div>
       </form>
     </Card>
   );

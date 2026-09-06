@@ -240,6 +240,7 @@ register("PATCH", "/api/habits/:id/checkin", ({ db, userId, params, body }) =>
 
 register("GET", "/api/virtual-assets", ({ db, userId }) => virtualAssetsRepo.listVirtualAssets(db, userId));
 register("GET", "/api/virtual-assets/latest-effect", ({ db, userId }) => ({ effect: virtualAssetsRepo.getLatestUpgradeEffect(db, userId) }));
+register("DELETE", "/api/virtual-assets/:id", ({ db, userId, params }) => virtualAssetsRepo.deleteVirtualAssetEntry(db, userId, params.id));
 
 register("GET", "/api/settings", ({ db, userId }) => settingsRepo.getSettings(db, userId));
 register("PATCH", "/api/settings", ({ db, userId, body }) => settingsRepo.updateSettings(db, userId, updateSettingsSchema.parse(body)));
