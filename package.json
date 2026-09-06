@@ -12,6 +12,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:sample": "tsx prisma/seedSampleFounder.ts",
+    "db:seed:growth": "tsx prisma/seedGrowthJourney.ts",
     "db:reset": "prisma migrate reset --force",
     "local:schema": "tsx scripts/generate-local-schema.ts",
     "build:android": "node scripts/build-android.mjs",

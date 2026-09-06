@@ -462,15 +462,21 @@ function CategoriesTab() {
   const [icon, setIcon] = useState("🏷️");
   const [editingRateFor, setEditingRateFor] = useState<string | null>(null);
   const [rateInput, setRateInput] = useState("350000");
+  const [creating, setCreating] = useState(false);
   const { format } = useCurrencyUnit();
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    await apiPost("/api/categories", { name, kind, valueType, icon });
-    setName("");
-    setShowForm(false);
-    mutate();
+    if (!name.trim() || creating) return;
+    setCreating(true);
+    try {
+      await apiPost("/api/categories", { name, kind, valueType, icon });
+      setName("");
+      setShowForm(false);
+      mutate();
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function toggleActive(cat: any) {
@@ -539,7 +545,9 @@ function CategoriesTab() {
                 </button>
               ))}
             </div>
-            <button type="submit" className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium">ثبت</button>
+            <button type="submit" disabled={creating} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
+              {creating ? "در حال ثبت..." : "ثبت"}
+            </button>
           </form>
         </Card>
       )}

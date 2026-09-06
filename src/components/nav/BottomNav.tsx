@@ -7,6 +7,8 @@ import { PRIMARY_NAV_ITEMS, MORE_NAV_ITEMS } from "@/lib/navConfig";
 import { apiPost } from "@/lib/apiClient";
 import { MoreIcon, XIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
+import SearchBox from "@/components/SearchBox";
+import NotificationBell from "@/components/NotificationBell";
 
 // The native-feeling replacement for the old hamburger + full-screen NavDrawer: the four most
 // used sections stay one tap away here, everything else (+ logout) lives behind "بیشتر". Fixed
@@ -86,6 +88,11 @@ export default function BottomNav({ userName }: { userName: string }) {
               <button onClick={() => setMoreOpen(false)} className="p-1.5 text-gray-400 hover:text-gray-600" aria-label="بستن">
                 <XIcon className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="flex items-center gap-2 px-5 pb-3">
+              <SearchBox />
+              <NotificationBell />
             </div>
 
             <div className="px-3 pb-2 grid grid-cols-3 gap-2">

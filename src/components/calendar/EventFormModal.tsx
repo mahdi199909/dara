@@ -5,7 +5,7 @@ import { apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
-import TimeScrollPicker from "@/components/ui/TimeScrollPicker";
+import TimePicker from "@/components/ui/TimePicker";
 import { XIcon, TrashIcon } from "@/components/icons";
 import { REMINDER_OFFSET_PRESETS, RECURRENCE_FREQS, type RecurrenceFreq } from "@/lib/types";
 
@@ -129,7 +129,7 @@ export default function EventFormModal({
             <div className="col-span-2">
               <JalaliDateInput value={date} onChange={setDate} />
             </div>
-            <TimeScrollPicker value={startTime} onChange={setStartTime} required />
+            <TimePicker value={startTime} onChange={setStartTime} required />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <input type="number" dir="ltr" min={5} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="مدت (دقیقه)" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />

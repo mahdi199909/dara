@@ -69,18 +69,8 @@ body {
 .companion-confetti-dot {
   animation: companion-pop 0.5s ease-out backwards;
 }
-/* The one-off bounce right after a successful capture — see Home's Companion wiring, which
-   retriggers this by remounting (a `key` bump), not by a class toggle. */
-@keyframes companion-pop-once {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-  100% { transform: scale(1); }
-}
-.companion-pop-once {
-  animation: companion-pop-once 400ms ease;
-}
 @media (prefers-reduced-motion: reduce) {
-  .companion-face *, .companion-ring, .companion-pop-once {
+  .companion-face *, .companion-ring {
     animation: none !important;
     transition: none !important;
   }

@@ -17,8 +17,17 @@ export default function HabitFormModal({
   onSaved: () => void;
   onDeleted?: () => void;
 }) {
-  const { categories } = useCategories();
+  const { categories: allCategories } = useCategories();
   const isEdit = !!habit;
+
+  // Defends against duplicate rows sharing a name (e.g. a double-submitted "new category")
+  // showing up twice in this picker — first-seen wins, same order the list already comes in.
+  const seenNames = new Set<string>();
+  const categories = allCategories.filter((c: any) => {
+    if (seenNames.has(c.name)) return false;
+    seenNames.add(c.name);
+    return true;
+  });
 
   const [title, setTitle] = useState(habit?.title ?? "");
   const [icon, setIcon] = useState(habit?.icon ?? "");

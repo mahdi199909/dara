@@ -60,6 +60,7 @@ export default function MoneyInput({
   placeholder,
   required,
   autoFocus,
+  disabled,
   className = "",
 }: {
   value: string;
@@ -67,6 +68,7 @@ export default function MoneyInput({
   placeholder?: string;
   required?: boolean;
   autoFocus?: boolean;
+  disabled?: boolean;
   className?: string;
 }) {
   const { unit, toToman, fromToman } = useCurrencyUnit();
@@ -138,10 +140,11 @@ export default function MoneyInput({
         dir="ltr"
         required={required}
         autoFocus={autoFocus}
+        disabled={disabled}
         value={toPersianDigits(display)}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-right pl-14"
+        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-right pl-14 disabled:bg-gray-50 disabled:text-gray-400"
       />
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
         {CURRENCY_UNIT_LABELS[unit]}

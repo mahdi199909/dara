@@ -6,7 +6,7 @@ import { apiPost, ApiClientError } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
-import TimeScrollPicker from "@/components/ui/TimeScrollPicker";
+import TimePicker from "@/components/ui/TimePicker";
 import { CAPTURE_TYPES, CAPTURE_TYPE_LABELS, VALUE_TYPES, VALUE_TYPE_LABELS, type CaptureEntityType, type ValueType } from "@/lib/types";
 
 function refreshAllCaches() {
@@ -23,7 +23,7 @@ function refreshAllCaches() {
 
 type FlowType = "COST" | "INCOME";
 
-// Plain ASCII "HH:MM", 24-hour — matches TimeScrollPicker's own value format, which submit()
+// Plain ASCII "HH:MM", 24-hour — matches TimePicker's own value format, which submit()
 // below feeds straight into `new Date(\`${day10}T${startTime}:00\`)`. Not jalali.ts's formatTime:
 // that one applies toPersianDigits, which would break that exact Date-string parse.
 function hhmm(d: Date): string {
@@ -70,7 +70,16 @@ export default function CaptureForm({
   // A project's auto-generated category is shown regardless of the Expense/Asset tab — a
   // project can incur both (buying a part is an expense, time spent is an asset), so tying
   // its category to only one tab would make it impossible to log the other kind against it.
-  const visibleCategories = categories.filter((c: any) => c.isActive && (c.projectId || c.valueType === valueType));
+  // Defends against duplicate rows sharing a name (e.g. a double-submitted "new category")
+  // showing up twice — first-seen wins, same order the list already comes in.
+  const seenCategoryNames = new Set<string>();
+  const visibleCategories = categories
+    .filter((c: any) => c.isActive && (c.projectId || c.valueType === valueType))
+    .filter((c: any) => {
+      if (seenCategoryNames.has(c.name)) return false;
+      seenCategoryNames.add(c.name);
+      return true;
+    });
 
   useEffect(() => {
     // Selected category no longer matches the visible (filtered) list — clear it rather
@@ -248,8 +257,8 @@ export default function CaptureForm({
       <div>
         <label className="text-xs text-gray-500 mb-1.5 block">زمان (اختیاری)</label>
         <div className="grid grid-cols-2 gap-2">
-          <TimeScrollPicker value={startTime} onChange={setStartTime} placeholder="شروع" />
-          <TimeScrollPicker value={endTime} onChange={setEndTime} placeholder="پایان" />
+          <TimePicker value={startTime} onChange={setStartTime} placeholder="شروع" />
+          <TimePicker value={endTime} onChange={setEndTime} placeholder="پایان" />
         </div>
       </div>
 

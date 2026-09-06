@@ -15,7 +15,6 @@ import { formatDuration } from "@/lib/money";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
 import { phraseCaptureReaction, type CaptureReactionKind } from "@/lib/phrasing";
 import { useCompanion } from "@/components/companion/useCompanion";
-import CompanionFace from "@/components/companion/CompanionFace";
 import { MOOD_FA_LABEL } from "@/components/companion/moodTokens";
 import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
@@ -23,23 +22,21 @@ import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
 type CaptureReaction = { kind: CaptureReactionKind; minutes?: number; amount?: number };
 
 /**
- * The Companion section — message + achieved/target line, the face, and the (now small) capture
- * button all in one row, button at the leading edge. Only the button is a tap target now (not
- * the whole row) — a clear, explicit action beside the companion rather than a secret hit-area.
- * The button's own label/action still follows the companion's mood (see computeCompanionState):
- * "پر کردن بازه" during BLINDFOLDED, pre-filling the day's biggest unlogged gap instead of
- * opening a blank form (DayBattery.tsx's own onLogGap shape, reused rather than inventing a
- * second convention) — but it's never hidden outright even in ASLEEP, since this is now Home's
- * only capture entry point (GlobalCaptureFab is deliberately absent from Home).
+ * The Companion section — mood message on its own line, then the achieved/target time at the
+ * left edge and the capture button at the right edge below it. The face itself now lives in
+ * AppTopBar's header (center slot), not here — see that file — so this row is purely text + one
+ * bigger, explicit tap target. The button's own label/action still follows the companion's mood
+ * (see computeCompanionState): "پر کردن بازه" during BLINDFOLDED, pre-filling the day's biggest
+ * unlogged gap instead of opening a blank form (DayBattery.tsx's own onLogGap shape, reused
+ * rather than inventing a second convention) — but it's never hidden outright even in ASLEEP,
+ * since this is Home's only capture entry point (GlobalCaptureFab is deliberately absent from Home).
  */
 function CompanionRow({
   reaction,
-  bounceKey,
   onOpenCapture,
   onLogGap,
 }: {
   reaction: CaptureReaction | null;
-  bounceKey: number;
   onOpenCapture: () => void;
   onLogGap: (start: Date, end: Date) => void;
 }) {
@@ -59,23 +56,20 @@ function CompanionRow({
   }
 
   return (
-    <div className="shrink-0 w-full flex items-center gap-2 rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-1.5">
-      <div className="flex-1 min-w-0 text-right">
-        <p className="text-xs text-gray-600 leading-snug line-clamp-2">{message}</p>
-        <p className="text-[11px] text-gray-400 mt-0.5">
+    <div className="shrink-0 w-full rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-2 space-y-1.5" aria-label={ariaLabel}>
+      <p className="text-xs text-gray-600 leading-snug line-clamp-2 text-right">{message}</p>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleClick}
+          className="shrink-0 rounded-xl bg-brand-600 text-white px-6 py-3 text-sm font-bold active:scale-[0.98] transition"
+        >
+          {buttonLabel}
+        </button>
+        <p className="text-[11px] text-gray-400">
           {formatDuration(state.achievedMinutes)} از {formatDuration(state.targetMinutes)}
         </p>
       </div>
-      <span key={bounceKey} className={bounceKey > 0 ? "companion-pop-once shrink-0" : "shrink-0"}>
-        <CompanionFace mood={state.mood} completion={state.completion} size={56} variant="face" label={ariaLabel} />
-      </span>
-      <button
-        type="button"
-        onClick={handleClick}
-        className="shrink-0 rounded-xl bg-brand-600 text-white px-3 py-2 text-xs font-bold active:scale-[0.98] transition"
-      >
-        {buttonLabel}
-      </button>
     </div>
   );
 }
@@ -139,7 +133,7 @@ function DailyMomentCard() {
 
   const card = (
     <div className="shrink-0 rounded-2xl bg-brand-50 border border-brand-100 px-4 py-2.5">
-      <p className="text-xs text-brand-700 leading-relaxed text-center line-clamp-2">{picked.text}</p>
+      <p className="text-xs text-brand-700 leading-relaxed text-center">{picked.text}</p>
     </div>
   );
   return picked.href ? <Link href={picked.href}>{card}</Link> : card;
@@ -156,7 +150,6 @@ export default function HomePage() {
   const [showCapture, setShowCapture] = useState(false);
   const [captureRange, setCaptureRange] = useState<{ start: Date; end: Date } | null>(null);
   const [reaction, setReaction] = useState<CaptureReaction | null>(null);
-  const [bounceKey, setBounceKey] = useState(0);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
 
@@ -190,7 +183,7 @@ export default function HomePage() {
     setShowCapture(true);
   }
 
-  // The Companion's own reaction (bounce + a temporary delta bubble) — see phraseCaptureReaction.
+  // The Companion's own reaction (a temporary delta message) — see phraseCaptureReaction.
   // Virtual-asset captures aren't handled here at all (CaptureForm never reports that kind);
   // UpgradeToast already reacts to those via /api/virtual-assets/latest-effect.
   function handleCaptureDone(summary?: CaptureSummary) {
@@ -199,7 +192,6 @@ export default function HomePage() {
     mutate();
     if (summary) {
       setReaction(summary);
-      setBounceKey((k) => k + 1);
       setTimeout(() => setReaction(null), 3000);
     }
   }
@@ -213,7 +205,6 @@ export default function HomePage() {
 
       <CompanionRow
         reaction={reaction}
-        bounceKey={bounceKey}
         onOpenCapture={() => openCapture()}
         onLogGap={(start, end) => openCapture({ start, end })}
       />
