@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { PRIMARY_NAV_ITEMS, MORE_NAV_ITEMS } from "@/lib/navConfig";
 import { apiPost } from "@/lib/apiClient";
-import { MoreIcon, XIcon } from "@/components/icons";
+import { MoreIcon, XIcon, SearchIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
 import SearchBox from "@/components/SearchBox";
 import NotificationBell from "@/components/NotificationBell";
@@ -19,6 +19,12 @@ export default function BottomNav({ userName }: { userName: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  function closeMore() {
+    setMoreOpen(false);
+    setSearchOpen(false);
+  }
 
   async function logout() {
     const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
@@ -73,27 +79,37 @@ export default function BottomNav({ userName }: { userName: string }) {
       </nav>
 
       {moreOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={() => setMoreOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={closeMore}>
           <div
             className="w-full bg-white rounded-t-2xl shadow-xl max-h-[75vh] overflow-y-auto scrollbar-thin animate-in"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 pt-5 pb-2">
-              <div className="flex items-center gap-2.5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icon.png" alt="پنهان" className="h-8 w-8 rounded-xl" />
-                <p className="text-xs text-gray-400">{userName}</p>
+            {searchOpen ? (
+              <div className="flex items-center gap-2 px-5 pt-5 pb-2">
+                <SearchBox autoFocus />
+                <button onClick={() => setSearchOpen(false)} className="text-sm text-gray-400 shrink-0">
+                  بستن
+                </button>
               </div>
-              <button onClick={() => setMoreOpen(false)} className="p-1.5 text-gray-400 hover:text-gray-600" aria-label="بستن">
-                <XIcon className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 px-5 pb-3">
-              <SearchBox />
-              <NotificationBell />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between px-5 pt-5 pb-2">
+                <div className="flex items-center gap-2.5">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/icon.png" alt="پنهان" className="h-8 w-8 rounded-xl" />
+                  <p className="text-xs text-gray-400">{userName}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500" aria-label="جستجو">
+                    <SearchIcon className="w-5 h-5" />
+                  </button>
+                  <NotificationBell />
+                  <button onClick={closeMore} className="p-1.5 text-gray-400 hover:text-gray-600" aria-label="بستن">
+                    <XIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="px-3 pb-2 grid grid-cols-3 gap-2">
               {MORE_NAV_ITEMS.map((item) => {
