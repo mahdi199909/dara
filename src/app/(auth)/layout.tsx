@@ -3,9 +3,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-brand-50 to-white px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white text-2xl font-bold mb-3">
-            پ
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="پروا" className="h-14 w-14 rounded-2xl mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-brand-900">پروا</h1>
           <p className="text-sm text-gray-500 mt-1">سیستم‌عامل شخصی زمان، وظایف و مالی</p>
         </div>
