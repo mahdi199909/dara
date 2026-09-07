@@ -184,6 +184,34 @@ function isDuplicateRow(db: LocalDb, table: string, row: Record<string, unknown>
   return existsById(db, table, row.id);
 }
 
+function buildSourceCategoryLookup(categoryRows: Record<string, unknown>[] | undefined): Map<string, { userId: string; name: string }> {
+  const map = new Map<string, { userId: string; name: string }>();
+  for (const row of categoryRows ?? []) {
+    if (typeof row.id === "string" && typeof row.userId === "string" && typeof row.name === "string") {
+      map.set(row.id, { userId: row.userId, name: row.name });
+    }
+  }
+  return map;
+}
+
+/**
+ * Every OTHER table's categoryId columns still point at the *source* device's category ids —
+ * fine for a category that just got freshly inserted (same id both sides), but not for one
+ * isCategoryDuplicate recognized as "the same category, already here under a different id" (see
+ * that function's own comment): that source id was never inserted, so a row still referencing it
+ * would fail with a foreign key error the moment it's inserted. Category is the only table with
+ * this "same real-world thing, different id" duplicate semantics — getLocalUserId() is what
+ * pre-seeds a fresh device with its own copy of DEFAULT_CATEGORIES before import ever runs — so
+ * it's the only categoryId needs resolving against; no other table's foreign keys need this.
+ */
+function resolveCategoryId(db: LocalDb, categoryId: unknown, sourceCategories: Map<string, { userId: string; name: string }>): unknown {
+  if (typeof categoryId !== "string" || existsById(db, "Category", categoryId)) return categoryId;
+  const source = sourceCategories.get(categoryId);
+  if (!source) return categoryId;
+  const match = db.get<{ id: string }>(`SELECT "id" FROM "Category" WHERE "userId" = ? AND "name" = ?`, [source.userId, source.name]);
+  return match ? match.id : categoryId;
+}
+
 /** INSERTs using exactly the columns present on `row` — see this file's top comment for why
  * that's deliberate. Throws (constraint violation, missing required column, etc.) rather than
  * swallowing anything itself; insertTableRows is what decides how to react to that. */
@@ -257,12 +285,22 @@ function insertTableRows(db: LocalDb, table: string, rows: Record<string, unknow
  */
 export function importAllData(db: LocalDb, file: DataExportFile): ImportResult {
   const result: ImportResult = { added: {}, skipped: {}, errors: {} };
+  const sourceCategories = buildSourceCategoryLookup(file.tables.Category);
 
   db.execute("BEGIN TRANSACTION");
   try {
     for (const table of DATA_EXPORT_TABLES) {
       const rows = file.tables[table];
       if (!Array.isArray(rows) || rows.length === 0) continue;
+
+      // Category itself is inserted-or-recognized-as-duplicate first (DATA_EXPORT_TABLES orders
+      // it before everything that references it) — by the time any later table's rows reach
+      // here, every category they could point at is already resolvable one way or the other.
+      if (table !== "Category") {
+        for (const row of rows) {
+          if ("categoryId" in row) row.categoryId = resolveCategoryId(db, row.categoryId, sourceCategories);
+        }
+      }
 
       const { added, skipped, errors } = insertTableRows(db, table, rows);
       if (added > 0) result.added[table] = added;

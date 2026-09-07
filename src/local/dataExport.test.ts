@@ -268,6 +268,25 @@ describe("importAllData — Category dedup", () => {
     expect(rows.find((r) => r.name === "کار")?.id).toBe("cat-fresh-install");
   });
 
+  it("resolves a Task's categoryId to the device's own pre-existing category instead of failing on the skipped one", async () => {
+    const db = await freshDb();
+    db.run(
+      `INSERT INTO "Category" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`,
+      ["cat-fresh-install", USER_ID, "کار", ts(), ts()]
+    );
+
+    const importedDefault = categoryRow({ id: "cat-from-other-phone", name: "کار" });
+    const task = taskRow({ id: "task-1", categoryId: "cat-from-other-phone" });
+    const result = importAllData(db, fileOf({ Category: [importedDefault], Task: [task] }));
+
+    expect(result.skipped.Category).toBe(1);
+    expect(result.added.Task).toBe(1);
+    expect(result.errors.Task).toBeUndefined();
+
+    const row = db.get<{ categoryId: string }>(`SELECT "categoryId" FROM "Task" WHERE "id" = ?`, ["task-1"]);
+    expect(row?.categoryId).toBe("cat-fresh-install"); // not the never-inserted "cat-from-other-phone"
+  });
+
   it("still allows a category with the same name for a genuinely different user", async () => {
     const db = await freshDb();
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
