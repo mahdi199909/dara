@@ -33,6 +33,11 @@ public class TodayEventsWidgetProvider extends AppWidgetProvider {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_today_events);
             views.removeAllViews(R.id.events_container);
 
+            Integer themeColor = WidgetTheme.getBackgroundArgbOrNull(context);
+            if (themeColor != null) {
+                views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", themeColor);
+            }
+
             List<String[]> events = readTodayEvents(context);
             if (events.isEmpty()) {
                 RemoteViews empty = new RemoteViews(context.getPackageName(), R.layout.widget_today_events_empty);

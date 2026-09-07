@@ -13,6 +13,7 @@ import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
+import { Preferences } from "@capacitor/preferences";
 
 // Only shown once isNativePlatform() resolves true (see BackupTab) — a plain web session has
 // no on-device database to export and no OS share sheet to hand a file to.
@@ -22,6 +23,7 @@ const TABS = [
   { key: "categories", label: "دسته‌بندی‌ها" },
   { key: "history", label: "سابقه" },
   { key: "backup", label: "پشتیبان‌گیری" },
+  { key: "widgets", label: "ویجت‌ها" },
 ] as const;
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
@@ -52,7 +54,7 @@ export default function SettingsPage() {
     setNative(Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()));
   }, []);
 
-  const visibleTabs = native ? TABS : TABS.filter((t) => t.key !== "backup");
+  const visibleTabs = native ? TABS : TABS.filter((t) => t.key !== "backup" && t.key !== "widgets");
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -77,6 +79,7 @@ export default function SettingsPage() {
       {tab === "categories" && <CategoriesTab />}
       {tab === "history" && <HistoryTab />}
       {tab === "backup" && <BackupTab />}
+      {tab === "widgets" && <WidgetsTab />}
     </div>
   );
 }
@@ -883,5 +886,110 @@ function BackupTab() {
         )}
       </Card>
     </div>
+  );
+}
+
+const WIDGET_COLOR_KEY = "widget_theme_color";
+const WIDGET_OPACITY_KEY = "widget_theme_opacity";
+const DEFAULT_WIDGET_COLOR = "#1c39bb";
+const DEFAULT_WIDGET_OPACITY = 85;
+
+// Background-only theming for the four home-screen widgets (see the four *WidgetProvider.java
+// files) — a solid color behind a bit of transparency, not a real backdrop blur: classic
+// RemoteViews (what Android widgets render through) has no API for blurring whatever sits behind
+// the widget on the launcher, only for the widget's own background color/alpha. Text/icon colors
+// inside the widgets are untouched by this — pick a light-ish color to keep them readable, the
+// same tradeoff every widget-color-customizer app leaves to the user rather than guessing at it.
+function WidgetsTab() {
+  const [color, setColor] = useState(DEFAULT_WIDGET_COLOR);
+  const [opacity, setOpacity] = useState(DEFAULT_WIDGET_OPACITY);
+  const [customized, setCustomized] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [storedColor, storedOpacity] = await Promise.all([
+        Preferences.get({ key: WIDGET_COLOR_KEY }),
+        Preferences.get({ key: WIDGET_OPACITY_KEY }),
+      ]);
+      if (storedColor.value) setColor(storedColor.value);
+      if (storedOpacity.value) setOpacity(Number(storedOpacity.value));
+      setCustomized(Boolean(storedColor.value || storedOpacity.value));
+    })();
+  }, []);
+
+  async function save() {
+    await Promise.all([
+      Preferences.set({ key: WIDGET_COLOR_KEY, value: color }),
+      Preferences.set({ key: WIDGET_OPACITY_KEY, value: String(opacity) }),
+    ]);
+    setCustomized(true);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function resetToDefault() {
+    await Promise.all([Preferences.remove({ key: WIDGET_COLOR_KEY }), Preferences.remove({ key: WIDGET_OPACITY_KEY })]);
+    setColor(DEFAULT_WIDGET_COLOR);
+    setOpacity(DEFAULT_WIDGET_OPACITY);
+    setCustomized(false);
+  }
+
+  return (
+    <Card className="p-5 space-y-4">
+      <div>
+        <h2 className="font-bold text-gray-800 text-sm">رنگ و شفافیت ویجت‌ها</h2>
+        <p className="text-xs text-gray-400 leading-relaxed mt-1">
+          روی پس‌زمینهٔ هر چهار ویجت صفحهٔ اصلی (ثبت سریع، عادت‌ها، رویدادهای امروز، سرمایه) اعمال می‌شود. برای دیدن تغییر، به صفحهٔ اصلی گوشی برگردید.
+        </p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <input
+          type="color"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-gray-500 mb-1">رنگ</p>
+          <p className="text-sm text-gray-700 font-mono" dir="ltr">{color}</p>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs text-gray-500">شفافیت پس‌زمینه</p>
+          <p className="text-xs text-gray-700 font-medium" dir="ltr">{toPersianDigits(opacity)}٪</p>
+        </div>
+        <input
+          type="range"
+          min={10}
+          max={100}
+          value={opacity}
+          onChange={(e) => setOpacity(Number(e.target.value))}
+          className="w-full"
+          dir="ltr"
+        />
+      </div>
+
+      <div
+        className="rounded-2xl border border-gray-200 h-20 flex items-center justify-center text-xs text-gray-500"
+        style={{ backgroundColor: color, opacity: opacity / 100 }}
+      >
+        پیش‌نمایش تقریبی
+      </div>
+
+      <div className="flex gap-2">
+        <button onClick={save} className="flex-1 rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700">
+          {saved ? "ذخیره شد" : "ذخیره"}
+        </button>
+        {customized && (
+          <button onClick={resetToDefault} className="rounded-xl border border-gray-200 text-gray-500 px-4 py-2.5 text-sm hover:bg-gray-50">
+            بازگشت به پیش‌فرض
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }

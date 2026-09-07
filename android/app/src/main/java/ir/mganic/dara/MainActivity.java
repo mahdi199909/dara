@@ -44,13 +44,14 @@ public class MainActivity extends BridgeActivity {
         getBridge().getWebView().addJavascriptInterface(new WebPrintBridge(this), "AndroidPrint");
     }
 
-    // QuickCaptureWidgetProvider is deliberately excluded here: it's a static "tap to open the
-    // capture form" button with no dynamic content (see its own file-level comment), so
-    // re-running its onUpdate() would just redraw the exact same layout — nothing to refresh.
+    // QuickCaptureWidgetProvider used to be excluded here (a static "tap to open the capture
+    // form" button with no dynamic content) — but its background now reads WidgetTheme same as
+    // the other three, so a theme change made in Settings needs it refreshed too.
     private static final Class<?>[] REFRESHABLE_WIDGET_PROVIDERS = {
         TodayEventsWidgetProvider.class,
         HabitsWidgetProvider.class,
         CapitalWidgetProvider.class,
+        QuickCaptureWidgetProvider.class,
     };
 
     @Override

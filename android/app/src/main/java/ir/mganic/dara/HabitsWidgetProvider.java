@@ -93,6 +93,11 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_habits);
         views.removeAllViews(R.id.habits_container);
 
+        Integer themeColor = WidgetTheme.getBackgroundArgbOrNull(context);
+        if (themeColor != null) {
+            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", themeColor);
+        }
+
         String todayIso = todayIsoUtc();
         List<String[]> habits = readTodayHabits(context);
         Set<String> checkedToday = readCheckedInHabitIds(context, todayIso);

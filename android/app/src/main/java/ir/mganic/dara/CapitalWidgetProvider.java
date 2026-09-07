@@ -84,6 +84,11 @@ public class CapitalWidgetProvider extends AppWidgetProvider {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_capital);
         views.removeAllViews(R.id.shortcuts_container);
 
+        Integer themeColor = WidgetTheme.getBackgroundArgbOrNull(context);
+        if (themeColor != null) {
+            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", themeColor);
+        }
+
         String[] summary = readCapitalSummary(context);
         if (summary == null) {
             // Nothing written yet (app never opened once) or malformed — hide the line rather
