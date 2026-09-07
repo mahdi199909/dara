@@ -712,7 +712,7 @@ function BackupTab() {
 
       const data = exportAllData(db);
       const json = JSON.stringify(data, null, 2);
-      const filename = `panhan-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `parva-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
       // Same Filesystem.writeFile + Directory.Documents pattern already used for the per-entity
       // CSV export (see src/app/(app)/reports/page.tsx) — plain UTF8 text, no base64 needed.
@@ -721,7 +721,7 @@ function BackupTab() {
       // `files` (not `url`) is @capacitor/share's option for a local file:// attachment — see
       // node_modules/@capacitor/share's ShareOptions — so Telegram/email/etc. in the resulting
       // share sheet receive the actual file, not just a path string.
-      await Share.share({ title: "پشتیبان اطلاعات پنهان", dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
+      await Share.share({ title: "پشتیبان اطلاعات پروا", dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
 
       setExportMessage(`فایل پشتیبان ساخته شد و در پوشه Documents ذخیره شد (${filename}).`);
     } catch (err) {

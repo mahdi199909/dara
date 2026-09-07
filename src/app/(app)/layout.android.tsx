@@ -20,7 +20,7 @@ function AndroidChrome({ children }: { children: React.ReactNode }) {
   // Same SWR key Settings' own name field reads/writes — a name change there calls this
   // hook's shared mutate("/api/settings"), so the header picks it up without a reload.
   const { data } = useSWR<{ user: { name: string } | null }>("/api/settings", fetcher);
-  const userName = data?.user?.name ?? "کاربر پنهان";
+  const userName = data?.user?.name ?? "کاربر پروا";
 
   return (
     <div className="min-h-screen bg-[#f8f9fb]" dir="rtl">

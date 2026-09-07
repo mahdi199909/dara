@@ -96,7 +96,7 @@ export default function BottomNav({ userName }: { userName: string }) {
               <div className="flex items-center justify-between px-5 pt-5 pb-2">
                 <div className="flex items-center gap-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icon.png" alt="پنهان" className="h-8 w-8 rounded-xl" />
+                  <img src="/icon.png" alt="پروا" className="h-8 w-8 rounded-xl" />
                   <p className="text-xs text-gray-400">{userName}</p>
                 </div>
                 <div className="flex items-center gap-1">
