@@ -13,6 +13,7 @@ export const DEFAULT_CATEGORIES: Array<{
   { name: "دانشگاه", icon: "🎓", color: "#57a89c", kind: "PRODUCTIVE", valueType: "ASSET" },
   { name: "یادگیری", icon: "📚", color: "#4c8577", kind: "PRODUCTIVE", valueType: "ASSET" },
   { name: "سلامت", icon: "❤️", color: "#5c9c7a", kind: "PRODUCTIVE", valueType: "ASSET" },
+  { name: "ورزش", icon: "🏋️", color: "#4f9c5c", kind: "PRODUCTIVE", valueType: "ASSET" },
   { name: "استراحت بدون تکنولوژی", icon: "🧘", color: "#7a9c8a", kind: "PRODUCTIVE", valueType: "ASSET" },
   { name: "خانواده", icon: "👨‍👩‍👧", color: "#8a8a8a", kind: "NEUTRAL", valueType: "EXPENSE" },
   { name: "تفریح", icon: "🎮", color: "#b0a24a", kind: "NEUTRAL", valueType: "EXPENSE" },

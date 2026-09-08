@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import useSWR, { mutate as mutateGlobal } from "swr";
 import { fetcher, apiPatch, apiPost, apiDelete } from "@/lib/apiClient";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -362,13 +362,13 @@ function PersonalTab() {
           <button
             type="button"
             onClick={toggleDailyMoment}
-            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.dailyMomentEnabled ? "bg-brand-500" : "bg-gray-300"}`}
+            dir="ltr"
+            className={`w-10 h-[22px] rounded-full transition shrink-0 flex items-center px-0.5 ${
+              data.settings.dailyMomentEnabled ? "bg-brand-500 justify-start" : "bg-gray-300 justify-end"
+            }`}
             aria-label={data.settings.dailyMomentEnabled ? "غیرفعال کردن لحظه روزانه" : "فعال کردن لحظه روزانه"}
           >
-            <span
-              className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
-              style={{ [data.settings.dailyMomentEnabled ? "left" : "right"]: "3px" }}
-            />
+            <span className="h-4 w-4 rounded-full bg-white transition" />
           </button>
         </div>
       )}
@@ -381,13 +381,13 @@ function PersonalTab() {
           <button
             type="button"
             onClick={toggleCompanion}
-            className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${data.settings.companionEnabled ? "bg-brand-500" : "bg-gray-300"}`}
+            dir="ltr"
+            className={`w-10 h-[22px] rounded-full transition shrink-0 flex items-center px-0.5 ${
+              data.settings.companionEnabled ? "bg-brand-500 justify-start" : "bg-gray-300 justify-end"
+            }`}
             aria-label={data.settings.companionEnabled ? "غیرفعال کردن آدمک" : "فعال کردن آدمک"}
           >
-            <span
-              className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
-              style={{ [data.settings.companionEnabled ? "left" : "right"]: "3px" }}
-            />
+            <span className="h-4 w-4 rounded-full bg-white transition" />
           </button>
         </div>
       )}
@@ -463,23 +463,51 @@ function CategoriesTab() {
   const [kind, setKind] = useState<CategoryKind>("NEUTRAL");
   const [valueType, setValueType] = useState<ValueType>("EXPENSE");
   const [icon, setIcon] = useState("🏷️");
+  const [parentCategoryId, setParentCategoryId] = useState("");
   const [editingRateFor, setEditingRateFor] = useState<string | null>(null);
   const [rateInput, setRateInput] = useState("350000");
   const [creating, setCreating] = useState(false);
   const { format } = useCurrencyUnit();
+
+  const categories: any[] = data?.categories ?? [];
+  // One level of nesting only (see prisma/schema.prisma's own comment on Category.parentCategoryId)
+  // — every category is either top-level or a child of a top-level one, never both.
+  const topLevelCategories = categories.filter((c) => !c.parentCategoryId);
+  const childrenByParent = new Map<string, any[]>();
+  for (const c of categories) {
+    if (!c.parentCategoryId) continue;
+    const list = childrenByParent.get(c.parentCategoryId) ?? [];
+    list.push(c);
+    childrenByParent.set(c.parentCategoryId, list);
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || creating) return;
     setCreating(true);
     try {
-      await apiPost("/api/categories", { name, kind, valueType, icon });
+      await apiPost("/api/categories", { name, kind, valueType, icon, parentCategoryId: parentCategoryId || undefined });
       setName("");
+      setParentCategoryId("");
       setShowForm(false);
       mutate();
     } finally {
       setCreating(false);
     }
+  }
+
+  // Reordering only ever moves a top-level category (and its whole group of sub-categories,
+  // which tag along together) relative to another top-level one — see this function's own
+  // caller for why sub-category-level reordering isn't offered yet. Submits the *entire*
+  // resulting flat id order in one PATCH, matching what reorderCategoriesSchema expects.
+  async function moveGroup(index: number, direction: -1 | 1) {
+    const otherIndex = index + direction;
+    if (otherIndex < 0 || otherIndex >= topLevelCategories.length) return;
+    const reordered = [...topLevelCategories];
+    [reordered[index], reordered[otherIndex]] = [reordered[otherIndex], reordered[index]];
+    const orderedIds = reordered.flatMap((top) => [top.id, ...(childrenByParent.get(top.id) ?? []).map((c) => c.id)]);
+    await apiPatch("/api/categories/reorder", { orderedIds });
+    mutate();
   }
 
   async function toggleActive(cat: any) {
@@ -534,6 +562,16 @@ function CategoriesTab() {
                 <option key={k} value={k}>{CATEGORY_KIND_LABELS[k]}</option>
               ))}
             </select>
+            <select
+              value={parentCategoryId}
+              onChange={(e) => setParentCategoryId(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="">بدون والد (دسته‌بندی مستقل)</option>
+              {topLevelCategories.map((c) => (
+                <option key={c.id} value={c.id}>زیرِ «{c.name}»</option>
+              ))}
+            </select>
             <div className="flex gap-2">
               {VALUE_TYPES.map((v) => (
                 <button
@@ -556,72 +594,104 @@ function CategoriesTab() {
       )}
 
       <Card>
-        {data?.categories.length === 0 ? (
+        {categories.length === 0 ? (
           <EmptyState message="دسته‌بندی‌ای وجود ندارد." />
         ) : (
           <ul className="divide-y divide-gray-50">
-            {data?.categories.map((c) => (
-              <li key={c.id} className={`px-4 py-3 space-y-2 ${!c.isActive ? "opacity-50" : ""}`}>
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">{c.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800">{c.name}</p>
-                    <p className="text-xs text-gray-400">{CATEGORY_KIND_LABELS[c.kind as CategoryKind]}</p>
-                  </div>
-                  <button
-                    onClick={() => toggleActive(c)}
-                    className={`relative w-10 h-[22px] rounded-full transition shrink-0 ${c.isActive ? "bg-brand-500" : "bg-gray-300"}`}
-                    aria-label={c.isActive ? "غیرفعال کردن" : "فعال کردن"}
-                  >
-                    <span
-                      className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition"
-                      style={{ [c.isActive ? "left" : "right"]: "3px" }}
-                    />
-                  </button>
-                  <button onClick={() => remove(c.id)} className="text-gray-300 hover:text-waste-500 p-1 shrink-0">
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5 pr-9">
-                  {VALUE_TYPES.map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => setCategoryValueType(c, v)}
-                      className={`text-xs px-2.5 py-1 rounded-lg ${
-                        c.valueType === v ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {VALUE_TYPE_LABELS[v]}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      if (c.generatesVirtualAsset) disableVirtualAsset(c);
-                      else {
-                        setRateInput(c.virtualAssetValuePerHour ? String(c.virtualAssetValuePerHour) : "350000");
-                        setEditingRateFor(c.id);
-                      }
-                    }}
-                    className={`text-xs px-2.5 py-1 rounded-lg mr-auto ${
-                      c.generatesVirtualAsset ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    دارایی مجازی {c.generatesVirtualAsset ? `(${format(c.virtualAssetValuePerHour, { withSuffix: true })}/س)` : "خاموش"}
-                  </button>
-                </div>
-                {editingRateFor === c.id && (
-                  <div className="flex items-center gap-2 pr-9">
-                    <MoneyInput value={rateInput} onChange={setRateInput} placeholder="ارزش هر ساعت" autoFocus />
-                    <button onClick={() => saveVirtualAssetRate(c.id)} className="text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg shrink-0">
-                      ثبت
-                    </button>
-                    <button onClick={() => setEditingRateFor(null)} className="text-xs text-gray-400 shrink-0">
-                      انصراف
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
+            {topLevelCategories.map((top, index) => {
+              function row(c: any, isChild: boolean) {
+                return (
+                  <li key={c.id} className={`px-4 py-3 space-y-2 ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-gray-50/60" : ""}`}>
+                    <div className="flex items-center gap-3">
+                      {isChild && <span className="text-gray-300 shrink-0">└</span>}
+                      {!isChild && (
+                        <div className="flex flex-col gap-0.5 shrink-0">
+                          <button
+                            onClick={() => moveGroup(index, -1)}
+                            disabled={index === 0}
+                            className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none"
+                            aria-label="جابه‌جایی به بالا"
+                          >
+                            ▲
+                          </button>
+                          <button
+                            onClick={() => moveGroup(index, 1)}
+                            disabled={index === topLevelCategories.length - 1}
+                            className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none"
+                            aria-label="جابه‌جایی به پایین"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                      )}
+                      <span className="text-lg">{c.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800">{c.name}</p>
+                        <p className="text-xs text-gray-400">{CATEGORY_KIND_LABELS[c.kind as CategoryKind]}</p>
+                      </div>
+                      <button
+                        onClick={() => toggleActive(c)}
+                        dir="ltr"
+                        className={`w-10 h-[22px] rounded-full transition shrink-0 flex items-center px-0.5 ${
+                          c.isActive ? "bg-brand-500 justify-start" : "bg-gray-300 justify-end"
+                        }`}
+                        aria-label={c.isActive ? "غیرفعال کردن" : "فعال کردن"}
+                      >
+                        <span className="h-4 w-4 rounded-full bg-white transition" />
+                      </button>
+                      <button onClick={() => remove(c.id)} className="text-gray-300 hover:text-waste-500 p-1 shrink-0">
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5 pr-9">
+                      {VALUE_TYPES.map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setCategoryValueType(c, v)}
+                          className={`text-xs px-2.5 py-1 rounded-lg ${
+                            c.valueType === v ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {VALUE_TYPE_LABELS[v]}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          if (c.generatesVirtualAsset) disableVirtualAsset(c);
+                          else {
+                            setRateInput(c.virtualAssetValuePerHour ? String(c.virtualAssetValuePerHour) : "350000");
+                            setEditingRateFor(c.id);
+                          }
+                        }}
+                        className={`text-xs px-2.5 py-1 rounded-lg mr-auto ${
+                          c.generatesVirtualAsset ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        دارایی مجازی {c.generatesVirtualAsset ? `(${format(c.virtualAssetValuePerHour, { withSuffix: true })}/س)` : "خاموش"}
+                      </button>
+                    </div>
+                    {editingRateFor === c.id && (
+                      <div className="flex items-center gap-2 pr-9">
+                        <MoneyInput value={rateInput} onChange={setRateInput} placeholder="ارزش هر ساعت" autoFocus />
+                        <button onClick={() => saveVirtualAssetRate(c.id)} className="text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg shrink-0">
+                          ثبت
+                        </button>
+                        <button onClick={() => setEditingRateFor(null)} className="text-xs text-gray-400 shrink-0">
+                          انصراف
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              }
+
+              return (
+                <Fragment key={top.id}>
+                  {row(top, false)}
+                  {(childrenByParent.get(top.id) ?? []).map((child) => row(child, true))}
+                </Fragment>
+              );
+            })}
           </ul>
         )}
       </Card>
@@ -717,16 +787,21 @@ function BackupTab() {
       const json = JSON.stringify(data, null, 2);
       const filename = `parva-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
-      // Same Filesystem.writeFile + Directory.Documents pattern already used for the per-entity
-      // CSV export (see src/app/(app)/reports/page.tsx) — plain UTF8 text, no base64 needed.
-      await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Documents, encoding: Encoding.UTF8 });
-      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents });
+      // Directory.Cache, not Documents: on a lot of real devices/Android versions the public
+      // Documents directory doesn't already exist and Filesystem.writeFile only fails with
+      // "Missing parent directory" rather than creating it (recursive only controls intermediate
+      // *sub*directories under an existing base, it doesn't conjure the base directory itself).
+      // Cache is always there (it's the app's own private storage, no scoped-storage permission
+      // dance) and that's all this needs — the file's real destination is wherever the user picks
+      // in the share sheet right below, not "visible in a file manager".
+      await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Cache, encoding: Encoding.UTF8 });
+      const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
       // `files` (not `url`) is @capacitor/share's option for a local file:// attachment — see
       // node_modules/@capacitor/share's ShareOptions — so Telegram/email/etc. in the resulting
       // share sheet receive the actual file, not just a path string.
       await Share.share({ title: "پشتیبان اطلاعات پروا", dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
 
-      setExportMessage(`فایل پشتیبان ساخته شد و در پوشه Documents ذخیره شد (${filename}).`);
+      setExportMessage(`فایل پشتیبان ساخته شد (${filename}) — از صفحه‌ی اشتراک‌گذاری، مقصد را انتخاب کنید.`);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "ساخت فایل پشتیبان با خطا مواجه شد.");
     } finally {

@@ -44,6 +44,31 @@ export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCac
   return license;
 }
 
+const OFFLINE_TRIAL_DAYS = 30;
+
+/**
+ * Fallback for when completeFirstRun fails because the remote server itself couldn't be reached
+ * at all (see FirstRunGate.tsx's distinction between that and a real 4xx/5xx from the server) —
+ * a network hiccup, or the remote host being unreachable from the user's specific network,
+ * shouldn't permanently lock someone out of an app whose actual data and features are 100%
+ * local. Caches a device-local TRIAL with no remoteUserId/token, so refreshLicenseStatus and
+ * syncWithServer both correctly keep no-op'ing (both bail out on a falsy token) until the user
+ * eventually succeeds at a real login/register — nothing here talks to the network at all.
+ */
+export async function continueOffline(email: string): Promise<LicenseCache> {
+  const trialEndsAt = new Date(Date.now() + OFFLINE_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { license } = await apiPost<{ license: LicenseCache }>("/api/local/license-cache", {
+    status: "TRIAL",
+    trialDaysRemaining: OFFLINE_TRIAL_DAYS,
+    trialEndsAt,
+    currentPeriodEnd: null,
+    remoteUserId: "",
+    remoteEmail: email,
+    token: null,
+  });
+  return license;
+}
+
 /**
  * Best-effort re-check with the server, so trial-days-remaining (and any subscribe/lifetime
  * upgrade made elsewhere) actually updates over time instead of being frozen at whatever

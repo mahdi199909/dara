@@ -46,8 +46,16 @@ async function readPersistedBytes(): Promise<Uint8Array | null> {
   try {
     const { data } = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
     return base64ToBytes(data as string);
-  } catch {
-    return null; // first launch — no file yet
+  } catch (err) {
+    // Capacitor's Filesystem plugin throws this exact message for a genuinely missing file
+    // (first launch) — anything else (a read/decode failure against a file that does exist,
+    // e.g. left truncated by an interrupted flush) is a real problem, not a fresh install, and
+    // must not be silently treated as "no data yet": that would make loadBrowserSqliteDriver
+    // below construct a brand-new *empty* database instead of surfacing the failure, which looks
+    // to the user exactly like all their data vanished. Let it throw instead — FirstRunGate's
+    // own catch already turns this into a visible bootError.
+    if (err instanceof Error && err.message === "File does not exist") return null;
+    throw err;
   }
 }
 
@@ -85,30 +93,40 @@ export async function loadBrowserSqliteDriver(): Promise<LocalDb> {
 
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let dirty = false;
+  // Chained onto so a caller that awaits flush() while a write is already in flight (e.g. the
+  // debounced timer just fired) waits for *that* write too, instead of racing it — two
+  // overlapping writePersistedBytes() calls could otherwise interleave and corrupt the file.
+  let pendingWrite: Promise<void> = Promise.resolve();
 
   function scheduleFlush() {
     dirty = true;
     if (flushTimer) clearTimeout(flushTimer);
-    flushTimer = setTimeout(flushNow, FLUSH_DEBOUNCE_MS);
+    flushTimer = setTimeout(() => {
+      void flushNow();
+    }, FLUSH_DEBOUNCE_MS);
   }
 
-  function flushNow() {
+  function flushNow(): Promise<void> {
     if (flushTimer) {
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    if (!dirty) return;
+    if (!dirty) return pendingWrite;
     dirty = false;
-    void writePersistedBytes(db.export());
+    pendingWrite = pendingWrite.then(() => writePersistedBytes(db.export()));
+    return pendingWrite;
   }
 
   // Safety net for the debounce window above: flush immediately if the app is backgrounded or
-  // the WebView is torn down before the debounced timer fires.
+  // the WebView is torn down before the debounced timer fires. Best-effort only — a handler
+  // reacting to pagehide/visibilitychange has no way to actually block the page from unloading
+  // while its async write finishes, unlike a caller that explicitly awaits flush() beforehand
+  // (see BottomNav.tsx's native logout, which does exactly that before navigating).
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") flushNow();
+      if (document.visibilityState === "hidden") void flushNow();
     });
-    window.addEventListener("pagehide", flushNow);
+    window.addEventListener("pagehide", () => void flushNow());
   }
 
   return {
@@ -141,6 +159,9 @@ export async function loadBrowserSqliteDriver(): Promise<LocalDb> {
     execute(sql) {
       db.run(sql);
       scheduleFlush();
+    },
+    flush() {
+      return flushNow();
     },
   };
 }

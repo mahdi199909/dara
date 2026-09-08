@@ -105,6 +105,10 @@ model Category {
   kind      String  @default("NEUTRAL") // PRODUCTIVE | NEUTRAL | WASTE
   valueType String  @default("EXPENSE") // EXPENSE | ASSET — drives the Expense/Asset toggle default in Quick Capture
   isActive  Boolean @default(true)
+  // User-controlled display order within the category picker/list (Quick Capture, management
+  // UI) — lower first. Defaults to 0 for every existing row, so an un-reordered install still
+  // sorts by createdAt (the list query's own secondary sort key) exactly as before this existed.
+  sortOrder Int     @default(0)
 
   // Virtual asset generation rule for this category (section 10)
   generatesVirtualAsset   Boolean @default(false)
@@ -115,6 +119,13 @@ model Category {
   // src/lib/projectCategorySync.ts.
   projectId String?  @unique
   project   Project? @relation("ProjectCategory", fields: [projectId], references: [id], onDelete: Cascade)
+
+  // One level only, deliberately — a sub-category (e.g. "پوش‌آپ" under "ورزش") never itself
+  // becomes a parent. onDelete: SetNull so deleting a parent demotes its children to top-level
+  // categories instead of cascading their deletion (they may still have real logged history).
+  parentCategoryId String?
+  parentCategory    Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: SetNull)
+  subCategories     Category[] @relation("CategoryHierarchy")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -127,6 +138,7 @@ model Category {
   habits       Habit[]
 
   @@index([userId])
+  @@index([parentCategoryId])
 }
 
 // ---------------------------------------------------------------------------

@@ -33,8 +33,14 @@ export default function BottomNav({ userName }: { userName: string }) {
       // would route through dispatchLocal to a nonexistent web-only concept and do nothing, and
       // "/login" isn't a real screen here (FirstRunGate owns the logged-out UI). Clear the cached
       // license/token instead and reload, so FirstRunGate's boot check finds nothing cached.
-      const { dispatchLocal } = await import("@/lib/localDispatcher");
+      const [{ dispatchLocal }, { getLocalDbInstance }] = await Promise.all([import("@/lib/localDispatcher"), import("@/local/db")]);
       dispatchLocal("POST", "/api/local/logout");
+      // Must complete before navigating away: browserSqlJs.ts buffers writes in memory and
+      // flushes to disk on a 300ms debounce (plus a pagehide safety net that can't actually block
+      // the navigation below from tearing the page down first). Without waiting here, a hard
+      // navigation right after a recent write could race that flush and lose or corrupt it —
+      // which on next launch looks exactly like the app's entire local data vanished.
+      await getLocalDbInstance()?.flush?.();
       window.location.href = "/";
       return;
     }

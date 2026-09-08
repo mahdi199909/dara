@@ -15,6 +15,7 @@ const updateSchema = z.object({
   isActive: z.boolean().optional(),
   generatesVirtualAsset: z.boolean().optional(),
   virtualAssetValuePerHour: z.number().int().min(0).nullable().optional(),
+  parentCategoryId: z.string().min(1).nullable().optional(),
 });
 
 async function getOwned(userId: string, id: string) {
@@ -28,6 +29,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
     const body = updateSchema.parse(await req.json());
+
+    if (body.parentCategoryId) {
+      if (body.parentCategoryId === params.id) throw new ApiError("یک دسته‌بندی نمی‌تواند والدِ خودش باشد.", 422);
+      const parent = await prisma.category.findFirst({ where: { id: body.parentCategoryId, userId, deletedAt: null } });
+      if (!parent) throw new ApiError("دسته‌بندی والد پیدا نشد.", 404);
+      if (parent.parentCategoryId) throw new ApiError("یک زیردسته نمی‌تواند خودش والدِ دسته‌ی دیگری باشد.", 422);
+    }
 
     const category = await prisma.category.update({ where: { id: params.id }, data: body });
 
@@ -55,6 +63,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const existing = await getOwned(userId, params.id);
 
     await prisma.category.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+    // The schema's onDelete: SetNull for parentCategoryId only fires on a real row DELETE, never
+    // on this soft-delete UPDATE — without this, a sub-category of this one would keep pointing
+    // at a now-deleted parent forever (same fix as the on-device repository's deleteCategory).
+    await prisma.category.updateMany({ where: { parentCategoryId: params.id, userId }, data: { parentCategoryId: null } });
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

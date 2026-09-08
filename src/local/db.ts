@@ -15,6 +15,14 @@ export interface LocalDb {
   get<T = unknown>(sql: string, params?: unknown[]): T | undefined;
   all<T = unknown>(sql: string, params?: unknown[]): T[];
   execute(sql: string): void;
+  /** Persists any pending in-memory writes to disk and resolves once that's actually done —
+   * only meaningful for a driver that buffers writes in memory before flushing (see
+   * browserSqlJs.ts's debounced flush); a driver that already writes synchronously to disk on
+   * every call (nodeSqlite.ts) has nothing to do here, hence optional. Callers that are about to
+   * navigate away or otherwise tear down the page (e.g. logout) must await this first — see
+   * BottomNav.tsx's native logout for why: firing a hard navigation without it races the
+   * debounced/pagehide flush and can lose or corrupt the just-written bytes. */
+  flush?(): Promise<void>;
 }
 
 /**

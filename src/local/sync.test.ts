@@ -46,7 +46,7 @@ describe("pushLocalChanges", () => {
     expect(result.pushed).toEqual({ Category: 1 });
     const [, init] = vi.mocked(fetch).mock.calls[0];
     const sentBody = JSON.parse((init as RequestInit).body as string);
-    expect(sentBody.tables.Category).toEqual([{ id: "cat_1", userId: REMOTE_USER_ID, name: "کار", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", icon: null, color: "#3a8d80", kind: "NEUTRAL", valueType: "EXPENSE", isActive: 1, generatesVirtualAsset: 0, virtualAssetValuePerHour: null, projectId: null, deletedAt: null }]);
+    expect(sentBody.tables.Category).toEqual([{ id: "cat_1", userId: REMOTE_USER_ID, name: "کار", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", icon: null, color: "#3a8d80", kind: "NEUTRAL", valueType: "EXPENSE", isActive: 1, sortOrder: 0, generatesVirtualAsset: 0, virtualAssetValuePerHour: null, projectId: null, parentCategoryId: null, deletedAt: null }]);
   });
 
   it("only pushes rows changed after the given cursor", async () => {

@@ -102,13 +102,13 @@ export default function ReportsPage() {
       }
 
       if (isNative) {
-        // Same Filesystem.writeFile + getUri + Share.share pattern already proven working for
-        // the full-data backup export (see settings/page.tsx's BackupTab) — a plain alert() here
-        // before gave no way to actually get the file off the device, and (being un-caught)
-        // silently swallowed any real error too.
+        // Directory.Cache, not Documents — see settings/page.tsx's BackupTab for why: on a lot of
+        // real devices the public Documents directory doesn't already exist, and writeFile fails
+        // with "Missing parent directory" rather than creating it. Cache is always there and is
+        // all a share-sheet handoff needs.
         const [{ Filesystem, Directory, Encoding }, { Share }] = await Promise.all([import("@capacitor/filesystem"), import("@capacitor/share")]);
-        await Filesystem.writeFile({ path: filename, data: csv, directory: Directory.Documents, encoding: Encoding.UTF8 });
-        const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents });
+        await Filesystem.writeFile({ path: filename, data: csv, directory: Directory.Cache, encoding: Encoding.UTF8 });
+        const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
         await Share.share({ title: filename, dialogTitle: "ارسال فایل خروجی", files: [uri] });
       } else {
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });

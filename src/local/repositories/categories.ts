@@ -16,9 +16,11 @@ interface CategoryRow {
   kind: string;
   valueType: string;
   isActive: number;
+  sortOrder: number;
   generatesVirtualAsset: number;
   virtualAssetValuePerHour: number | null;
   projectId: string | null;
+  parentCategoryId: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -38,21 +40,46 @@ function getOwnedRow(db: LocalDb, userId: string, id: string) {
   return toCategory(row);
 }
 
+/** Throws if parentCategoryId doesn't name an active category owned by this same user, or if
+ * that category is itself already a sub-category — this schema only supports one level of
+ * nesting (see prisma/schema.prisma's own comment on Category.parentCategoryId), so a
+ * sub-category can never become a parent. */
+function assertValidParent(db: LocalDb, userId: string, parentCategoryId: string) {
+  const parent = db.get<{ parentCategoryId: string | null }>(
+    `SELECT "parentCategoryId" FROM "Category" WHERE "id" = ? AND "userId" = ? AND "deletedAt" IS NULL`,
+    [parentCategoryId, userId]
+  );
+  if (!parent) throw new ApiError("دسته‌بندی والد پیدا نشد.", 404);
+  if (parent.parentCategoryId) throw new ApiError("یک زیردسته نمی‌تواند خودش والدِ دسته‌ی دیگری باشد.", 422);
+}
+
 // Matches the web route exactly: the list is filtered only by deletedAt, NOT by isActive —
 // deactivated categories (e.g. from a soft-deleted project, see projectSync.ts) still show up.
+// sortOrder first (the user's own explicit ordering — see reorderCategories), createdAt as the
+// tiebreaker for anything never explicitly reordered (every row defaults to sortOrder 0, so
+// without this secondary key they'd otherwise come back in undefined/storage order).
 export function listCategories(db: LocalDb, userId: string) {
-  const rows = db.all<CategoryRow>(`SELECT * FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL ORDER BY "createdAt" ASC`, [userId]);
+  const rows = db.all<CategoryRow>(
+    `SELECT * FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, "createdAt" ASC`,
+    [userId]
+  );
   return rows.map(toCategory);
 }
 
 export function createCategory(db: LocalDb, userId: string, input: CreateCategoryInput) {
+  if (input.parentCategoryId) assertValidParent(db, userId, input.parentCategoryId);
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  // New categories join at the end of the user's own order, not at sortOrder 0 alongside
+  // whatever an un-reordered install already has sitting there.
+  const maxSortOrder = db.get<{ maxSortOrder: number | null }>(`SELECT MAX("sortOrder") as "maxSortOrder" FROM "Category" WHERE "userId" = ?`, [userId]);
+  const sortOrder = (maxSortOrder?.maxSortOrder ?? -1) + 1;
 
   db.run(
     `INSERT INTO "Category"
-       ("id","userId","name","icon","color","kind","valueType","isActive","generatesVirtualAsset","virtualAssetValuePerHour","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ("id","userId","name","icon","color","kind","valueType","isActive","sortOrder","generatesVirtualAsset","virtualAssetValuePerHour","parentCategoryId","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       userId,
@@ -62,8 +89,10 @@ export function createCategory(db: LocalDb, userId: string, input: CreateCategor
       input.kind ?? "NEUTRAL",
       input.valueType ?? "EXPENSE",
       1, // isActive — not settable on create by the web route's own schema, always starts true
+      sortOrder,
       input.generatesVirtualAsset ? 1 : 0,
       input.virtualAssetValuePerHour ?? null,
+      input.parentCategoryId ?? null,
       now,
       now,
     ]
@@ -76,6 +105,10 @@ export function createCategory(db: LocalDb, userId: string, input: CreateCategor
 
 export function updateCategory(db: LocalDb, userId: string, id: string, input: UpdateCategoryInput) {
   const existing = getOwnedRow(db, userId, id);
+  if (input.parentCategoryId) {
+    if (input.parentCategoryId === id) throw new ApiError("یک دسته‌بندی نمی‌تواند والدِ خودش باشد.", 422);
+    assertValidParent(db, userId, input.parentCategoryId);
+  }
 
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -92,6 +125,7 @@ export function updateCategory(db: LocalDb, userId: string, id: string, input: U
   if (input.isActive !== undefined) set("isActive", input.isActive ? 1 : 0);
   if (input.generatesVirtualAsset !== undefined) set("generatesVirtualAsset", input.generatesVirtualAsset ? 1 : 0);
   if (input.virtualAssetValuePerHour !== undefined) set("virtualAssetValuePerHour", input.virtualAssetValuePerHour);
+  if (input.parentCategoryId !== undefined) set("parentCategoryId", input.parentCategoryId);
   set("updatedAt", now());
 
   db.run(`UPDATE "Category" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, id]);
@@ -103,8 +137,32 @@ export function updateCategory(db: LocalDb, userId: string, id: string, input: U
 
 export function deleteCategory(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedRow(db, userId, id);
-  db.run(`UPDATE "Category" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
+  const now_ = now();
+  db.run(`UPDATE "Category" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now_, now_, id]);
+  // Mirrors the schema's onDelete: SetNull for parentCategoryId — a soft-delete never runs the
+  // database's own FK action, so any sub-category of this one would otherwise keep pointing at a
+  // now-deleted parent forever.
+  db.run(`UPDATE "Category" SET "parentCategoryId" = NULL, "updatedAt" = ? WHERE "parentCategoryId" = ? AND "userId" = ?`, [now_, id, userId]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Category", entityId: id, oldValue: existing });
+  return { ok: true };
+}
+
+/** Applies a full explicit order in one shot — see reorderCategoriesSchema's own doc comment for
+ * why this takes the whole list rather than one-off "move to position N" calls. Ids the caller
+ * doesn't own (or that don't exist / are already deleted) are silently skipped rather than
+ * thrown on, since a stale client-side list (a category deleted from another device, not yet
+ * synced) shouldn't block reordering everything else. */
+export function reorderCategories(db: LocalDb, userId: string, orderedIds: string[]) {
+  const owned = new Set(
+    db.all<{ id: string }>(`SELECT "id" FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL`, [userId]).map((r) => r.id)
+  );
+  const now_ = now();
+  let sortOrder = 0;
+  for (const id of orderedIds) {
+    if (!owned.has(id)) continue;
+    db.run(`UPDATE "Category" SET "sortOrder" = ?, "updatedAt" = ? WHERE "id" = ?`, [sortOrder, now_, id]);
+    sortOrder++;
+  }
   return { ok: true };
 }
 

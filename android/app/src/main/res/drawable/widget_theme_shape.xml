@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rounded-corner outline only, no fill — see WidgetTheme.java's own doc comment. This sits on
+     each widget's root purely so clipToOutline has a rounded shape to clip against; the actual
+     visible color (the original opaque look, or the user's translucent theme) is painted entirely
+     by the widget_theme_overlay view on top of it. If this shape had its own solid fill instead,
+     a translucent overlay color would always blend against THAT opaque fill rather than whatever
+     is really behind the widget on the launcher — which is exactly why a "transparent" theme
+     color was rendering as flat white instead of see-through. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <corners android:radius="20dp" />
+</shape>

@@ -43,7 +43,7 @@ import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
 import { jalaliMonthRange, toJalali } from "@/lib/jalali";
 import { createTaskSchema, updateTaskSchema } from "@/lib/schemas/tasks";
-import { createCategorySchema, updateCategorySchema } from "@/lib/schemas/categories";
+import { createCategorySchema, updateCategorySchema, reorderCategoriesSchema } from "@/lib/schemas/categories";
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
@@ -106,6 +106,11 @@ register("DELETE", "/api/tasks/:id", ({ db, userId, params }) => tasksRepo.delet
 // --- Categories --------------------------------------------------------------------------
 register("GET", "/api/categories", ({ db, userId }) => ({ categories: categoriesRepo.listCategories(db, userId) }));
 register("POST", "/api/categories", ({ db, userId, body }) => ({ category: categoriesRepo.createCategory(db, userId, createCategorySchema.parse(body)) }), 201);
+// Registered before the :id pattern below — routes.find() takes the first match, and "reorder"
+// would otherwise satisfy :id's own ([^/]+) just fine and never reach this handler.
+register("PATCH", "/api/categories/reorder", ({ db, userId, body }) =>
+  categoriesRepo.reorderCategories(db, userId, reorderCategoriesSchema.parse(body).orderedIds)
+);
 register("PATCH", "/api/categories/:id", ({ db, userId, params, body }) => ({
   category: categoriesRepo.updateCategory(db, userId, params.id, updateCategorySchema.parse(body)),
 }));

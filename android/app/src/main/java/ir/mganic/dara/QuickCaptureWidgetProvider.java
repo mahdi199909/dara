@@ -19,10 +19,7 @@ public class QuickCaptureWidgetProvider extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_quick_capture);
 
-            Integer themeColor = WidgetTheme.getBackgroundArgbOrNull(context);
-            if (themeColor != null) {
-                views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", themeColor);
-            }
+            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, 0xFF1C39BB));
 
             Intent intent = new Intent(context, QuickCaptureActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);

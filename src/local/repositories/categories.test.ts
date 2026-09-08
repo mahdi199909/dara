@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { openLocalDb, resetLocalDbForTests } from "../db";
 import { createNodeSqliteDriver } from "../drivers/nodeSqlite";
-import { createCategory, deleteCategory, listCategories, updateCategory } from "./categories";
+import { createCategory, deleteCategory, listCategories, reorderCategories, updateCategory } from "./categories";
 
 const USER_ID = "user_test_1";
 
@@ -98,5 +98,55 @@ describe("local categories repository", () => {
     const db = await freshDb();
     const category = createCategory(db, USER_ID, { name: "من" });
     expect(() => updateCategory(db, "someone_else", category.id, { name: "دستکاری" })).toThrow("دسته‌بندی پیدا نشد.");
+  });
+
+  it("reorders categories to match the given id order, ignoring an id it doesn't own", async () => {
+    const db = await freshDb();
+    const a = createCategory(db, USER_ID, { name: "الف" });
+    const b = createCategory(db, USER_ID, { name: "ب" });
+    const c = createCategory(db, USER_ID, { name: "ج" });
+
+    reorderCategories(db, USER_ID, [c.id, "not-a-real-id", a.id, b.id]);
+
+    expect(listCategories(db, USER_ID).map((cat) => cat.name)).toEqual(["ج", "الف", "ب"]);
+  });
+
+  it("puts a newly created category after everything already reordered, not back at sortOrder 0", async () => {
+    const db = await freshDb();
+    const a = createCategory(db, USER_ID, { name: "الف" });
+    const b = createCategory(db, USER_ID, { name: "ب" });
+    reorderCategories(db, USER_ID, [b.id, a.id]);
+
+    createCategory(db, USER_ID, { name: "تازه" });
+
+    expect(listCategories(db, USER_ID).map((cat) => cat.name)).toEqual(["ب", "الف", "تازه"]);
+  });
+
+  it("creates a sub-category under a parent and nulls it out again when the parent is deleted", async () => {
+    const db = await freshDb();
+    const parent = createCategory(db, USER_ID, { name: "ورزش" });
+    const child = createCategory(db, USER_ID, { name: "پوش‌آپ", parentCategoryId: parent.id });
+    expect(child.parentCategoryId).toBe(parent.id);
+
+    deleteCategory(db, USER_ID, parent.id);
+
+    const reloaded = updateCategory(db, USER_ID, child.id, { name: "پوش‌آپ" }); // re-read via a no-op-ish update
+    expect(reloaded.parentCategoryId).toBeNull();
+  });
+
+  it("rejects a sub-category being used as someone else's parent (one level only)", async () => {
+    const db = await freshDb();
+    const parent = createCategory(db, USER_ID, { name: "ورزش" });
+    const child = createCategory(db, USER_ID, { name: "پوش‌آپ", parentCategoryId: parent.id });
+
+    expect(() => createCategory(db, USER_ID, { name: "دیگر", parentCategoryId: child.id })).toThrow(
+      "یک زیردسته نمی‌تواند خودش والدِ دسته‌ی دیگری باشد."
+    );
+  });
+
+  it("rejects a category being set as its own parent", async () => {
+    const db = await freshDb();
+    const category = createCategory(db, USER_ID, { name: "ورزش" });
+    expect(() => updateCategory(db, USER_ID, category.id, { parentCategoryId: category.id })).toThrow("یک دسته‌بندی نمی‌تواند والدِ خودش باشد.");
   });
 });

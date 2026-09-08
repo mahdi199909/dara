@@ -14,7 +14,7 @@
 // Wiring this in is part of restructuring that layout in Phase 6, once there's a real Capacitor
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
-import { getCachedLicense, completeFirstRun, refreshLicenseStatus, syncWithServer } from "@/lib/nativeOnboarding";
+import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer } from "@/lib/nativeOnboarding";
 import { ApiClientError } from "@/lib/apiClient";
 
 function isNativePlatform(): boolean {
@@ -32,7 +32,10 @@ function describeError(err: unknown): string {
     const detail = err.details ? (typeof err.details === "string" ? err.details : JSON.stringify(err.details)) : null;
     return detail ? `${err.message} (${detail})` : err.message;
   }
-  if (err instanceof Error) return `خطای غیرمنتظره: ${err.name}: ${err.message}`;
+  // A plain "TypeError: Failed to fetch" (no ApiClientError, meaning remoteAuth.ts's fetch()
+  // never got a response at all) reads as an opaque browser internal to someone who isn't
+  // debugging it — lead with the plain-language cause instead, keep the raw detail for support.
+  if (err instanceof Error) return `اتصال به سرور برقرار نشد — اینترنت گوشی را بررسی کنید. (${err.name}: ${err.message})`;
   return `خطای غیرمنتظره: ${String(err)}`;
 }
 
@@ -52,6 +55,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [networkError, setNetworkError] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -95,8 +99,10 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       // ensureDefaultCategories's own doc comment) — a install-time-only concern, so this
       // shouldn't block getting into the app either if it somehow fails.
       try {
-        const { getLocalUserId, ensureDefaultCategories } = await import("@/local/localUser");
-        ensureDefaultCategories(driver, getLocalUserId(driver));
+        const { getLocalUserId, ensureDefaultCategories, mergeDuplicateCategories } = await import("@/local/localUser");
+        const userId = getLocalUserId(driver);
+        ensureDefaultCategories(driver, userId);
+        mergeDuplicateCategories(driver, userId);
       } catch (err) {
         console.error("ensure default categories on boot failed", err);
       }
@@ -122,9 +128,30 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNetworkError(false);
     setLoading(true);
     try {
       await completeFirstRun({ mode, name, email, password });
+      setReady(true);
+    } catch (err) {
+      setError(describeError(err));
+      // ApiClientError means the server actually answered (with a real 4xx/5xx — wrong password,
+      // duplicate email, validation, etc.) — that's a genuine problem with the submitted info, not
+      // a connectivity one, so no offline fallback for those. Anything else here is the raw fetch()
+      // in remoteAuth.ts never getting a response at all (offline, DNS, TLS, or the remote host
+      // being unreachable from this specific network) — see continueOffline's own doc comment for
+      // why that specific case gets an escape hatch instead of leaving the user stuck.
+      setNetworkError(!(err instanceof ApiClientError));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onContinueOffline() {
+    setError(null);
+    setLoading(true);
+    try {
+      await continueOffline(email);
       setReady(true);
     } catch (err) {
       setError(describeError(err));
@@ -178,7 +205,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
             required
           />
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-500 leading-relaxed">{error}</p>}
           <button
             type="submit"
             disabled={loading}
@@ -186,6 +213,16 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
           >
             {loading ? "در حال بررسی..." : mode === "login" ? "ورود" : "ثبت‌نام"}
           </button>
+          {networkError && (
+            <button
+              type="button"
+              onClick={onContinueOffline}
+              disabled={loading}
+              className="w-full rounded-xl border border-gray-200 text-gray-500 py-2.5 text-sm hover:bg-gray-50 disabled:opacity-40"
+            >
+              فعلاً بدون اینترنت ادامه بده (بعداً دوباره تلاش می‌کنیم)
+            </button>
+          )}
         </form>
         <button
           type="button"
