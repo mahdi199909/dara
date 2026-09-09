@@ -10,7 +10,7 @@
     <color name="colorPrimary">#0E5F54</color>
     <color name="colorPrimaryDark">#074039</color>
     <color name="colorAccent">#46B9A6</color>
-    <!-- Light-theme canvas (see globals.css's --canvas) — used behind the splash artwork so a
-         fresh cold start shows this instead of stark white or the old brand blue. -->
+    <!-- Light-theme canvas (see globals.css's canvas variable) — used behind the splash artwork
+         so a fresh cold start shows this instead of stark white or the old brand blue. -->
     <color name="splashBackground">#EFF2EE</color>
 </resources>
