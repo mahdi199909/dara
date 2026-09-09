@@ -164,12 +164,12 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   if (ready) return <>{children}</>;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" dir="rtl">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow p-6 space-y-4">
+    <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">
+      <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon.png" alt="پروا" className="h-14 w-14 rounded-2xl mx-auto" />
-        <h1 className="text-lg font-bold text-gray-800 text-center">{mode === "login" ? "ورود به پروا" : "ساخت حساب در پروا"}</h1>
-        <p className="text-xs text-gray-400 text-center leading-relaxed">
+        <h1 className="text-lg font-bold text-ink text-center">{mode === "login" ? "ورود به پروا" : "ساخت حساب در پروا"}</h1>
+        <p className="text-xs text-muted text-center leading-relaxed">
           این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>
         {bootError && (
@@ -183,7 +183,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="نام"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+              className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
               required
             />
           )}
@@ -193,7 +193,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             onChange={(e) => setEmail(e.target.value)}
             placeholder="ایمیل"
             dir="ltr"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
+            className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm text-left"
             required
           />
           <input
@@ -202,14 +202,14 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             onChange={(e) => setPassword(e.target.value)}
             placeholder="رمز عبور"
             dir="ltr"
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-left"
+            className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm text-left"
             required
           />
           {error && <p className="text-xs text-red-500 leading-relaxed">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+            className="w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40"
           >
             {loading ? "در حال بررسی..." : mode === "login" ? "ورود" : "ثبت‌نام"}
           </button>
@@ -218,7 +218,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
               type="button"
               onClick={onContinueOffline}
               disabled={loading}
-              className="w-full rounded-xl border border-gray-200 text-gray-500 py-2.5 text-sm hover:bg-gray-50 disabled:opacity-40"
+              className="w-full rounded-xl border border-line text-muted py-2.5 text-sm hover:bg-canvas disabled:opacity-40"
             >
               فعلاً بدون اینترنت ادامه بده (بعداً دوباره تلاش می‌کنیم)
             </button>
@@ -227,7 +227,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         <button
           type="button"
           onClick={() => setMode(mode === "login" ? "register" : "login")}
-          className="w-full text-center text-xs text-gray-400 hover:text-gray-600"
+          className="w-full text-center text-xs text-muted hover:text-ink"
         >
           {mode === "login" ? "حساب ندارید؟ ثبت‌نام کنید" : "قبلاً حساب دارید؟ وارد شوید"}
         </button>

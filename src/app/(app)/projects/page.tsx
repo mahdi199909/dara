@@ -33,8 +33,8 @@ export default function ProjectsPage() {
   return (
     <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-800">پروژه‌ها</h1>
-        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700">
+        <h1 className="text-lg font-bold text-ink">پروژه‌ها</h1>
+        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90">
           <PlusIcon className="w-4 h-4" />
           پروژه جدید
         </button>
@@ -43,9 +43,9 @@ export default function ProjectsPage() {
       {showForm && (
         <Card className="p-4">
           <form onSubmit={submit} className="space-y-3">
-            <input autoFocus required value={name} onChange={(e) => setName(e.target.value)} placeholder="نام پروژه" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="توضیحات (اختیاری)" rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm resize-none" />
-            <button type="submit" disabled={loading} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
+            <input autoFocus required value={name} onChange={(e) => setName(e.target.value)} placeholder="نام پروژه" className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="توضیحات (اختیاری)" rows={2} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm resize-none" />
+            <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">
               ثبت پروژه
             </button>
           </form>
@@ -57,13 +57,13 @@ export default function ProjectsPage() {
           <Link key={p.id} href={`/projects/detail?id=${p.id}`}>
             <Card className="p-4 h-full hover:shadow-md transition">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-gray-800">{p.name}</h3>
-                <span className="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">
+                <h3 className="font-bold text-ink">{p.name}</h3>
+                <span className="text-xs bg-accent-soft text-accent px-2 py-0.5 rounded-full">
                   {PROJECT_STATUS_LABELS[p.status as ProjectStatus]}
                 </span>
               </div>
-              {p.description && <p className="text-xs text-gray-400 mt-1.5 line-clamp-2">{p.description}</p>}
-              <p className="text-xs text-gray-400 mt-3">{p._count?.tasks ?? 0} کار</p>
+              {p.description && <p className="text-xs text-muted mt-1.5 line-clamp-2">{p.description}</p>}
+              <p className="text-xs text-muted mt-3">{p._count?.tasks ?? 0} کار</p>
             </Card>
           </Link>
         ))}

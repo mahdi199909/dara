@@ -123,29 +123,29 @@ export default function TimePicker({
         type="button"
         onClick={openPicker}
         dir="ltr"
-        className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-center hover:border-gray-300 transition"
+        className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-line px-3 py-2.5 text-sm text-center hover:border-line transition"
       >
-        <ClockIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-        {value ? toPersianDigits(value) : <span className="text-gray-400">{placeholder}</span>}
+        <ClockIcon className="w-3.5 h-3.5 text-muted shrink-0" />
+        {value ? toPersianDigits(value) : <span className="text-muted">{placeholder}</span>}
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-xs mx-auto bg-white rounded-t-2xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-xs mx-auto bg-surface rounded-t-2xl shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-gray-800 text-sm">
+              <h3 className="font-bold text-ink text-sm">
                 {mode === "type" ? placeholder || "زمان" : step === "hour" ? "ساعت را انتخاب کن" : "دقیقه را انتخاب کن"}
               </h3>
-              <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+              <button type="button" onClick={() => setOpen(false)} className="text-muted hover:text-ink p-1">
                 <XIcon className="w-4 h-4" />
               </button>
             </div>
 
             {mode === "dial" && step === "hour" && (
               <div className="relative mx-auto" style={{ width: DIAL_SIZE, height: DIAL_SIZE }} dir="ltr">
-                <div className="absolute inset-0 rounded-full bg-gray-50" />
+                <div className="absolute inset-0 rounded-full bg-canvas" />
                 <div
-                  className="absolute rounded-full border border-gray-200"
+                  className="absolute rounded-full border border-line"
                   style={{
                     left: DIAL_CENTER - (INNER_RADIUS + INNER_BTN / 2),
                     top: DIAL_CENTER - (INNER_RADIUS + INNER_BTN / 2),
@@ -160,7 +160,7 @@ export default function TimePicker({
                       type="button"
                       key={i}
                       onClick={() => pickHour(i)}
-                      className="absolute flex items-center justify-center rounded-full text-xs tabular-nums text-gray-500 hover:bg-brand-50 hover:text-brand-700 transition"
+                      className="absolute flex items-center justify-center rounded-full text-xs tabular-nums text-muted hover:bg-accent-soft hover:text-accent transition"
                       style={{ left: x - INNER_BTN / 2, top: y - INNER_BTN / 2, width: INNER_BTN, height: INNER_BTN }}
                     >
                       {toPersianDigits(pad2(i))}
@@ -174,29 +174,29 @@ export default function TimePicker({
                       type="button"
                       key={i}
                       onClick={() => pickHour(i)}
-                      className="absolute flex items-center justify-center rounded-full text-sm tabular-nums text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition"
+                      className="absolute flex items-center justify-center rounded-full text-sm tabular-nums text-ink hover:bg-accent-soft hover:text-accent transition"
                       style={{ left: x - OUTER_BTN / 2, top: y - OUTER_BTN / 2, width: OUTER_BTN, height: OUTER_BTN }}
                     >
                       {toPersianDigits(pad2(i))}
                     </button>
                   );
                 })}
-                <div className="absolute rounded-full bg-gray-300" style={{ left: DIAL_CENTER - 3, top: DIAL_CENTER - 3, width: 6, height: 6 }} />
+                <div className="absolute rounded-full bg-line" style={{ left: DIAL_CENTER - 3, top: DIAL_CENTER - 3, width: 6, height: 6 }} />
               </div>
             )}
 
             {mode === "dial" && step === "minute" && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <button type="button" onClick={() => setStep("hour")} className="text-xs text-gray-400 hover:text-gray-600">
+                  <button type="button" onClick={() => setStep("hour")} className="text-xs text-muted hover:text-ink">
                     ← بازگشت به ساعت
                   </button>
-                  <button type="button" onClick={switchToTypeFromMinuteStep} className="text-xs text-brand-600 hover:text-brand-700">
+                  <button type="button" onClick={switchToTypeFromMinuteStep} className="text-xs text-accent hover:text-accent">
                     دقیقه‌ی دقیق‌تر؟ تایپ کن
                   </button>
                 </div>
                 <div className="relative mx-auto" style={{ width: DIAL_SIZE, height: DIAL_SIZE }} dir="ltr">
-                  <div className="absolute inset-0 rounded-full bg-gray-50" />
+                  <div className="absolute inset-0 rounded-full bg-canvas" />
                   {MINUTES.map((i, idx) => {
                     const { x, y } = polarPos(idx, 12, OUTER_RADIUS);
                     return (
@@ -204,14 +204,14 @@ export default function TimePicker({
                         type="button"
                         key={i}
                         onClick={() => pickMinute(i)}
-                        className="absolute flex items-center justify-center rounded-full text-sm tabular-nums text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition"
+                        className="absolute flex items-center justify-center rounded-full text-sm tabular-nums text-ink hover:bg-accent-soft hover:text-accent transition"
                         style={{ left: x - OUTER_BTN / 2, top: y - OUTER_BTN / 2, width: OUTER_BTN, height: OUTER_BTN }}
                       >
                         {toPersianDigits(pad2(i))}
                       </button>
                     );
                   })}
-                  <div className="absolute rounded-full bg-gray-300" style={{ left: DIAL_CENTER - 3, top: DIAL_CENTER - 3, width: 6, height: 6 }} />
+                  <div className="absolute rounded-full bg-line" style={{ left: DIAL_CENTER - 3, top: DIAL_CENTER - 3, width: 6, height: 6 }} />
                 </div>
               </div>
             )}
@@ -229,9 +229,9 @@ export default function TimePicker({
                     e.preventDefault();
                     confirmTyped();
                   }}
-                  className="w-16 rounded-xl border border-gray-200 py-3 text-center text-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  className="bg-surface w-16 rounded-xl border border-line py-3 text-center text-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
-                <span className="text-lg font-bold text-gray-400">:</span>
+                <span className="text-lg font-bold text-muted">:</span>
                 <input
                   ref={minuteInputRef}
                   type="text"
@@ -244,19 +244,19 @@ export default function TimePicker({
                     confirmTyped();
                   }}
                   placeholder={toPersianDigits("00")}
-                  className="w-16 rounded-xl border border-gray-200 py-3 text-center text-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-400"
+                  className="bg-surface w-16 rounded-xl border border-line py-3 text-center text-lg tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-400"
                 />
               </div>
             )}
 
             <div className="flex gap-2 mt-5">
               {!required && (
-                <button type="button" onClick={clear} className="flex-1 rounded-xl border border-gray-200 text-gray-500 text-sm py-2.5 hover:bg-gray-50">
+                <button type="button" onClick={clear} className="flex-1 rounded-xl border border-line text-muted text-sm py-2.5 hover:bg-canvas">
                   پاک کردن
                 </button>
               )}
               {mode === "type" && (
-                <button type="button" onClick={confirmTyped} className="flex-1 rounded-xl bg-brand-600 text-white text-sm py-2.5 hover:bg-brand-700">
+                <button type="button" onClick={confirmTyped} className="flex-1 rounded-xl bg-accent text-on-accent text-sm py-2.5 hover:opacity-90">
                   تأیید
                 </button>
               )}

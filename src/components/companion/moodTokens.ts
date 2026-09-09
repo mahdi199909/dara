@@ -1,6 +1,13 @@
 // Color tokens per Companion mood — see doc/companion-preview.html for the approved visual
-// reference this mirrors exactly. The app is light-only (no dark theme), so this is the only
-// palette that will ever exist for this component.
+// reference this mirrors exactly. Updated in place for the Persian Blue -> deep-teal rebrand
+// (doc/theme-prompt.md §2.1) by swapping each old brand-scale hex for its new value at the same
+// scale position — not a redesign. Deliberately NOT wired to the light/dark CSS variables like
+// the rest of the app: doc/companion-preview.html has no approved dark-mode version of this
+// face, and guessing 5 moods' worth of dark-mode fill/ink pairs isn't something to do without
+// that reference. The face renders with these same fixed colors in both themes for now — a
+// known, flagged gap (same treatment the widget dark-theme work gets in this same PR), not an
+// oversight. ASLEEP/SLEEPY intentionally stay plain gray in both themes either way — a
+// "drained of color" sleepy face was never meant to carry brand color.
 import type { CompanionMood } from "@/lib/companion";
 
 export interface MoodTokens {
@@ -9,21 +16,23 @@ export interface MoodTokens {
   ring: string; // progress-ring fill color
 }
 
-// Same for every mood — the unfilled portion of the progress ring never changes color.
-export const RING_TRACK_COLOR = "#e5e7eb";
-export const BLINDFOLD_BAND_COLOR = "#c9862e"; // signal-500
+// Same for every mood — the unfilled portion of the progress ring never changes color. Uses the
+// `line` CSS variable directly (this file is plain TS, not Tailwind classes) so at least the
+// track itself — unlike the mood fills above — does stay theme-correct.
+export const RING_TRACK_COLOR = "rgb(var(--line))";
+export const BLINDFOLD_BAND_COLOR = "#c9862e"; // signal-500 (unchanged by the rebrand)
 // Alternating brand-600 / signal-500, in render order — never red, matches the product's
 // "no color ever means judgment" rule.
-export const CONFETTI_COLORS = ["#1c39bb", "#c9862e"];
+export const CONFETTI_COLORS = ["#0e5f54", "#c9862e"];
 
 export const MOOD_TOKENS: Record<CompanionMood, MoodTokens> = {
   ASLEEP: { fill: "#e5e7eb", ink: "#9ca3af", ring: "#d1d5db" },
   SLEEPY: { fill: "#e5e7eb", ink: "#6b7280", ring: "#d1d5db" },
-  FRESH: { fill: "#eef1fb", ink: "#182e96", ring: "#1c39bb" },
-  NEUTRAL: { fill: "#eef1fb", ink: "#152773", ring: "#1c39bb" },
-  CONTENT: { fill: "#d9defa", ink: "#152773", ring: "#1c39bb" },
-  HAPPY: { fill: "#b3bdf0", ink: "#182e96", ring: "#1c39bb" },
-  CELEBRATING: { fill: "#8695e3", ink: "#13215d", ring: "#1c39bb" },
+  FRESH: { fill: "#f0f7f6", ink: "#0a4f46", ring: "#0e5f54" },
+  NEUTRAL: { fill: "#f0f7f6", ink: "#074039", ring: "#0e5f54" },
+  CONTENT: { fill: "#dbeeeb", ink: "#074039", ring: "#0e5f54" },
+  HAPPY: { fill: "#b7e1dc", ink: "#0a4f46", ring: "#0e5f54" },
+  CELEBRATING: { fill: "#88d3c9", ink: "#05322c", ring: "#0e5f54" },
   BLINDFOLDED: { fill: "#f7eeda", ink: "#8a5f16", ring: "#c9862e" },
 };
 

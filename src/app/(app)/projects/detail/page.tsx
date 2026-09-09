@@ -30,7 +30,7 @@ function ProjectDetailContent() {
   const [completing, setCompleting] = useState(false);
   const { format } = useCurrencyUnit();
 
-  if (!data) return <p className="text-sm text-gray-400 text-center py-10">در حال بارگذاری...</p>;
+  if (!data) return <p className="text-sm text-muted text-center py-10">در حال بارگذاری...</p>;
 
   const { project, tasks, activities, transactions, summary, virtualAssetEntry } = data;
 
@@ -49,18 +49,18 @@ function ProjectDetailContent() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-gray-800">{project.name}</h1>
-            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+            <h1 className="text-lg font-bold text-ink">{project.name}</h1>
+            <span className="text-xs bg-canvas text-muted px-2 py-0.5 rounded-full">
               {PROJECT_STATUS_LABELS[project.status as ProjectStatus]}
             </span>
           </div>
-          {project.description && <p className="text-sm text-gray-500 mt-1">{project.description}</p>}
+          {project.description && <p className="text-sm text-muted mt-1">{project.description}</p>}
         </div>
         {project.status !== "COMPLETED" && (
           <button
             onClick={markComplete}
             disabled={completing}
-            className="shrink-0 flex items-center gap-1.5 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700 disabled:opacity-40"
+            className="shrink-0 flex items-center gap-1.5 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90 disabled:opacity-40"
           >
             <CheckSquareIcon className="w-4 h-4" />
             اتمام پروژه
@@ -69,8 +69,8 @@ function ProjectDetailContent() {
       </div>
 
       {virtualAssetEntry && (
-        <Card className="p-4 bg-brand-50 border-brand-100">
-          <p className="text-sm text-brand-800">
+        <Card className="p-4 bg-accent-soft border-accent">
+          <p className="text-sm text-accent">
             این پروژه در {formatJalali(new Date(virtualAssetEntry.date))} تکمیل شد و به‌عنوان یک دارایی مجازی جداگانه به ارزش{" "}
             <strong>{format(virtualAssetEntry.totalValue, { withSuffix: true })}</strong> در سیستم دارایی ثبت شده است.
           </p>
@@ -79,11 +79,11 @@ function ProjectDetailContent() {
 
       <Card className="p-5">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-500">پیشرفت</span>
-          <span className="text-sm font-bold text-brand-700">{summary.progress}٪</span>
+          <span className="text-sm text-muted">پیشرفت</span>
+          <span className="text-sm font-bold text-accent">{summary.progress}٪</span>
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-brand-600" style={{ width: `${summary.progress}%` }} />
+        <div className="w-full h-2 bg-canvas rounded-full overflow-hidden">
+          <div className="h-full bg-accent" style={{ width: `${summary.progress}%` }} />
         </div>
         <div className="grid grid-cols-2 gap-4 mt-5">
           <StatItem label="زمان کل" value={formatDuration(summary.totalDurationMin)} />
@@ -94,7 +94,7 @@ function ProjectDetailContent() {
       </Card>
 
       <Card className="p-5">
-        <h2 className="font-bold text-gray-800 text-sm mb-3">جریان نقدینگی پروژه</h2>
+        <h2 className="font-bold text-ink text-sm mb-3">جریان نقدینگی پروژه</h2>
         <div className="grid grid-cols-3 gap-4">
           <StatItem label="درآمد" value={format(summary.income, { withSuffix: true })} tone="positive" />
           <StatItem label="هزینه مستقیم" value={format(summary.directCost, { withSuffix: true })} tone="negative" />
@@ -107,16 +107,16 @@ function ProjectDetailContent() {
       </Card>
 
       <section>
-        <h2 className="font-bold text-gray-700 text-sm mb-2">کارها ({summary.doneTasks}/{summary.totalTasks})</h2>
+        <h2 className="font-bold text-ink text-sm mb-2">کارها ({summary.doneTasks}/{summary.totalTasks})</h2>
         <Card>
           {tasks.length === 0 ? (
             <EmptyState message="کاری برای این پروژه ثبت نشده." />
           ) : (
-            <ul className="divide-y divide-gray-50">
+            <ul className="divide-y divide-line">
               {tasks.map((t: any) => (
                 <li key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className={t.status === "DONE" ? "line-through text-gray-400" : "text-gray-700"}>{t.title}</span>
-                  <span className="text-xs text-gray-400">{TASK_STATUS_LABELS[t.status as TaskStatus]}</span>
+                  <span className={t.status === "DONE" ? "line-through text-muted" : "text-ink"}>{t.title}</span>
+                  <span className="text-xs text-muted">{TASK_STATUS_LABELS[t.status as TaskStatus]}</span>
                 </li>
               ))}
             </ul>
@@ -125,7 +125,7 @@ function ProjectDetailContent() {
       </section>
 
       <section>
-        <h2 className="font-bold text-gray-700 text-sm mb-2">فعالیت‌ها</h2>
+        <h2 className="font-bold text-ink text-sm mb-2">فعالیت‌ها</h2>
         {activities.length === 0 ? (
           <Card>
             <EmptyState message="فعالیتی برای این پروژه ثبت نشده." />
@@ -140,13 +140,13 @@ function ProjectDetailContent() {
               }, {})
             ).map(([categoryName, items]) => (
               <div key={categoryName}>
-                <p className="text-xs text-gray-400 mb-1 px-1">{categoryName}</p>
+                <p className="text-xs text-muted mb-1 px-1">{categoryName}</p>
                 <Card>
-                  <ul className="divide-y divide-gray-50">
+                  <ul className="divide-y divide-line">
                     {(items as any[]).map((a) => (
                       <li key={a.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                        <span className="text-gray-700">{a.title}</span>
-                        <span className="text-xs text-gray-400">{formatDuration(a.totalDurationMin)}</span>
+                        <span className="text-ink">{a.title}</span>
+                        <span className="text-xs text-muted">{formatDuration(a.totalDurationMin)}</span>
                       </li>
                     ))}
                   </ul>
@@ -158,18 +158,18 @@ function ProjectDetailContent() {
       </section>
 
       <section>
-        <h2 className="font-bold text-gray-700 text-sm mb-2">تراکنش‌ها</h2>
+        <h2 className="font-bold text-ink text-sm mb-2">تراکنش‌ها</h2>
         <Card>
           {transactions.length === 0 ? (
             <EmptyState message="تراکنشی برای این پروژه ثبت نشده." />
           ) : (
-            <ul className="divide-y divide-gray-50">
+            <ul className="divide-y divide-line">
               {transactions.map((t: any) => (
                 <li key={t.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span className="text-gray-700">{t.description || "تراکنش"}</span>
+                  <span className="text-ink">{t.description || "تراکنش"}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">{formatJalali(new Date(t.date))}</span>
-                    <span className={t.type === "EXPENSE" ? "text-waste-600" : "text-brand-700"}>{format(t.amount, { withSuffix: true })}</span>
+                    <span className="text-xs text-muted">{formatJalali(new Date(t.date))}</span>
+                    <span className={t.type === "EXPENSE" ? "text-waste" : "text-accent"}>{format(t.amount, { withSuffix: true })}</span>
                   </div>
                 </li>
               ))}

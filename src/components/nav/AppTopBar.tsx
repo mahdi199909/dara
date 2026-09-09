@@ -33,11 +33,11 @@ export default function AppTopBar({ userName }: { userName: string }) {
 
   return (
     <header
-      className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-gray-100 px-4"
+      className="sticky top-0 z-20 bg-surface/80 backdrop-blur border-b border-line px-4"
       style={{ height: TOP_BAR_HEIGHT_PX }}
     >
       <div className="h-full grid grid-cols-3 items-center">
-        <p className="font-bold text-gray-800 text-sm truncate">مسیر {userName}</p>
+        <p className="font-bold text-ink text-sm truncate">مسیر {userName}</p>
 
         <div className="flex justify-center">
           {isHome && companionEnabled && companionState && (
@@ -52,7 +52,7 @@ export default function AppTopBar({ userName }: { userName: string }) {
 
         <div className="flex items-center justify-end">
           {hours !== null && (
-            <Link href="/capital" className="bg-brand-50 rounded-2xl px-3 py-1 text-sm font-bold text-brand-700 leading-none">
+            <Link href="/capital" className="bg-accent-soft rounded-2xl px-3 py-1 text-sm font-bold text-accent leading-none">
               {toPersianDigits(hours)} ساعت
             </Link>
           )}

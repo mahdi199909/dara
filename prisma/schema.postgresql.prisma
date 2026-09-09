@@ -86,6 +86,9 @@ model Settings {
   dailyProductiveTargetMin Int     @default(360)
   companionEnabled         Boolean @default(true)
 
+  // Light/dark/system UI theme preference — see schema.prisma's copy of this comment.
+  theme String @default("system") // light | dark | system
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

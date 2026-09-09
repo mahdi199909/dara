@@ -18,5 +18,6 @@ export const updateSettingsSchema = z.object({
   sleepHour: z.number().int().min(0).max(23).optional(),
   dailyProductiveTargetMin: z.number().int().min(30).max(900).optional(),
   companionEnabled: z.boolean().optional(),
+  theme: z.enum(["light", "dark", "system"]).optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

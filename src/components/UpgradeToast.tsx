@@ -46,13 +46,13 @@ export default function UpgradeToast() {
 
   return (
     <div className="fixed top-0 inset-x-0 z-50 flex justify-center px-4 pt-3 pointer-events-none" dir="rtl">
-      <div className="pointer-events-auto w-full max-w-sm bg-white rounded-2xl border border-gray-100 shadow-card p-3 space-y-2">
+      <div className="pointer-events-auto w-full max-w-sm bg-surface rounded-2xl border border-line shadow-card p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1">
-            <p className="text-sm text-gray-800">{phraseBuildAdded(shown.addedMinutes, shown.label)}</p>
-            <p className="text-xs text-gray-500">{phraseMilestoneProgress(shown.categoryTotalMinutes, nextMilestoneHours, remainingMinutes)}</p>
+            <p className="text-sm text-ink">{phraseBuildAdded(shown.addedMinutes, shown.label)}</p>
+            <p className="text-xs text-muted">{phraseMilestoneProgress(shown.categoryTotalMinutes, nextMilestoneHours, remainingMinutes)}</p>
           </div>
-          <button onClick={() => setShown(null)} aria-label="بستن" className="text-gray-400 hover:text-gray-600 p-1 shrink-0">
+          <button onClick={() => setShown(null)} aria-label="بستن" className="text-muted hover:text-ink p-1 shrink-0">
             <XIcon className="w-3.5 h-3.5" />
           </button>
         </div>

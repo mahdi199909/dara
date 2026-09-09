@@ -2,17 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Semantic theme tokens (see doc/theme-prompt.md §1) — components reference these only via the
+   `canvas`/`surface`/`ink`/`muted`/`line`/`accent`/`accent-soft`/`on-accent`/`waste`/`signal`
+   Tailwind colors (mapped in tailwind.config.ts), never these variables directly. Each channel
+   is space-separated "R G B" (not a hex string or comma-separated) so Tailwind's
+   rgb(var(--x) / <alpha-value>) pattern can splice in an opacity modifier like `bg-surface/60`.
+   Flipping *only the values* here — never a component's own classes — is what makes dark mode
+   a one-block, one-file change. */
+:root {
+  --canvas: 239 242 238; /* #EFF2EE — office paper, not raw white */
+  --surface: 251 252 250; /* #FBFCFA — card */
+  --ink: 20 24 26; /* #14181A — primary text */
+  --muted: 92 99 96; /* #5C6360 — secondary text */
+  --line: 220 227 222; /* #DCE3DE — borders/dividers */
+  --accent: 14 95 84; /* #0E5F54 = brand-600 */
+  --accent-soft: 227 238 235; /* #E3EEEB — tinted card/pill backgrounds */
+  --on-accent: 255 255 255; /* #FFFFFF — text on a solid accent fill */
+  --waste: 168 71 59; /* #A8473B = waste-600 */
+  --waste-soft: 251 225 222; /* #FBE1DE = waste-100 */
+  --signal: 138 95 22; /* #8A5F16 = signal-700 */
+  --signal-soft: 247 238 218; /* #F7EEDA = signal-100 */
+}
+
+/* Dark theme — only the variable values change; every component keeps the exact same classes.
+   Three rules this block must never break (doc/theme-prompt.md §2.8): surfaces read lighter
+   than canvas (elevation reads as brightness here, not shadow), no pure #000/#FFF anywhere,
+   and the neutrals keep a deliberate brand-tinted cast rather than going flat gray. */
+.dark {
+  --canvas: 14 20 18; /* #0E1412 — not pure black */
+  --surface: 22 29 27; /* #161D1B — lighter than canvas */
+  --ink: 231 236 234; /* #E7ECEA — not pure white */
+  --muted: 147 160 155; /* #93A09B */
+  --line: 37 48 41; /* #253029 */
+  --accent: 70 185 166; /* #46B9A6 = brand-400 */
+  --accent-soft: 22 48 43; /* #16302B */
+  --on-accent: 8 17 15; /* #08110F — dark text on the lighter dark-mode accent */
+  --waste: 224 146 128; /* #E09280 = waste-300 */
+  --waste-soft: 42 26 22; /* #2A1A16 */
+  --signal: 214 166 90; /* #D6A65A = signal-400 */
+  --signal-soft: 42 34 19; /* #2A2213 */
+}
+
 html {
   direction: rtl;
 }
 
 body {
-  background-color: #f8f9fb;
-  color: #1a1d29;
+  background-color: rgb(var(--canvas));
+  color: rgb(var(--ink));
 }
 
 ::selection {
-  background-color: #b3bdf0;
+  background-color: #b7e1dc;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -20,7 +61,7 @@ body {
   height: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #d9defa;
+  background-color: rgb(var(--line));
   border-radius: 999px;
 }
 

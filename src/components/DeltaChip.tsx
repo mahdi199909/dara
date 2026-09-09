@@ -20,7 +20,7 @@ export default function DeltaChip({ current, previous, polarity }: { current: nu
 
   const up = percent > 0;
   const isGood = polarity === "neutral" ? null : polarity === "higherIsBetter" ? up : !up;
-  const toneClass = isGood === true ? "text-brand-700" : "text-gray-400";
+  const toneClass = isGood === true ? "text-accent" : "text-muted";
 
   return (
     <span className={`inline-flex items-center gap-1 text-xs ${toneClass}`}>

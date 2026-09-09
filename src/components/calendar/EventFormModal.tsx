@@ -116,15 +116,15 @@ export default function EventFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30">
-      <div className="w-full max-w-md mx-auto bg-white rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+      <div className="w-full max-w-md mx-auto bg-surface rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between px-5 pt-5">
-          <h2 className="font-bold text-gray-800">{isEdit ? "ویرایش رویداد" : "رویداد جدید"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+          <h2 className="font-bold text-ink">{isEdit ? "ویرایش رویداد" : "رویداد جدید"}</h2>
+          <button onClick={onClose} className="text-muted hover:text-ink p-1">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
         <form onSubmit={submit} className="p-5 space-y-3">
-          <input autoFocus required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان رویداد" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
+          <input autoFocus required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان رویداد" className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
               <JalaliDateInput value={date} onChange={setDate} />
@@ -132,8 +132,8 @@ export default function EventFormModal({
             <TimePicker value={startTime} onChange={setStartTime} required />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input type="number" dir="ltr" min={5} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="مدت (دقیقه)" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm">
+            <input type="number" dir="ltr" min={5} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="مدت (دقیقه)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
+            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="bg-surface rounded-xl border border-line px-3 py-2 text-sm">
               <option value="">دسته‌بندی</option>
               {categories.filter((c: any) => c.isActive).map((c: any) => (
                 <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
@@ -146,15 +146,15 @@ export default function EventFormModal({
             <MoneyInput value={incomeAmount} onChange={setIncomeAmount} placeholder="درآمد" />
           </div>
 
-          <select value={recurrenceFreq} onChange={(e) => setRecurrenceFreq(e.target.value as RecurrenceFreq)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
+          <select value={recurrenceFreq} onChange={(e) => setRecurrenceFreq(e.target.value as RecurrenceFreq)} className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm">
             {RECURRENCE_FREQS.map((f) => (
               <option key={f} value={f}>{RECURRENCE_LABELS[f]}</option>
             ))}
           </select>
 
           {recurrenceFreq !== "NONE" && (
-            <div className="rounded-xl bg-gray-50 p-3 space-y-2">
-              <p className="text-xs text-gray-500">پایان تکرار</p>
+            <div className="rounded-xl bg-canvas p-3 space-y-2">
+              <p className="text-xs text-muted">پایان تکرار</p>
               <div className="flex gap-1.5">
                 {(
                   [
@@ -168,7 +168,7 @@ export default function EventFormModal({
                     key={opt.key}
                     onClick={() => setRecurrenceEndMode(opt.key)}
                     className={`text-xs px-2.5 py-1.5 rounded-lg ${
-                      recurrenceEndMode === opt.key ? "bg-brand-600 text-white" : "bg-white text-gray-500 border border-gray-200"
+                      recurrenceEndMode === opt.key ? "bg-accent text-on-accent" : "bg-surface text-muted border border-line"
                     }`}
                   >
                     {opt.label}
@@ -184,7 +184,7 @@ export default function EventFormModal({
                   value={recurrenceCount}
                   onChange={(e) => setRecurrenceCount(e.target.value)}
                   placeholder="تعداد تکرار"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-right"
+                  className="bg-surface w-full rounded-lg border border-line px-3 py-2 text-sm text-right"
                 />
               )}
               {recurrenceEndMode === "DATE" && <JalaliDateInput value={recurrenceUntil} onChange={setRecurrenceUntil} />}
@@ -193,7 +193,7 @@ export default function EventFormModal({
 
           {!isEdit && (
             <div>
-              <p className="text-xs text-gray-500 mb-1.5">یادآوری</p>
+              <p className="text-xs text-muted mb-1.5">یادآوری</p>
               <div className="flex flex-wrap gap-1.5">
                 {REMINDER_OFFSET_PRESETS.map((p) => (
                   <button
@@ -201,7 +201,7 @@ export default function EventFormModal({
                     key={p.minutes}
                     onClick={() => toggleOffset(p.minutes)}
                     className={`text-xs px-2.5 py-1 rounded-full ${
-                      reminderOffsets.includes(p.minutes) ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                      reminderOffsets.includes(p.minutes) ? "bg-accent text-on-accent" : "bg-canvas text-muted"
                     }`}
                   >
                     {p.label}
@@ -211,7 +211,7 @@ export default function EventFormModal({
             </div>
           )}
 
-          {error && <p className="text-sm text-waste-600">{error}</p>}
+          {error && <p className="text-sm text-waste">{error}</p>}
 
           <div className="flex gap-2">
             {isEdit && (
@@ -219,12 +219,12 @@ export default function EventFormModal({
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-4 rounded-xl border border-waste-200 text-waste-600 hover:bg-waste-50 transition disabled:opacity-40"
+                className="px-4 rounded-xl border border-waste-200 text-waste hover:bg-waste-50 transition disabled:opacity-40"
               >
                 <TrashIcon className="w-4 h-4" />
               </button>
             )}
-            <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700 disabled:opacity-40">
+            <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40">
               {loading ? "در حال ثبت..." : isEdit ? "ذخیره تغییرات" : "ثبت رویداد"}
             </button>
           </div>

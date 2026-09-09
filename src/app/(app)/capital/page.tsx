@@ -109,16 +109,16 @@ export default function CapitalPage() {
 
   return (
     <div className="px-4 py-6 space-y-4">
-      <h1 className="text-lg font-bold text-gray-800">سرمایه من</h1>
+      <h1 className="text-lg font-bold text-ink">سرمایه من</h1>
 
       {!data ? (
-        <p className="text-sm text-gray-400">در حال بارگذاری...</p>
+        <p className="text-sm text-muted">در حال بارگذاری...</p>
       ) : !data.capital.firstRecordAt ? (
         <Card className="p-5">
           <EmptyState
             message="هر ساعتی که روی یک مهارت، پروژه یا کار می‌گذاری، اینجا به‌عنوان دارایی پنهانت جمع می‌شود. سرمایه‌ات از اولین ثبت شروع می‌شود."
             cta={
-              <Link href="/" className="text-xs font-medium text-brand-600 hover:text-brand-700">
+              <Link href="/" className="text-xs font-medium text-accent hover:text-accent">
                 ثبت اول
               </Link>
             }
@@ -127,13 +127,13 @@ export default function CapitalPage() {
       ) : (
         <>
           <Card className="p-5 space-y-1">
-            <p className="text-3xl font-bold text-gray-800">
-              {toPersianDigits(Math.round(data.capital.investedMinutes / 60))} <span className="text-base font-medium text-gray-400">ساعت سرمایه‌گذاری‌شده</span>
+            <p className="text-3xl font-bold text-ink">
+              {toPersianDigits(Math.round(data.capital.investedMinutes / 60))} <span className="text-base font-medium text-muted">ساعت سرمایه‌گذاری‌شده</span>
             </p>
-            <p className="text-sm text-gray-500">
-              معادل تخمینی: <span className="font-bold text-brand-700">{format(data.capital.virtualAssetValue, { withSuffix: true })}</span>
+            <p className="text-sm text-muted">
+              معادل تخمینی: <span className="font-bold text-accent">{format(data.capital.virtualAssetValue, { withSuffix: true })}</span>
             </p>
-            <p className="text-xs text-gray-400 pt-1">از {formatJalali(new Date(data.capital.firstRecordAt), { long: true })}</p>
+            <p className="text-xs text-muted pt-1">از {formatJalali(new Date(data.capital.firstRecordAt), { long: true })}</p>
           </Card>
 
           {identityData && identityData.statements.length > 0 && (
@@ -162,13 +162,13 @@ export default function CapitalPage() {
 
           <Card className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="font-bold text-gray-700 text-sm">روند سرمایه</h2>
+              <h2 className="font-bold text-ink text-sm">روند سرمایه</h2>
               <div className="flex gap-1">
                 {RANGES.map((r) => (
                   <button
                     key={r.key}
                     onClick={() => setRange(r.key)}
-                    className={`text-xs px-2.5 py-1 rounded-lg transition ${range === r.key ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"}`}
+                    className={`text-xs px-2.5 py-1 rounded-lg transition ${range === r.key ? "bg-accent text-on-accent" : "bg-canvas text-muted"}`}
                   >
                     {r.label}
                   </button>
@@ -176,14 +176,14 @@ export default function CapitalPage() {
               </div>
             </div>
             {data.snapshots.length < 2 ? (
-              <p className="text-xs text-gray-400 text-center py-4">با ادامه ثبت، روند رشد اینجا شکل می‌گیرد.</p>
+              <p className="text-xs text-muted text-center py-4">با ادامه ثبت، روند رشد اینجا شکل می‌گیرد.</p>
             ) : (
               <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={data.snapshots} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                   <XAxis dataKey="date" tickFormatter={shortJalali} tick={{ fontSize: 10 }} interval="preserveStartEnd" tickLine={false} />
                   <YAxis tick={{ fontSize: 10 }} tickLine={false} width={32} tickFormatter={(v) => toPersianDigits(Math.round(v / 60))} />
                   <Tooltip labelFormatter={(v) => shortJalali(v as string)} formatter={(v: number) => [`${toPersianDigits(Math.round(v / 60))} ساعت`, "سرمایه"]} />
-                  <Line type="monotone" dataKey="investedMinutes" stroke="#3947c4" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="investedMinutes" stroke="#279183" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -199,24 +199,24 @@ export default function CapitalPage() {
           </div>
 
           <section className="space-y-2">
-            <h2 className="font-bold text-gray-700 text-sm">دارایی‌های مرئی</h2>
+            <h2 className="font-bold text-ink text-sm">دارایی‌های مرئی</h2>
             {(accountsData?.accounts.length ?? 0) === 0 && (assetsData?.assets.length ?? 0) === 0 ? (
               <Card>
                 <EmptyState message="هنوز حساب یا دارایی واقعی ثبت نکرده‌اید." />
               </Card>
             ) : (
               <Card>
-                <ul className="divide-y divide-gray-50">
+                <ul className="divide-y divide-line">
                   {accountsData?.accounts.map((a) => (
                     <li key={a.id} className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-sm text-gray-700">{a.name}</span>
-                      <span className="text-sm font-bold text-gray-800">{format(a.balance, { withSuffix: true })}</span>
+                      <span className="text-sm text-ink">{a.name}</span>
+                      <span className="text-sm font-bold text-ink">{format(a.balance, { withSuffix: true })}</span>
                     </li>
                   ))}
                   {assetsData?.assets.map((a) => (
                     <li key={a.id} className="flex items-center justify-between px-4 py-2.5">
-                      <span className="text-sm text-gray-700">{a.name}</span>
-                      <span className="text-sm font-bold text-gray-800">{format(a.currentValue, { withSuffix: true })}</span>
+                      <span className="text-sm text-ink">{a.name}</span>
+                      <span className="text-sm font-bold text-ink">{format(a.currentValue, { withSuffix: true })}</span>
                     </li>
                   ))}
                 </ul>
@@ -225,7 +225,7 @@ export default function CapitalPage() {
           </section>
 
           <section className="space-y-2">
-            <h2 className="font-bold text-gray-700 text-sm">دارایی‌های پنهان</h2>
+            <h2 className="font-bold text-ink text-sm">دارایی‌های پنهان</h2>
             {!vaData || (vaData.byCategory.length === 0 && vaData.projectEntries.length === 0) ? (
               <Card>
                 <EmptyState message="هنوز مهارت یا پروژه‌ای دارایی پنهان نساخته." />
@@ -237,24 +237,24 @@ export default function CapitalPage() {
                   return (
                     <Card key={bucket.categoryId} className="p-4 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-800">
+                        <span className="text-sm text-ink">
                           {bucket.icon} {bucket.name}
                         </span>
-                        <span className="text-sm font-bold text-gray-800">{formatDuration(minutes)}</span>
+                        <span className="text-sm font-bold text-ink">{formatDuration(minutes)}</span>
                       </div>
                       <MilestoneProgressBar totalMinutes={minutes} nextMilestoneMinutes={nextMilestoneMinutes(minutes)} />
-                      {bucket.total > 0 && <p className="text-xs text-gray-400">معادل تخمینی: {format(bucket.total, { withSuffix: true })}</p>}
+                      {bucket.total > 0 && <p className="text-xs text-muted">معادل تخمینی: {format(bucket.total, { withSuffix: true })}</p>}
                     </Card>
                   );
                 })}
                 {vaData.projectEntries.map((e) => (
                   <Card key={e.id} className="p-4 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-800">{e.project?.name}</span>
-                      <span className="text-sm font-bold text-gray-800">{formatDuration(e.durationMin)}</span>
+                      <span className="text-sm text-ink">{e.project?.name}</span>
+                      <span className="text-sm font-bold text-ink">{formatDuration(e.durationMin)}</span>
                     </div>
                     <MilestoneProgressBar totalMinutes={e.durationMin} nextMilestoneMinutes={nextMilestoneMinutes(e.durationMin)} />
-                    {e.totalValue > 0 && <p className="text-xs text-gray-400">معادل تخمینی: {format(e.totalValue, { withSuffix: true })}</p>}
+                    {e.totalValue > 0 && <p className="text-xs text-muted">معادل تخمینی: {format(e.totalValue, { withSuffix: true })}</p>}
                   </Card>
                 ))}
               </div>
@@ -263,21 +263,21 @@ export default function CapitalPage() {
 
           {installmentsData && installmentsData.plans.length > 0 && (
             <section className="space-y-2">
-              <h2 className="font-bold text-gray-700 text-sm">بدهی‌ها و اقساط</h2>
+              <h2 className="font-bold text-ink text-sm">بدهی‌ها و اقساط</h2>
               <Card>
-                <ul className="divide-y divide-gray-50">
+                <ul className="divide-y divide-line">
                   {installmentsData.plans.map((p) => (
                     <li key={p.id} className="flex items-center justify-between px-4 py-2.5">
                       <div>
-                        <p className="text-sm text-gray-700">{p.title}</p>
-                        <p className="text-xs text-gray-400">{toPersianDigits(p.summary.remainingCount)} قسط باقی‌مانده</p>
+                        <p className="text-sm text-ink">{p.title}</p>
+                        <p className="text-xs text-muted">{toPersianDigits(p.summary.remainingCount)} قسط باقی‌مانده</p>
                       </div>
-                      <span className="text-sm font-bold text-waste-600">{format(p.summary.remainingAmount, { withSuffix: true })}</span>
+                      <span className="text-sm font-bold text-waste">{format(p.summary.remainingAmount, { withSuffix: true })}</span>
                     </li>
                   ))}
-                  <li className="flex items-center justify-between px-4 py-2.5 bg-gray-50">
-                    <span className="text-sm font-medium text-gray-700">جمع بدهی</span>
-                    <span className="text-sm font-bold text-waste-600">{format(totalDebt, { withSuffix: true })}</span>
+                  <li className="flex items-center justify-between px-4 py-2.5 bg-canvas">
+                    <span className="text-sm font-medium text-ink">جمع بدهی</span>
+                    <span className="text-sm font-bold text-waste">{format(totalDebt, { withSuffix: true })}</span>
                   </li>
                 </ul>
               </Card>
@@ -285,23 +285,23 @@ export default function CapitalPage() {
           )}
 
           <section className="space-y-2">
-            <h2 className="font-bold text-gray-700 text-sm">چه چیزی این ماه ساختی</h2>
+            <h2 className="font-bold text-ink text-sm">چه چیزی این ماه ساختی</h2>
             {recentEntries.length === 0 ? (
               <Card>
                 <EmptyState message="هنوز در ۳۰ روز اخیر دارایی پنهانی ثبت نشده." />
               </Card>
             ) : (
               <Card>
-                <ul className="divide-y divide-gray-50">
+                <ul className="divide-y divide-line">
                   {recentEntries.slice(0, 10).map((e: any) => (
                     <li key={e.id} className="flex items-center justify-between px-4 py-2.5">
                       <div className="min-w-0">
-                        <p className="text-sm text-gray-700 truncate">{entryLabel(e) || "—"}</p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-sm text-ink truncate">{entryLabel(e) || "—"}</p>
+                        <p className="text-xs text-muted">
                           {formatDuration(e.durationMin)} · {formatJalali(new Date(e.date))}
                         </p>
                       </div>
-                      <span className="text-sm text-gray-600 shrink-0">{format(e.totalValue, { withSuffix: true })}</span>
+                      <span className="text-sm text-ink shrink-0">{format(e.totalValue, { withSuffix: true })}</span>
                     </li>
                   ))}
                 </ul>

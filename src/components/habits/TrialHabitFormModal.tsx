@@ -36,13 +36,13 @@ export default function TrialHabitFormModal({ onClose, onCreated }: { onClose: (
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30">
-      <div className="w-full max-w-md mx-auto bg-white rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+      <div className="w-full max-w-md mx-auto bg-surface rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between px-5 pt-5">
           <div>
-            <h2 className="font-bold text-gray-800">عادت تستی ۳ روزه</h2>
-            <p className="text-xs text-gray-400 mt-0.5">بر اساس روش Tiny Habits — یک اقدام خیلی کوچک، ۳ روز امتحانش کن</p>
+            <h2 className="font-bold text-ink">عادت تستی ۳ روزه</h2>
+            <p className="text-xs text-muted mt-0.5">بر اساس روش Tiny Habits — یک اقدام خیلی کوچک، ۳ روز امتحانش کن</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+          <button onClick={onClose} className="text-muted hover:text-ink p-1">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
@@ -80,16 +80,16 @@ export default function TrialHabitFormModal({ onClose, onCreated }: { onClose: (
             connectUp
           />
 
-          {error && <p className="text-sm text-waste-600 mt-3">{error}</p>}
+          {error && <p className="text-sm text-waste mt-3">{error}</p>}
 
           <button
             type="submit"
             disabled={loading || !canSubmit}
-            className="w-full mt-4 rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+            className="w-full mt-4 rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40"
           >
             {loading ? "در حال ثبت..." : "شروع عادت تستی"}
           </button>
-          <p className="text-xs text-gray-400 text-center mt-2">
+          <p className="text-xs text-muted text-center mt-2">
             بعد از ۳ روز ازت می‌پرسیم ادامه بدی یا نه — تا اون‌موقع روی استریک اصلی‌ات تأثیری نداره.
           </p>
         </form>
@@ -122,14 +122,14 @@ function ChainStep({
   return (
     <div className="flex gap-3">
       <div className="flex flex-col items-center w-9 shrink-0">
-        <div className={`w-1.5 flex-1 ${connectUp ? "bg-brand-200" : "bg-transparent"}`} style={{ minHeight: connectUp ? "0.75rem" : 0 }} />
-        <div className="w-9 h-9 rounded-full bg-brand-50 border-2 border-brand-200 flex items-center justify-center text-base shrink-0">
+        <div className={`w-1.5 flex-1 ${connectUp ? "bg-accent-soft" : "bg-transparent"}`} style={{ minHeight: connectUp ? "0.75rem" : 0 }} />
+        <div className="w-9 h-9 rounded-full bg-accent-soft border-2 border-accent flex items-center justify-center text-base shrink-0">
           {emoji}
         </div>
-        <div className={`w-1.5 flex-1 ${connectDown ? "bg-brand-200" : "bg-transparent"}`} style={{ minHeight: connectDown ? "0.75rem" : 0 }} />
+        <div className={`w-1.5 flex-1 ${connectDown ? "bg-accent-soft" : "bg-transparent"}`} style={{ minHeight: connectDown ? "0.75rem" : 0 }} />
       </div>
       <div className="flex-1 pb-4">
-        <p className="text-xs font-medium text-gray-500 mb-1">
+        <p className="text-xs font-medium text-muted mb-1">
           {number}. {label}
         </p>
         <input
@@ -137,9 +137,9 @@ function ChainStep({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
         />
-        <p className="text-[11px] text-gray-400 mt-1">{hint}</p>
+        <p className="text-[11px] text-muted mt-1">{hint}</p>
       </div>
     </div>
   );

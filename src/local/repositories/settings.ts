@@ -26,6 +26,7 @@ interface SettingsRow {
   sleepHour: number;
   dailyProductiveTargetMin: number;
   companionEnabled: number;
+  theme: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,9 +39,9 @@ function insertDefaultSettings(db: LocalDb, userId: string): SettingsRow {
   const id = crypto.randomUUID();
   const ts = now();
   db.run(
-    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","wakeHour","sleepHour","dailyProductiveTargetMin","companionEnabled","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, 7, 23, 360, 1, ts, ts]
+    `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","dailyQuoteEnabled","wakeHour","sleepHour","dailyProductiveTargetMin","companionEnabled","theme","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, userId, "Asia/Tehran", "IRT", "TOMAN", "jalali", 1, 7, 23, 360, 1, "system", ts, ts]
   );
   return db.get<SettingsRow>(`SELECT * FROM "Settings" WHERE "id" = ?`, [id])!;
 }
@@ -103,6 +104,7 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.sleepHour !== undefined) set("sleepHour", settingsBody.sleepHour);
     if (settingsBody.dailyProductiveTargetMin !== undefined) set("dailyProductiveTargetMin", settingsBody.dailyProductiveTargetMin);
     if (settingsBody.companionEnabled !== undefined) set("companionEnabled", settingsBody.companionEnabled ? 1 : 0);
+    if (settingsBody.theme !== undefined) set("theme", settingsBody.theme);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 
@@ -119,8 +121,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     const id = crypto.randomUUID();
     const ts = now();
     db.run(
-      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","wakeHour","sleepHour","dailyProductiveTargetMin","companionEnabled","createdAt","updatedAt")
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO "Settings" ("id","userId","timezone","currency","currencyDisplayUnit","calendarType","monthlyIncome","workingHoursMonth","hourlyValueOverride","dailyQuoteEnabled","wakeHour","sleepHour","dailyProductiveTargetMin","companionEnabled","theme","createdAt","updatedAt")
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id,
         userId,
@@ -136,6 +138,7 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
         settingsBody.sleepHour ?? 23,
         settingsBody.dailyProductiveTargetMin ?? 360,
         settingsBody.companionEnabled === false ? 0 : 1,
+        settingsBody.theme ?? "system",
         ts,
         ts,
       ]

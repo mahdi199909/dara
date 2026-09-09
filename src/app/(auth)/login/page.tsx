@@ -37,47 +37,47 @@ function LoginForm() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-lg font-bold mb-4 text-gray-800">ورود</h2>
+    <div className="bg-surface rounded-2xl shadow-sm border border-line p-6">
+      <h2 className="text-lg font-bold mb-4 text-ink">ورود</h2>
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">ایمیل</label>
+          <label className="block text-sm text-ink mb-1">ایمیل</label>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             dir="ltr"
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">رمز عبور</label>
+          <label className="block text-sm text-ink mb-1">رمز عبور</label>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+            className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
             dir="ltr"
           />
         </div>
-        {error && <p className="text-sm text-waste-600">{error}</p>}
+        {error && <p className="text-sm text-waste">{error}</p>}
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700 transition disabled:opacity-50"
+          className="w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
         >
           {loading ? "در حال ورود..." : "ورود"}
         </button>
       </form>
-      <p className="text-center text-sm text-gray-500 mt-4">
+      <p className="text-center text-sm text-muted mt-4">
         حساب ندارید؟{" "}
-        <Link href="/register" className="text-brand-600 font-medium">
+        <Link href="/register" className="text-accent font-medium">
           ثبت‌نام
         </Link>
       </p>
-      <p className="text-center text-xs text-gray-400 mt-3">
+      <p className="text-center text-xs text-muted mt-3">
         حساب دمو از پیش پر شده — فقط دکمه ورود را بزنید.
       </p>
     </div>

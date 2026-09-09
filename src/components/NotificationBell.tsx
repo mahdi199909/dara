@@ -19,7 +19,7 @@ export default function NotificationBell() {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative p-2 rounded-full hover:bg-gray-100 text-gray-500"
+        className="relative p-2 rounded-full hover:bg-canvas text-muted"
         aria-label="اعلان‌ها"
       >
         <BellIcon className="w-5 h-5" />
@@ -34,21 +34,21 @@ export default function NotificationBell() {
           {/* The bell sits at the far-left of the header in this layout (both mobile and
               desktop share one AppTopBar), so the panel must open rightward/inward — anchoring
               via right-0 here would extend it further left, off the edge of the viewport. */}
-          <div className="absolute left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] max-h-96 overflow-y-auto scrollbar-thin bg-white rounded-2xl shadow-lg border border-gray-100 z-40">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <span className="font-medium text-sm text-gray-700">اعلان‌ها</span>
+          <div className="absolute left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] max-h-96 overflow-y-auto scrollbar-thin bg-surface rounded-2xl shadow-lg border border-line z-40">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+              <span className="font-medium text-sm text-ink">اعلان‌ها</span>
               <button onClick={() => setOpen(false)}>
-                <XIcon className="w-4 h-4 text-gray-400" />
+                <XIcon className="w-4 h-4 text-muted" />
               </button>
             </div>
             {notifications.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">اعلان جدیدی نیست.</p>
+              <p className="text-sm text-muted text-center py-8">اعلان جدیدی نیست.</p>
             ) : (
-              <ul className="divide-y divide-gray-50">
+              <ul className="divide-y divide-line">
                 {notifications.map((n: any) => (
-                  <li key={n.id} className="px-4 py-3 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => markRead(n.id)}>
-                    <p className="font-medium text-gray-700">{n.title}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">{n.body}</p>
+                  <li key={n.id} className="px-4 py-3 text-sm hover:bg-canvas cursor-pointer" onClick={() => markRead(n.id)}>
+                    <p className="font-medium text-ink">{n.title}</p>
+                    <p className="text-muted text-xs mt-0.5">{n.body}</p>
                   </li>
                 ))}
               </ul>

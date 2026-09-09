@@ -5,7 +5,7 @@
     android:orientation="vertical"
     android:layoutDirection="rtl"
     android:gravity="center"
-    android:background="#FFFFFF"
+    android:background="#EFF2EE"
     android:padding="32dp">
 
     <ImageView
@@ -21,7 +21,7 @@
         android:layout_marginTop="16dp"
         android:gravity="center"
         android:text="@string/app_name"
-        android:textColor="#1C39BB"
+        android:textColor="#0E5F54"
         android:textSize="22sp"
         android:fontFamily="@font/vazirmatn"
         android:textStyle="bold" />

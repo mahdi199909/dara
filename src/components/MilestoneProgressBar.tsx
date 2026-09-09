@@ -5,8 +5,8 @@
 export default function MilestoneProgressBar({ totalMinutes, nextMilestoneMinutes }: { totalMinutes: number; nextMilestoneMinutes: number | null }) {
   const pct = nextMilestoneMinutes ? Math.min(100, Math.max(0, (totalMinutes / nextMilestoneMinutes) * 100)) : 100;
   return (
-    <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-      <div className="h-full bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
+    <div className="h-1 bg-canvas rounded-full overflow-hidden">
+      <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
     </div>
   );
 }

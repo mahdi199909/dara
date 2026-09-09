@@ -26,12 +26,12 @@ export default function CaptureFormModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={onClose}>
       <div
-        className="w-full max-w-md mx-auto bg-white rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin"
+        className="w-full max-w-md mx-auto bg-surface rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 pt-5 pb-1">
-          <h2 className="font-bold text-gray-800">ثبت کار</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="بستن">
+          <h2 className="font-bold text-ink">ثبت کار</h2>
+          <button onClick={onClose} className="text-muted hover:text-ink p-1" aria-label="بستن">
             <XIcon className="w-5 h-5" />
           </button>
         </div>

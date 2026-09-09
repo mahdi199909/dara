@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Referenced by styles.xml's AppTheme (colorPrimary/colorPrimaryDark/colorAccent had no
+         explicit definition anywhere in this project before — they were resolving to whatever
+         default @capacitor/android's own template supplies, which is where an off-brand blue
+         could show through briefly, e.g. in the system status bar tint on older Android, before
+         the app's own content draws). Values match the deep-teal brand scale (see
+         doc/theme-prompt.md §2.1): colorPrimary = brand-600, colorPrimaryDark = brand-800,
+         colorAccent = brand-400. -->
+    <color name="colorPrimary">#0E5F54</color>
+    <color name="colorPrimaryDark">#074039</color>
+    <color name="colorAccent">#46B9A6</color>
+    <!-- Light-theme canvas (see globals.css's --canvas) — used behind the splash artwork so a
+         fresh cold start shows this instead of stark white or the old brand blue. -->
+    <color name="splashBackground">#EFF2EE</color>
+</resources>

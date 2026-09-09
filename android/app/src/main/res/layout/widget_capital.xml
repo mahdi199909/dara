@@ -34,7 +34,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textDirection="rtl"
-            android:textColor="#1c39bb"
+            android:textColor="#0E5F54"
             android:textSize="15sp"
             android:textStyle="bold"
             android:layout_marginBottom="8dp"

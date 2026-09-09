@@ -18,7 +18,7 @@ export default function GlobalCaptureFab() {
       <button
         onClick={() => setOpen(true)}
         style={{ bottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1rem)` }}
-        className="fixed left-6 z-30 h-14 w-14 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg shadow-brand-600/30 hover:bg-brand-700 transition"
+        className="fixed left-6 z-30 h-14 w-14 rounded-full bg-accent text-on-accent flex items-center justify-center shadow-lg shadow-accent/30 hover:opacity-90 transition"
         aria-label="ثبت کار"
       >
         <PlusIcon className="w-6 h-6" />

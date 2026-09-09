@@ -138,11 +138,11 @@ export default function ReportsPage() {
   return (
     <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-800">گزارش‌ها</h1>
+        <h1 className="text-lg font-bold text-ink">گزارش‌ها</h1>
         <div className="flex gap-2">
-          <button onClick={() => exportCsv("transactions")} className="text-xs bg-gray-100 px-3 py-1.5 rounded-lg text-gray-600">CSV مالی</button>
-          <button onClick={() => exportCsv("activities")} className="text-xs bg-gray-100 px-3 py-1.5 rounded-lg text-gray-600">CSV فعالیت‌ها</button>
-          <button onClick={exportPdf} className="text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg">خروجی PDF</button>
+          <button onClick={() => exportCsv("transactions")} className="text-xs bg-canvas px-3 py-1.5 rounded-lg text-ink">CSV مالی</button>
+          <button onClick={() => exportCsv("activities")} className="text-xs bg-canvas px-3 py-1.5 rounded-lg text-ink">CSV فعالیت‌ها</button>
+          <button onClick={exportPdf} className="text-xs bg-accent text-on-accent px-3 py-1.5 rounded-lg">خروجی PDF</button>
         </div>
       </div>
 
@@ -154,7 +154,7 @@ export default function ReportsPage() {
                 key={p.key}
                 onClick={() => setPreset(p.key)}
                 className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full transition ${
-                  preset === p.key ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-500"
+                  preset === p.key ? "bg-accent text-on-accent" : "bg-surface border border-line text-muted"
                 }`}
               >
                 {p.label}
@@ -168,7 +168,7 @@ export default function ReportsPage() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`text-sm px-3.5 py-1.5 rounded-full transition ${
-                tab === t.key ? "bg-brand-100 text-brand-700 border border-brand-300" : "bg-white border border-gray-200 text-gray-500"
+                tab === t.key ? "bg-accent-soft text-accent border border-accent" : "bg-surface border border-line text-muted"
               }`}
             >
               {t.label}
@@ -180,17 +180,17 @@ export default function ReportsPage() {
       {tab === "categoryCalendar" ? (
         <CategoryCalendarTab />
       ) : !data ? (
-        <p className="text-sm text-gray-400 text-center py-10">در حال بارگذاری...</p>
+        <p className="text-sm text-muted text-center py-10">در حال بارگذاری...</p>
       ) : tab === "summary" ? (
         <>
           <Card className="p-5">
-            <h3 className="font-bold text-gray-800 text-sm mb-2">خلاصه</h3>
-            <p className="text-sm text-gray-600 leading-7">{data.narrative}</p>
+            <h3 className="font-bold text-ink text-sm mb-2">خلاصه</h3>
+            <p className="text-sm text-ink leading-7">{data.narrative}</p>
           </Card>
 
           <div className="grid grid-cols-1 gap-4">
             <Card className="p-5">
-              <h3 className="font-bold text-gray-800 text-sm mb-3">زمان</h3>
+              <h3 className="font-bold text-ink text-sm mb-3">زمان</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <StatItem
                   label="کل زمان"
@@ -221,7 +221,7 @@ export default function ReportsPage() {
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-bold text-gray-800 text-sm mb-3">مالی</h3>
+              <h3 className="font-bold text-ink text-sm mb-3">مالی</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <StatItem label="درآمد" value={format(data.report.income, { withSuffix: true })} tone="positive" />
                 <StatItem
@@ -268,16 +268,16 @@ export default function ReportsPage() {
             const prideLine = computePrideLine(data.comparison);
             return prideLine ? (
               <Card className="p-4">
-                <p className="text-sm text-brand-700">{prideLine}</p>
+                <p className="text-sm text-accent">{prideLine}</p>
               </Card>
             ) : null;
           })()}
 
           <Card className="p-5">
-            <h3 className="font-bold text-gray-800 text-sm mb-3">هزینه فرصت زمان‌های اتلافی</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="font-bold text-ink text-sm mb-3">هزینه فرصت زمان‌های اتلافی</h3>
+            <p className="text-sm text-ink">
               در این بازه <strong>{formatDuration(data.report.wasteMin)}</strong> در فعالیت‌های اتلاف‌وقت سپری شده که معادل{" "}
-              <strong className="text-waste-600">{format(data.report.opportunityCost, { withSuffix: true })}</strong> هزینه فرصت است. این عدد
+              <strong className="text-waste">{format(data.report.opportunityCost, { withSuffix: true })}</strong> هزینه فرصت است. این عدد
               هزینه‌ای که پرداخت شده نیست، بلکه ارزش زمانی است که می‌توانست صرف کارهای دیگر شود.
             </p>
           </Card>
@@ -285,19 +285,19 @@ export default function ReportsPage() {
           {data.habitsReport && data.habitsReport.habits.length > 0 && (
             <Card className="p-5">
               <div className="flex items-center justify-between mb-1">
-                <h3 className="font-bold text-gray-800 text-sm">دارایی دیجیتال از عادت‌ها</h3>
+                <h3 className="font-bold text-ink text-sm">دارایی دیجیتال از عادت‌ها</h3>
                 <span className="flex items-center gap-1 text-xs text-amber-600">
                   <FlameIcon className="w-3.5 h-3.5" />
                   {toPersianDigits(data.habitsReport.currentStreak)} روز استریک
                 </span>
               </div>
-              <p className="text-lg font-bold text-brand-700 mt-2">{format(data.habitsReport.digitalAssetTotal, { withSuffix: true })}</p>
+              <p className="text-lg font-bold text-accent mt-2">{format(data.habitsReport.digitalAssetTotal, { withSuffix: true })}</p>
             </Card>
           )}
 
           {data.report.timeByProject.length > 0 && (
             <Card className="p-5">
-              <h3 className="font-bold text-gray-800 text-sm mb-3">زمان بر اساس پروژه</h3>
+              <h3 className="font-bold text-ink text-sm mb-3">زمان بر اساس پروژه</h3>
               <ResponsiveContainer width="100%" height={Math.max(120, data.report.timeByProject.length * 44)}>
                 <BarChart
                   data={data.report.timeByProject.map((p: any) => ({ ...p, shortName: truncateLabel(p.name, 16) }))}
@@ -349,19 +349,19 @@ function HabitsTab({ habitsReport }: { habitsReport: any }) {
       </Card>
 
       <Card>
-        <ul className="divide-y divide-gray-50">
+        <ul className="divide-y divide-line">
           {habitsReport.habits.map((h: any) => (
             <li key={h.id} className="flex items-center justify-between px-4 py-3">
               <div className="min-w-0 flex items-center gap-2">
                 <span className="shrink-0">{h.icon || "🔥"}</span>
                 <div className="min-w-0">
-                  <p className={`text-sm truncate ${h.isActive ? "text-gray-800" : "text-gray-400"}`}>{h.title}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className={`text-sm truncate ${h.isActive ? "text-ink" : "text-muted"}`}>{h.title}</p>
+                  <p className="text-xs text-muted mt-0.5">
                     {h.currentStreak > 0 ? `${toPersianDigits(h.currentStreak)} روز پشت‌سرهم` : `${toPersianDigits(h.daysSinceLastCheckIn)} روز از آخرین تیک`}
                   </p>
                 </div>
               </div>
-              <span className="text-sm font-bold text-brand-700 shrink-0">{format(h.virtualAssetValue, { withSuffix: true })}</span>
+              <span className="text-sm font-bold text-accent shrink-0">{format(h.virtualAssetValue, { withSuffix: true })}</span>
             </li>
           ))}
         </ul>
@@ -375,8 +375,8 @@ function HiddenCostTab({ hiddenCost }: { hiddenCost: any }) {
   return (
     <div className="space-y-4">
       <Card className="p-5">
-        <h3 className="font-bold text-gray-800 text-sm mb-1">هزینه پنهان کارها و رویدادها</h3>
-        <p className="text-xs text-gray-500 mb-4">
+        <h3 className="font-bold text-ink text-sm mb-1">هزینه پنهان کارها و رویدادها</h3>
+        <p className="text-xs text-muted mb-4">
           مجموع هزینه مستقیمی که برای هر کار/رویداد ثبت کرده‌اید، به‌علاوه معادل تومانی زمانی که برای آن وارد کرده‌اید.
         </p>
         <div className="grid grid-cols-3 gap-4">
@@ -390,21 +390,21 @@ function HiddenCostTab({ hiddenCost }: { hiddenCost: any }) {
         {hiddenCost.items.length === 0 ? (
           <EmptyState message="در این بازه کار یا رویدادی با هزینه یا زمان ثبت‌شده وجود ندارد." />
         ) : (
-          <ul className="divide-y divide-gray-50">
+          <ul className="divide-y divide-line">
             {hiddenCost.items.map((item: any) => (
               <li key={`${item.entityType}-${item.id}`} className="px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <p className="text-sm text-gray-800 truncate">{item.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-sm text-ink truncate">{item.title}</p>
+                    <p className="text-xs text-muted mt-0.5">
                       {item.entityType === "TASK" ? "کار" : "رویداد"}
                       {item.categoryName ? ` · ${item.categoryName}` : ""} · {formatJalali(new Date(item.date))}
                     </p>
                   </div>
-                  <span className="text-sm font-bold text-waste-600 shrink-0">{format(item.hiddenCost, { withSuffix: true })}</span>
+                  <span className="text-sm font-bold text-waste shrink-0">{format(item.hiddenCost, { withSuffix: true })}</span>
                 </div>
                 {(item.directCost > 0 || item.timeCost > 0) && (
-                  <div className="flex gap-3 mt-1.5 text-xs text-gray-400">
+                  <div className="flex gap-3 mt-1.5 text-xs text-muted">
                     {item.directCost > 0 && <span>هزینه مستقیم: {format(item.directCost, { withSuffix: true })}</span>}
                     {item.timeCost > 0 && (
                       <span>
@@ -451,19 +451,19 @@ function CategoryCalendarTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-center gap-1">
-        <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+        <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted">
           <ChevronRightIcon className="w-4 h-4" />
         </button>
-        <span className="text-sm text-gray-600 min-w-[7rem] text-center">{formatJalaliMonthYear(cursor)}</span>
-        <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+        <span className="text-sm text-ink min-w-[7rem] text-center">{formatJalaliMonthYear(cursor)}</span>
+        <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted">
           <ChevronLeftIcon className="w-4 h-4" />
         </button>
       </div>
 
       <Card className="p-4">
-        <p className="text-xs text-gray-500 mb-2">دسته‌بندی</p>
+        <p className="text-xs text-muted mb-2">دسته‌بندی</p>
         {!data ? (
-          <p className="text-sm text-gray-400">در حال بارگذاری...</p>
+          <p className="text-sm text-muted">در حال بارگذاری...</p>
         ) : data.categories.length === 0 ? (
           <EmptyState message="هنوز دسته‌بندی‌ای نساخته‌اید." />
         ) : (
@@ -474,10 +474,10 @@ function CategoryCalendarTab() {
                 onClick={() => setSelectedCategoryId(selectedCategoryId === c.categoryId ? null : c.categoryId)}
                 className={`shrink-0 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition ${
                   selectedCategoryId === c.categoryId
-                    ? "bg-brand-600 text-white border-brand-600"
+                    ? "bg-accent text-on-accent border-accent"
                     : c.totalDays > 0
-                      ? "bg-white text-gray-600 border-gray-200"
-                      : "bg-white text-gray-300 border-gray-100"
+                      ? "bg-surface text-ink border-line"
+                      : "bg-surface text-muted border-line"
                 }`}
               >
                 <span>{c.icon}</span>
@@ -504,7 +504,7 @@ function CategoryCalendarTab() {
           </div>
 
           <Card className="p-3">
-            <div className="grid grid-cols-7 text-center text-xs text-gray-400 mb-2">
+            <div className="grid grid-cols-7 text-center text-xs text-muted mb-2">
               {WEEKDAY_HEADERS.map((w) => (
                 <div key={w}>{w}</div>
               ))}
@@ -519,14 +519,14 @@ function CategoryCalendarTab() {
                   <div
                     key={day.toISOString()}
                     className={`aspect-square rounded-xl border p-1.5 flex flex-col items-center justify-center gap-0.5 ${
-                      !inMonth ? "bg-gray-50 border-transparent text-gray-300" : minutes > 0 ? "border-brand-200" : "bg-white border-gray-100"
+                      !inMonth ? "bg-canvas border-transparent text-muted" : minutes > 0 ? "border-accent-soft" : "bg-surface border-line"
                     }`}
-                    style={minutes > 0 ? { backgroundColor: `rgba(28, 57, 187, ${0.12 + intensity * 0.55})` } : undefined}
+                    style={minutes > 0 ? { backgroundColor: `rgb(var(--accent) / ${0.12 + intensity * 0.55})` } : undefined}
                   >
-                    <span className={`text-xs ${inMonth ? (minutes > 0 ? "text-brand-900 font-bold" : "text-gray-700") : "text-gray-300"}`}>
+                    <span className={`text-xs ${inMonth ? (minutes > 0 ? "text-accent font-bold" : "text-ink") : "text-muted"}`}>
                       {toPersianDigits(jd)}
                     </span>
-                    {minutes > 0 && <span className="text-[9px] text-brand-800">{compactDuration(minutes)}</span>}
+                    {minutes > 0 && <span className="text-[9px] text-accent">{compactDuration(minutes)}</span>}
                   </div>
                 );
               })}

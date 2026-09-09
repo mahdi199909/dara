@@ -96,6 +96,18 @@ describe("local settings repository", () => {
     expect(reread.settings.dailyMomentEnabled).toBe(false);
   });
 
+  it("defaults theme to system and persists an explicit change", async () => {
+    const db = await freshDb();
+    const { settings: defaults } = getSettings(db, USER_ID);
+    expect(defaults.theme).toBe("system");
+
+    const { settings } = updateSettings(db, USER_ID, { theme: "dark" });
+    expect(settings.theme).toBe("dark");
+
+    const reread = getSettings(db, USER_ID);
+    expect(reread.settings.theme).toBe("dark");
+  });
+
   it("defaults wakeHour/sleepHour to 7/23 and persists an explicit change", async () => {
     const db = await freshDb();
     const { settings: defaults } = getSettings(db, USER_ID);

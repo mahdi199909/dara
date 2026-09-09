@@ -213,7 +213,7 @@ export default function CaptureForm({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="چیکار کردی؟"
-        className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-400"
+        className="bg-surface w-full rounded-xl border border-line px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-400"
       />
 
       <div className="flex gap-2">
@@ -223,7 +223,7 @@ export default function CaptureForm({
             key={t}
             onClick={() => setEntityType(t)}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
-              entityType === t ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+              entityType === t ? "bg-accent text-on-accent" : "bg-canvas text-muted"
             }`}
           >
             {CAPTURE_TYPE_LABELS[t]}
@@ -238,7 +238,7 @@ export default function CaptureForm({
             key={v}
             onClick={() => setValueType(v)}
             className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
-              valueType === v ? "bg-brand-100 text-brand-700 border border-brand-300" : "bg-gray-50 text-gray-500 border border-transparent"
+              valueType === v ? "bg-accent-soft text-accent border border-accent" : "bg-canvas text-muted border border-transparent"
             }`}
           >
             {VALUE_TYPE_LABELS[v]}
@@ -247,7 +247,7 @@ export default function CaptureForm({
       </div>
 
       <div>
-        <p className="text-xs text-gray-500 mb-1.5">دسته‌بندی</p>
+        <p className="text-xs text-muted mb-1.5">دسته‌بندی</p>
         <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
           {visibleCategories.map((c: any) => (
             <button
@@ -255,7 +255,7 @@ export default function CaptureForm({
               key={c.id}
               onClick={() => pickCategory(c)}
               className={`shrink-0 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition ${
-                categoryId === c.id ? "bg-brand-600 text-white border-brand-600" : "bg-white text-gray-600 border-gray-200"
+                categoryId === c.id ? "bg-accent text-on-accent border-accent" : "bg-surface text-ink border-line"
               }`}
             >
               <span>{c.icon}</span>
@@ -265,14 +265,14 @@ export default function CaptureForm({
           <button
             type="button"
             onClick={() => setAddingCategory(true)}
-            className="shrink-0 flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border border-dashed border-gray-300 text-gray-500 hover:border-brand-300 hover:text-brand-600 transition"
+            className="shrink-0 flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border border-dashed border-line text-muted hover:border-accent hover:text-accent transition"
           >
             <PlusIcon className="w-3.5 h-3.5" />
             دسته‌بندی جدید
           </button>
         </div>
         {visibleCategories.length === 0 && !addingCategory && (
-          <p className="text-xs text-gray-400 mt-1">دسته‌بندی‌ای برای «{VALUE_TYPE_LABELS[valueType]}» فعال نیست.</p>
+          <p className="text-xs text-muted mt-1">دسته‌بندی‌ای برای «{VALUE_TYPE_LABELS[valueType]}» فعال نیست.</p>
         )}
         {addingCategory && (
           <div className="mt-2 space-y-1.5">
@@ -288,9 +288,9 @@ export default function CaptureForm({
                   }
                 }}
                 placeholder="نام دسته‌بندی جدید"
-                className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                className="bg-surface flex-1 rounded-xl border border-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
               />
-              <button type="button" onClick={createCategoryInline} className="shrink-0 rounded-xl bg-brand-600 text-white px-3 py-2 text-xs font-medium">
+              <button type="button" onClick={createCategoryInline} className="shrink-0 rounded-xl bg-accent text-on-accent px-3 py-2 text-xs font-medium">
                 ثبت
               </button>
               <button
@@ -300,24 +300,24 @@ export default function CaptureForm({
                   setNewCategoryName("");
                   setAddingCategoryError(null);
                 }}
-                className="shrink-0 text-xs text-gray-400 px-1"
+                className="shrink-0 text-xs text-muted px-1"
               >
                 انصراف
               </button>
             </div>
-            <p className="text-[11px] text-gray-400">به‌صورت پیش‌فرض «هزینه» ثبت می‌شود — تنظیمات کامل‌تر از تنظیمات ← دسته‌بندی‌ها.</p>
-            {addingCategoryError && <p className="text-xs text-waste-600">{addingCategoryError}</p>}
+            <p className="text-[11px] text-muted">به‌صورت پیش‌فرض «هزینه» ثبت می‌شود — تنظیمات کامل‌تر از تنظیمات ← دسته‌بندی‌ها.</p>
+            {addingCategoryError && <p className="text-xs text-waste">{addingCategoryError}</p>}
           </div>
         )}
       </div>
 
       <div>
-        <label className="text-xs text-gray-500 mb-1.5 block">روز</label>
+        <label className="text-xs text-muted mb-1.5 block">روز</label>
         <JalaliDateInput value={day} onChange={setDay} />
       </div>
 
       <div>
-        <label className="text-xs text-gray-500 mb-1.5 block">زمان (اختیاری)</label>
+        <label className="text-xs text-muted mb-1.5 block">زمان (اختیاری)</label>
         <div className="grid grid-cols-2 gap-2">
           <TimePicker value={startTime} onChange={setStartTime} placeholder="شروع" />
           <TimePicker value={endTime} onChange={setEndTime} placeholder="پایان" />
@@ -330,7 +330,7 @@ export default function CaptureForm({
             type="button"
             onClick={() => setFlowType("COST")}
             className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition ${
-              flowType === "COST" ? "bg-waste-100 text-waste-600" : "bg-gray-50 text-gray-400"
+              flowType === "COST" ? "bg-waste-soft text-waste" : "bg-canvas text-muted"
             }`}
           >
             هزینه انجام‌شده
@@ -339,7 +339,7 @@ export default function CaptureForm({
             type="button"
             onClick={() => setFlowType("INCOME")}
             className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition ${
-              flowType === "INCOME" ? "bg-brand-100 text-brand-700" : "bg-gray-50 text-gray-400"
+              flowType === "INCOME" ? "bg-accent-soft text-accent" : "bg-canvas text-muted"
             }`}
           >
             درآمد ثبت‌شده
@@ -348,12 +348,12 @@ export default function CaptureForm({
         <MoneyInput value={amount} onChange={setAmount} placeholder="۰" />
       </div>
 
-      {error && <p className="text-sm text-waste-600">{error}</p>}
+      {error && <p className="text-sm text-waste">{error}</p>}
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-xl bg-brand-600 text-white py-3 text-sm font-medium hover:bg-brand-700 transition disabled:opacity-40"
+        className="w-full rounded-xl bg-accent text-on-accent py-3 text-sm font-medium hover:opacity-90 transition disabled:opacity-40"
       >
         {loading ? "در حال ثبت..." : "ثبت"}
       </button>

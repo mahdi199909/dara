@@ -9,6 +9,7 @@ import GlobalCaptureFab from "@/components/GlobalCaptureFab";
 import SWRProvider from "@/components/SWRProvider";
 import FirstRunGate from "@/components/native/FirstRunGate";
 import WidgetQueueDrainer from "@/components/native/WidgetQueueDrainer";
+import ThemeSettingsSync from "@/components/ThemeSettingsSync";
 
 // Capacitor/static-export variant of (app)/layout.tsx — see scripts/prepare-android-export.mjs,
 // which swaps this in for the real layout.tsx during an Android build only. No server-side
@@ -23,7 +24,7 @@ function AndroidChrome({ children }: { children: React.ReactNode }) {
   const userName = data?.user?.name ?? "کاربر پروا";
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb]" dir="rtl">
+    <div className="min-h-screen bg-canvas" dir="rtl">
       <AppTopBar userName={userName} />
       <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
       <GlobalCaptureFab />
@@ -36,6 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <FirstRunGate>
       <SWRProvider>
+        <ThemeSettingsSync />
         <WidgetQueueDrainer />
         <AndroidChrome>{children}</AndroidChrome>
       </SWRProvider>

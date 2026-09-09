@@ -20,12 +20,12 @@ export default function HabitAdherenceChart({ series, currentStreak, defaultOpen
 
   return (
     <div>
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between text-sm text-gray-600 py-1">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between text-sm text-ink py-1">
         <span className="flex items-center gap-1.5">
-          <FlameIcon className={`w-4 h-4 ${currentStreak > 0 ? "text-amber-500" : "text-gray-300"}`} />
+          <FlameIcon className={`w-4 h-4 ${currentStreak > 0 ? "text-amber-500" : "text-muted"}`} />
           <span>{currentStreak > 0 ? `${toPersianDigits(currentStreak)} روز پشت‌سرهم` : "بدون استریک فعال"}</span>
         </span>
-        <span className="flex items-center gap-1 text-gray-400">
+        <span className="flex items-center gap-1 text-muted">
           نمودار پایبندی
           <ChevronDownIcon className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </span>
@@ -33,7 +33,7 @@ export default function HabitAdherenceChart({ series, currentStreak, defaultOpen
       {open && (
         <div className="mt-2">
           {!hasData ? (
-            <p className="text-xs text-gray-400 text-center py-4">هنوز داده‌ای برای رسم نمودار نیست.</p>
+            <p className="text-xs text-muted text-center py-4">هنوز داده‌ای برای رسم نمودار نیست.</p>
           ) : (
             <ResponsiveContainer width="100%" height={140}>
               <LineChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
@@ -44,7 +44,7 @@ export default function HabitAdherenceChart({ series, currentStreak, defaultOpen
                   labelFormatter={(v) => shortJalali(v as string)}
                   formatter={(v: number) => [`${toPersianDigits(v)}٪`, "پایبندی"]}
                 />
-                <Line type="monotone" dataKey="percent" stroke="#3947c4" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="percent" stroke="#279183" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}

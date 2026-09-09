@@ -144,9 +144,9 @@ export default function MoneyInput({
         value={toPersianDigits(display)}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-right pl-14 disabled:bg-gray-50 disabled:text-gray-400"
+        className="w-full rounded-xl border border-line px-3 py-2 text-sm text-right pl-14 bg-surface disabled:bg-canvas disabled:text-muted"
       />
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">
         {CURRENCY_UNIT_LABELS[unit]}
       </span>
     </div>

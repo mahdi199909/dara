@@ -29,13 +29,13 @@ export default function Companion({ state, onAction, size = 96, variant = "face"
 
       <div
         className={`relative rounded-2xl border px-4 py-2.5 text-center text-sm leading-relaxed max-w-[280px] ${
-          isWarn ? "bg-signal-100 border-signal-500/40 text-signal-700" : "bg-brand-50 border-brand-100 text-brand-700"
+          isWarn ? "bg-signal-soft border-signal/40 text-signal" : "bg-accent-soft border-accent/40 text-accent"
         }`}
       >
         {message}
         <span
           className={`absolute -bottom-[6px] right-1/2 translate-x-1/2 rotate-45 w-3 h-3 border-b border-r ${
-            isWarn ? "bg-signal-100 border-signal-500/40" : "bg-brand-50 border-brand-100"
+            isWarn ? "bg-signal-soft border-signal/40" : "bg-accent-soft border-accent/40"
           }`}
         />
       </div>
@@ -44,7 +44,7 @@ export default function Companion({ state, onAction, size = 96, variant = "face"
         <button
           type="button"
           onClick={onAction}
-          className="rounded-2xl bg-brand-600 text-white px-5 py-2.5 text-sm font-bold shadow-md shadow-brand-600/25 active:scale-[0.98] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+          className="rounded-2xl bg-accent text-on-accent px-5 py-2.5 text-sm font-bold shadow-md shadow-accent/25 active:scale-[0.98] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {action.label}
         </button>

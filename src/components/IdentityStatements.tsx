@@ -16,7 +16,7 @@ export interface IdentityStatementDto {
 export default function IdentityStatements({
   statements,
   className = "space-y-1.5",
-  itemClassName = "block text-sm text-gray-700 hover:text-brand-700 transition",
+  itemClassName = "block text-sm text-ink hover:text-accent transition",
 }: {
   statements: IdentityStatementDto[];
   className?: string;

@@ -50,7 +50,7 @@ export default function CapitalHeader({ onEmptyCta }: { onEmptyCta?: () => void 
           message="سرمایه‌ات از اولین ثبت شروع می‌شود."
           cta={
             onEmptyCta && (
-              <button onClick={onEmptyCta} className="text-xs font-medium text-brand-600 hover:text-brand-700">
+              <button onClick={onEmptyCta} className="text-xs font-medium text-accent hover:text-accent">
                 ثبت کن
               </button>
             )
@@ -65,22 +65,22 @@ export default function CapitalHeader({ onEmptyCta }: { onEmptyCta?: () => void 
   return (
     <Link href="/capital">
       <Card className="p-5 hover:shadow-md transition-shadow">
-        <p className="text-xs text-gray-400 mb-1">سرمایه من</p>
+        <p className="text-xs text-muted mb-1">سرمایه من</p>
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-3xl font-bold text-gray-800">
-              {toPersianDigits(hours)} <span className="text-base font-medium text-gray-400">ساعت</span>
+            <p className="text-3xl font-bold text-ink">
+              {toPersianDigits(hours)} <span className="text-base font-medium text-muted">ساعت</span>
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-muted mt-1">
               {toPersianDigits(capital.skillCount)} مهارت · {toPersianDigits(capital.projectCount)} پروژه · {toPersianDigits(capital.assetCount)} دارایی
             </p>
-            {capital.todayDeltaMinutes > 0 && <p className="text-xs text-brand-600 mt-1">+{toPersianDigits(capital.todayDeltaMinutes)} دقیقه امروز</p>}
+            {capital.todayDeltaMinutes > 0 && <p className="text-xs text-accent mt-1">+{toPersianDigits(capital.todayDeltaMinutes)} دقیقه امروز</p>}
           </div>
           {snapshots.length > 1 && (
             <div className="w-20 h-10 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={snapshots}>
-                  <Line type="monotone" dataKey="investedMinutes" stroke="#3947c4" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="investedMinutes" stroke="#279183" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

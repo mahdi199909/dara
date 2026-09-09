@@ -54,7 +54,7 @@ export default function BottomNav({ userName }: { userName: string }) {
   return (
     <>
       <nav
-        className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-gray-100 flex items-stretch"
+        className="fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-line flex items-stretch"
         style={{ height: BOTTOM_NAV_HEIGHT_PX, paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {PRIMARY_NAV_ITEMS.map((item) => {
@@ -65,7 +65,7 @@ export default function BottomNav({ userName }: { userName: string }) {
               key={item.href}
               href={item.href}
               className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[11px] ${
-                active ? "text-brand-600" : "text-gray-400"
+                active ? "text-accent" : "text-muted"
               }`}
             >
               <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.1 : 1.8} />
@@ -76,7 +76,7 @@ export default function BottomNav({ userName }: { userName: string }) {
         <button
           onClick={() => setMoreOpen(true)}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[11px] ${
-            moreOpen || moreActive ? "text-brand-600" : "text-gray-400"
+            moreOpen || moreActive ? "text-accent" : "text-muted"
           }`}
         >
           <MoreIcon className="w-[22px] h-[22px]" strokeWidth={moreOpen || moreActive ? 2.1 : 1.8} />
@@ -87,14 +87,14 @@ export default function BottomNav({ userName }: { userName: string }) {
       {moreOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={closeMore}>
           <div
-            className="w-full bg-white rounded-t-2xl shadow-xl max-h-[75vh] overflow-y-auto scrollbar-thin animate-in"
+            className="w-full bg-surface rounded-t-2xl shadow-xl max-h-[75vh] overflow-y-auto scrollbar-thin animate-in"
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
             onClick={(e) => e.stopPropagation()}
           >
             {searchOpen ? (
               <div className="flex items-center gap-2 px-5 pt-5 pb-2">
                 <SearchBox autoFocus />
-                <button onClick={() => setSearchOpen(false)} className="text-sm text-gray-400 shrink-0">
+                <button onClick={() => setSearchOpen(false)} className="text-sm text-muted shrink-0">
                   بستن
                 </button>
               </div>
@@ -103,14 +103,14 @@ export default function BottomNav({ userName }: { userName: string }) {
                 <div className="flex items-center gap-2.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/icon.png" alt="پروا" className="h-8 w-8 rounded-xl" />
-                  <p className="text-xs text-gray-400">{userName}</p>
+                  <p className="text-xs text-muted">{userName}</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500" aria-label="جستجو">
+                  <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-canvas text-muted" aria-label="جستجو">
                     <SearchIcon className="w-5 h-5" />
                   </button>
                   <NotificationBell />
-                  <button onClick={closeMore} className="p-1.5 text-gray-400 hover:text-gray-600" aria-label="بستن">
+                  <button onClick={closeMore} className="p-1.5 text-muted hover:text-ink" aria-label="بستن">
                     <XIcon className="w-5 h-5" />
                   </button>
                 </div>
@@ -127,7 +127,7 @@ export default function BottomNav({ userName }: { userName: string }) {
                     href={item.href}
                     onClick={() => setMoreOpen(false)}
                     className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-xs transition ${
-                      active ? "bg-brand-50 text-brand-700 font-medium" : "text-gray-600 hover:bg-gray-50"
+                      active ? "bg-accent-soft text-accent font-medium" : "text-ink hover:bg-canvas"
                     }`}
                   >
                     <Icon className="w-5 h-5" />
@@ -137,10 +137,10 @@ export default function BottomNav({ userName }: { userName: string }) {
               })}
             </div>
 
-            <div className="p-3 border-t border-gray-100">
+            <div className="p-3 border-t border-line">
               <button
                 onClick={logout}
-                className="w-full text-center px-3 py-2.5 rounded-xl text-sm text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition"
+                className="w-full text-center px-3 py-2.5 rounded-xl text-sm text-muted hover:bg-canvas hover:text-ink transition"
               >
                 خروج از حساب
               </button>

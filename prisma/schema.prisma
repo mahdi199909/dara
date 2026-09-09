@@ -86,6 +86,11 @@ model Settings {
   dailyProductiveTargetMin Int     @default(360)
   companionEnabled         Boolean @default(true)
 
+  // Light/dark/system UI theme preference — see doc/theme-prompt.md. "system" (the default)
+  // follows the OS-level prefers-color-scheme; "light"/"dark" pin it. Same db-push-safe
+  // literal-default pattern as the other preference columns above.
+  theme String @default("system") // light | dark | system
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -25,14 +25,14 @@ function PrintReportContent() {
   const { format } = useCurrencyUnit();
 
   if (!data) {
-    return <p className="p-10 text-center text-gray-400">در حال آماده‌سازی گزارش...</p>;
+    return <p className="p-10 text-center text-muted">در حال آماده‌سازی گزارش...</p>;
   }
 
   const { report, netWorth, hiddenCost, narrative, label } = data;
   const generatedAt = new Date();
 
   return (
-    <div dir="rtl" className="print-page max-w-3xl mx-auto px-8 py-10 text-gray-800 bg-white">
+    <div dir="rtl" className="print-page max-w-3xl mx-auto px-8 py-10 text-ink bg-surface">
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -56,15 +56,15 @@ function PrintReportContent() {
             if (androidPrint?.print) androidPrint.print();
             else window.print();
           }}
-          className="bg-brand-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-brand-700"
+          className="bg-accent text-on-accent text-sm px-4 py-2 rounded-xl hover:opacity-90"
         >
           چاپ / ذخیره PDF
         </button>
       </div>
 
-      <header className="mb-8 pb-4 border-b-2 border-brand-800">
-        <h1 className="text-2xl font-bold text-brand-900">پروا — گزارش {label}</h1>
-        <p className="text-xs text-gray-400 mt-1">تاریخ تولید گزارش: {formatJalali(generatedAt, { withTime: true })}</p>
+      <header className="mb-8 pb-4 border-b-2 border-accent">
+        <h1 className="text-2xl font-bold text-accent">پروا — گزارش {label}</h1>
+        <p className="text-xs text-muted mt-1">تاریخ تولید گزارش: {formatJalali(generatedAt, { withTime: true })}</p>
       </header>
 
       {identityData && identityData.statements.length > 0 && (
@@ -72,18 +72,18 @@ function PrintReportContent() {
           <IdentityStatements
             statements={identityData.statements.slice(0, 3)}
             className="space-y-1"
-            itemClassName="block text-sm text-gray-700"
+            itemClassName="block text-sm text-ink"
           />
         </section>
       )}
 
       <section className="mb-8">
-        <h2 className="text-base font-bold text-gray-800 mb-2">خلاصه</h2>
-        <p className="text-sm leading-8 text-gray-700">{narrative}</p>
+        <h2 className="text-base font-bold text-ink mb-2">خلاصه</h2>
+        <p className="text-sm leading-8 text-ink">{narrative}</p>
       </section>
 
       <section className="mb-8">
-        <h2 className="text-base font-bold text-gray-800 mb-3">زمان</h2>
+        <h2 className="text-base font-bold text-ink mb-3">زمان</h2>
         <div className="grid grid-cols-4 gap-3 mb-4">
           <SummaryBox label="کل زمان" value={formatDuration(report.totalDurationMin)} />
           <SummaryBox label="زمان مفید" value={formatDuration(report.productiveMin)} />
@@ -105,7 +105,7 @@ function PrintReportContent() {
       </section>
 
       <section className="mb-8">
-        <h2 className="text-base font-bold text-gray-800 mb-3">مالی</h2>
+        <h2 className="text-base font-bold text-ink mb-3">مالی</h2>
         <div className="grid grid-cols-4 gap-3 mb-4">
           <SummaryBox label="درآمد" value={format(report.income, { withSuffix: true })} />
           <SummaryBox label="هزینه" value={format(report.expense, { withSuffix: true })} />
@@ -127,7 +127,7 @@ function PrintReportContent() {
       </section>
 
       <section className="mb-8">
-        <h2 className="text-base font-bold text-gray-800 mb-3">هزینه واقعی و فرصت</h2>
+        <h2 className="text-base font-bold text-ink mb-3">هزینه واقعی و فرصت</h2>
         <div className="grid grid-cols-3 gap-3">
           <SummaryBox label="هزینه واقعی (مستقیم + زمانی)" value={format(report.realCost, { withSuffix: true })} />
           <SummaryBox label="هزینه فرصت (زمان‌های اتلافی)" value={format(report.opportunityCost, { withSuffix: true })} />
@@ -137,7 +137,7 @@ function PrintReportContent() {
 
       {hiddenCost.items.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-base font-bold text-gray-800 mb-3">هزینه پنهان کارها و رویدادها</h2>
+          <h2 className="text-base font-bold text-ink mb-3">هزینه پنهان کارها و رویدادها</h2>
           <table>
             <thead>
               <tr><th>عنوان</th><th>نوع</th><th>هزینه مستقیم</th><th>هزینه زمانی</th><th>مجموع</th></tr>
@@ -164,7 +164,7 @@ function PrintReportContent() {
       )}
 
       <section className={identityData?.statements[0] ? "mb-8" : ""}>
-        <h2 className="text-base font-bold text-gray-800 mb-3">ارزش خالص دارایی</h2>
+        <h2 className="text-base font-bold text-ink mb-3">ارزش خالص دارایی</h2>
         <div className="grid grid-cols-4 gap-3">
           <SummaryBox label="دارایی واقعی" value={format(netWorth.realAssetsValue, { withSuffix: true })} />
           <SummaryBox label="دارایی مجازی" value={format(netWorth.virtualAssetsValue, { withSuffix: true })} />
@@ -174,8 +174,8 @@ function PrintReportContent() {
       </section>
 
       {identityData?.statements[0] && (
-        <section className="border-t-2 border-brand-800 pt-4">
-          <p className="text-sm font-medium text-brand-900">{identityData.statements[0].text}</p>
+        <section className="border-t-2 border-accent pt-4">
+          <p className="text-sm font-medium text-accent">{identityData.statements[0].text}</p>
         </section>
       )}
     </div>
@@ -184,9 +184,9 @@ function PrintReportContent() {
 
 function SummaryBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-gray-200 rounded-lg px-3 py-2">
-      <p className="text-[11px] text-gray-500">{label}</p>
-      <p className="text-sm font-bold text-gray-800 mt-0.5">{value}</p>
+    <div className="border border-line rounded-lg px-3 py-2">
+      <p className="text-[11px] text-muted">{label}</p>
+      <p className="text-sm font-bold text-ink mt-0.5">{value}</p>
     </div>
   );
 }

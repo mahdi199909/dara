@@ -23,7 +23,7 @@ export default function FinancePage() {
 
   return (
     <div className="px-4 py-6 space-y-4">
-      <h1 className="text-lg font-bold text-gray-800">مالی</h1>
+      <h1 className="text-lg font-bold text-ink">مالی</h1>
 
       <div className="flex gap-2">
         {TABS.map((t) => (
@@ -31,7 +31,7 @@ export default function FinancePage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`text-sm px-3.5 py-1.5 rounded-full transition ${
-              tab === t.key ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-500"
+              tab === t.key ? "bg-accent text-on-accent" : "bg-surface border border-line text-muted"
             }`}
           >
             {t.label}
@@ -57,7 +57,7 @@ function TransactionsTab() {
     <div className="space-y-3">
       <button
         onClick={() => setShowForm((v) => !v)}
-        className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700"
+        className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
       >
         <PlusIcon className="w-4 h-4" />
         تراکنش جدید
@@ -76,22 +76,22 @@ function TransactionsTab() {
 
       <Card>
         {!data ? (
-          <p className="text-sm text-gray-400 text-center py-8">در حال بارگذاری...</p>
+          <p className="text-sm text-muted text-center py-8">در حال بارگذاری...</p>
         ) : data.transactions.length === 0 ? (
           <EmptyState message="هنوز تراکنشی ثبت نکرده‌اید." />
         ) : (
-          <ul className="divide-y divide-gray-50">
+          <ul className="divide-y divide-line">
             {data.transactions.map((tx) => (
               <li key={tx.id} className="flex items-center justify-between px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm text-gray-800 truncate">{tx.description || tx.category?.name || "تراکنش"}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-sm text-ink truncate">{tx.description || tx.category?.name || "تراکنش"}</p>
+                  <p className="text-xs text-muted mt-0.5">
                     {tx.account.name} · {formatJalali(new Date(tx.date))}
                   </p>
                 </div>
                 <span
                   className={`text-sm font-bold shrink-0 ${
-                    tx.type === "INCOME" ? "text-brand-700" : tx.type === "EXPENSE" ? "text-waste-600" : "text-gray-500"
+                    tx.type === "INCOME" ? "text-accent" : tx.type === "EXPENSE" ? "text-waste" : "text-muted"
                   }`}
                 >
                   {tx.type === "EXPENSE" ? "-" : tx.type === "INCOME" ? "+" : ""}
@@ -143,7 +143,7 @@ function NewTransactionForm({ categories, accounts, onDone }: { categories: any[
               type="button"
               key={t}
               onClick={() => setType(t)}
-              className={`flex-1 text-sm py-1.5 rounded-lg ${type === t ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"}`}
+              className={`flex-1 text-sm py-1.5 rounded-lg ${type === t ? "bg-accent text-on-accent" : "bg-canvas text-muted"}`}
             >
               {t === "EXPENSE" ? "هزینه" : t === "INCOME" ? "درآمد" : "انتقال"}
             </button>
@@ -155,25 +155,25 @@ function NewTransactionForm({ categories, accounts, onDone }: { categories: any[
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="توضیحات"
-            className="rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            className="bg-surface rounded-xl border border-line px-3 py-2 text-sm"
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm">
+          <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
             <option value="">{type === "TRANSFER" ? "از حساب" : "حساب"}</option>
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
           {type === "TRANSFER" ? (
-            <select required value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm">
+            <select required value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
               <option value="">به حساب</option>
               {accounts.filter((a) => a.id !== accountId).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
           ) : (
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm">
+            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
               <option value="">دسته‌بندی</option>
               {categories.map((c: any) => (
                 <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
@@ -181,7 +181,7 @@ function NewTransactionForm({ categories, accounts, onDone }: { categories: any[
             </select>
           )}
         </div>
-        <button type="submit" disabled={loading} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40">
+        <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
           ثبت تراکنش
         </button>
       </form>
@@ -217,7 +217,7 @@ function AccountsTab() {
     <div className="space-y-3">
       <button
         onClick={() => setShowForm((v) => !v)}
-        className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700"
+        className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
       >
         <PlusIcon className="w-4 h-4" />
         حساب جدید
@@ -232,17 +232,17 @@ function AccountsTab() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="نام حساب"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+              className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
             />
             <div className="grid grid-cols-2 gap-2">
-              <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm">
+              <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
                 {ACCOUNT_TYPES.map((t) => (
                   <option key={t} value={t}>{ACCOUNT_TYPE_LABELS[t]}</option>
                 ))}
               </select>
               <MoneyInput value={initialBalance} onChange={setInitialBalance} placeholder="موجودی اولیه" />
             </div>
-            <button type="submit" disabled={loading} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
+            <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">
               ثبت حساب
             </button>
           </form>
@@ -252,9 +252,9 @@ function AccountsTab() {
       <div className="grid grid-cols-1 gap-3">
         {data?.accounts.map((a) => (
           <Card key={a.id} className="p-4">
-            <p className="text-xs text-gray-400">{ACCOUNT_TYPE_LABELS[a.type as AccountType]}</p>
-            <p className="font-bold text-gray-800 mt-0.5">{a.name}</p>
-            <p className="text-lg font-bold text-brand-700 mt-2">{format(a.balance, { withSuffix: true })}</p>
+            <p className="text-xs text-muted">{ACCOUNT_TYPE_LABELS[a.type as AccountType]}</p>
+            <p className="font-bold text-ink mt-0.5">{a.name}</p>
+            <p className="text-lg font-bold text-accent mt-2">{format(a.balance, { withSuffix: true })}</p>
           </Card>
         ))}
         {data?.accounts.length === 0 && <EmptyState message="هنوز حسابی ثبت نکرده‌اید." />}
@@ -278,7 +278,7 @@ function InstallmentsTab() {
     <div className="space-y-3">
       <button
         onClick={() => setShowForm((v) => !v)}
-        className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700"
+        className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
       >
         <PlusIcon className="w-4 h-4" />
         طرح قسط جدید
@@ -298,11 +298,11 @@ function InstallmentsTab() {
         return (
           <Card key={plan.id} className="p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-gray-800">{plan.title}</h3>
+              <h3 className="font-bold text-ink">{plan.title}</h3>
               {nextDue && accounts[0] && (
                 <button
                   onClick={() => pay(nextDue.id, accounts[0].id)}
-                  className="text-xs bg-brand-50 text-brand-700 px-3 py-1.5 rounded-lg hover:bg-brand-100"
+                  className="text-xs bg-accent-soft text-accent px-3 py-1.5 rounded-lg hover:bg-accent-soft"
                 >
                   پرداخت قسط بعدی
                 </button>
@@ -319,15 +319,15 @@ function InstallmentsTab() {
             </div>
             {interest.interest > 0 && (
               <div className="mt-3 rounded-xl bg-waste-50 px-3 py-2 flex items-center justify-between text-xs">
-                <span className="text-gray-500">
+                <span className="text-muted">
                   مبلغ اصل: {format(plan.totalAmount, { withSuffix: true })} · مجموع بازپرداخت: {format(interest.totalPayable, { withSuffix: true })}
                 </span>
-                <span className="text-waste-600 font-bold shrink-0">
+                <span className="text-waste font-bold shrink-0">
                   سود واقعی: {format(interest.interest, { withSuffix: true })} ({interest.interestPercent.toFixed(1)}٪)
                 </span>
               </div>
             )}
-            <p className="text-xs text-gray-400 mt-3">
+            <p className="text-xs text-muted mt-3">
               {plan.summary.paidCount} از {plan.summary.totalCount} قسط پرداخت‌شده
             </p>
           </Card>
@@ -381,25 +381,25 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
   return (
     <Card className="p-4">
       <form onSubmit={submit} className="space-y-3">
-        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان (مثلاً وام خودرو)" className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
+        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان (مثلاً وام خودرو)" className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
         <div className="grid grid-cols-2 gap-2">
           <MoneyInput value={totalAmount} onChange={setTotalAmount} placeholder="مبلغ کل وام (اصل)" required />
           <MoneyInput value={installmentAmount} onChange={setInstallmentAmount} placeholder="مبلغ هر قسط" required />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />
-          <input type="number" dir="ltr" required min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۲۸)" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-right" />
+          <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
+          <input type="number" dir="ltr" required min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۲۸)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
         </div>
 
         {preview && (
-          <div className="rounded-xl bg-gray-50 p-3 text-xs space-y-1">
+          <div className="rounded-xl bg-canvas p-3 text-xs space-y-1">
             <div className="flex justify-between">
-              <span className="text-gray-500">مجموع بازپرداخت</span>
-              <span className="text-gray-700 font-medium">{format(preview.totalPayable, { withSuffix: true })}</span>
+              <span className="text-muted">مجموع بازپرداخت</span>
+              <span className="text-ink font-medium">{format(preview.totalPayable, { withSuffix: true })}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">سود واقعی</span>
-              <span className={`font-bold ${preview.interest > 0 ? "text-waste-600" : "text-brand-700"}`}>
+              <span className="text-muted">سود واقعی</span>
+              <span className={`font-bold ${preview.interest > 0 ? "text-waste" : "text-accent"}`}>
                 {format(preview.interest, { withSuffix: true })} ({preview.interestPercent.toFixed(1)}٪)
               </span>
             </div>
@@ -407,7 +407,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
         )}
 
         <div>
-          <p className="text-xs text-gray-500 mb-1.5">یادآوری هر قسط</p>
+          <p className="text-xs text-muted mb-1.5">یادآوری هر قسط</p>
           <div className="flex flex-wrap gap-1.5">
             {REMINDER_OFFSET_PRESETS.map((p) => (
               <button
@@ -415,7 +415,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
                 key={p.minutes}
                 onClick={() => toggleOffset(p.minutes)}
                 className={`text-xs px-2.5 py-1 rounded-full ${
-                  reminderOffsets.includes(p.minutes) ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                  reminderOffsets.includes(p.minutes) ? "bg-accent text-on-accent" : "bg-canvas text-muted"
                 }`}
               >
                 {p.label}
@@ -424,7 +424,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
           </div>
         </div>
 
-        <button type="submit" disabled={loading} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
+        <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">
           ثبت طرح قسط
         </button>
       </form>

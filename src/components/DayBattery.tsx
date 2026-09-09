@@ -22,17 +22,19 @@ interface DayBatteryDto {
 }
 
 const SEGMENT_CLASS: Record<string, string> = {
-  PRODUCTIVE: "bg-brand-600",
-  NEUTRAL: "bg-gray-400",
+  PRODUCTIVE: "bg-accent",
+  NEUTRAL: "bg-muted",
   WASTE: "bg-amber-500", // not red — the day battery never judges, see the product brief
-  REMAINING: "bg-gray-100",
+  REMAINING: "bg-canvas",
 };
 
 // Subtle diagonal stripe for past-but-unlogged time — visually distinct from REMAINING (plain,
 // future, hasn't happened yet) so "you didn't log this" and "this hasn't happened yet" never
-// read as the same gray.
+// read as the same gray. Plain CSS custom properties (not Tailwind classes, since this is an
+// inline gradient) so the stripe still flips with the theme.
 const UNLOGGED_STYLE: React.CSSProperties = {
-  backgroundImage: "repeating-linear-gradient(135deg, #e5e7eb, #e5e7eb 4px, #d1d5db 4px, #d1d5db 8px)",
+  backgroundImage:
+    "repeating-linear-gradient(135deg, rgb(var(--line)), rgb(var(--line)) 4px, rgb(var(--muted)) 4px, rgb(var(--muted)) 8px)",
 };
 
 /**
@@ -65,7 +67,7 @@ export default function DayBattery({ onLogGap }: { onLogGap: (start: Date, end: 
 
   return (
     <Card className="p-4">
-      <div className="w-full h-[14px] rounded-full overflow-hidden flex bg-gray-100" dir="rtl">
+      <div className="w-full h-[14px] rounded-full overflow-hidden flex bg-canvas" dir="rtl">
         {battery.segments.map((seg, i) => {
           const isUnlogged = seg.kind === "UNLOGGED";
           const widthPct = (seg.minutes / battery.capacityMinutes) * 100;
@@ -84,7 +86,7 @@ export default function DayBattery({ onLogGap }: { onLogGap: (start: Date, end: 
           );
         })}
       </div>
-      <p className="text-xs text-gray-400 mt-2 text-center">
+      <p className="text-xs text-muted mt-2 text-center">
         {formatDuration(battery.loggedMinutes)} ثبت‌شده · {formatDuration(battery.unloggedMinutes)} ثبت‌نشده · {formatDuration(battery.remainingMinutes)} باقی‌مانده
       </p>
     </Card>

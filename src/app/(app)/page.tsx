@@ -56,17 +56,17 @@ function CompanionRow({
   }
 
   return (
-    <div className="shrink-0 w-full rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-2 space-y-1.5" aria-label={ariaLabel}>
-      <p className="text-xs text-gray-600 leading-snug line-clamp-2 text-right">{message}</p>
+    <div className="shrink-0 w-full rounded-2xl bg-surface border border-line shadow-card px-3 py-2 space-y-1.5" aria-label={ariaLabel}>
+      <p className="text-xs text-ink leading-snug line-clamp-2 text-right">{message}</p>
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={handleClick}
-          className="shrink-0 rounded-xl bg-brand-600 text-white px-6 py-3 text-sm font-bold active:scale-[0.98] transition"
+          className="shrink-0 rounded-xl bg-accent text-on-accent px-6 py-3 text-sm font-bold active:scale-[0.98] transition"
         >
           {buttonLabel}
         </button>
-        <p className="text-[11px] text-gray-400">
+        <p className="text-[11px] text-muted">
           {formatDuration(state.achievedMinutes)} از {formatDuration(state.targetMinutes)}
         </p>
       </div>
@@ -132,8 +132,8 @@ function DailyMomentCard() {
   if (!picked) return null;
 
   const card = (
-    <div className="shrink-0 rounded-2xl bg-brand-50 border border-brand-100 px-4 py-2.5">
-      <p className="text-xs text-brand-700 leading-relaxed text-center">{picked.text}</p>
+    <div className="shrink-0 rounded-2xl bg-accent-soft border border-accent px-4 py-2.5">
+      <p className="text-xs text-accent leading-relaxed text-center">{picked.text}</p>
     </div>
   );
   return picked.href ? <Link href={picked.href}>{card}</Link> : card;
@@ -209,11 +209,11 @@ export default function HomePage() {
         onLogGap={(start, end) => openCapture({ start, end })}
       />
 
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-gray-100 shadow-card">
-        <h2 className="shrink-0 font-bold text-gray-800 text-sm px-4 pt-3 pb-2">رویدادهای امروز</h2>
+      <div className="flex-1 min-h-0 flex flex-col bg-surface rounded-2xl border border-line shadow-card">
+        <h2 className="shrink-0 font-bold text-ink text-sm px-4 pt-3 pb-2">رویدادهای امروز</h2>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
           {!data ? (
-            <p className="text-sm text-gray-400">در حال بارگذاری...</p>
+            <p className="text-sm text-muted">در حال بارگذاری...</p>
           ) : upcomingToday.length === 0 ? (
             <EmptyState message="رویداد پیش‌رویی برای امروز نمانده." />
           ) : (
@@ -224,14 +224,14 @@ export default function HomePage() {
                     onClick={() => toggleEventDone(occ)}
                     aria-label="تکمیل رویداد"
                     className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition ${
-                      occ.isDone ? "bg-brand-600 border-brand-600 text-white" : "border-gray-300 text-transparent"
+                      occ.isDone ? "bg-accent border-accent text-on-accent" : "border-line text-transparent"
                     }`}
                   >
                     <CheckSquareIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
                   </button>
-                  <ClockIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-gray-400 w-12 shrink-0">{formatTime(new Date(occ.startAt))}</span>
-                  <span className={`truncate ${occ.isDone ? "text-gray-400 line-through" : "text-gray-800"}`}>{occ.event.title}</span>
+                  <ClockIcon className="w-4 h-4 text-muted shrink-0" />
+                  <span className="text-muted w-12 shrink-0">{formatTime(new Date(occ.startAt))}</span>
+                  <span className={`truncate ${occ.isDone ? "text-muted line-through" : "text-ink"}`}>{occ.event.title}</span>
                 </li>
               ))}
             </ul>
@@ -239,8 +239,8 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-gray-100 shadow-card">
-        <h2 className="shrink-0 font-bold text-gray-800 text-sm px-4 pt-3 pb-2">عادت‌های امروز</h2>
+      <div className="flex-1 min-h-0 flex flex-col bg-surface rounded-2xl border border-line shadow-card">
+        <h2 className="shrink-0 font-bold text-ink text-sm px-4 pt-3 pb-2">عادت‌های امروز</h2>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
           {activeHabits.length === 0 ? (
             <EmptyState message="هنوز عادتی نساخته‌اید. از منو، بخش «عادت‌ها» را ببینید." />
@@ -252,17 +252,17 @@ export default function HomePage() {
                     onClick={() => toggleHabitCheckIn(h.id)}
                     aria-label="تیک عادت"
                     className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition ${
-                      h.checkedInToday ? "bg-brand-600 border-brand-600 text-white" : "border-gray-300 text-transparent"
+                      h.checkedInToday ? "bg-accent border-accent text-on-accent" : "border-line text-transparent"
                     }`}
                   >
                     <CheckSquareIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
                   </button>
                   <span className="shrink-0">{h.icon || "🔥"}</span>
-                  <span className={`flex-1 truncate ${h.checkedInToday ? "text-gray-400 line-through" : "text-gray-800"}`}>{h.title}</span>
+                  <span className={`flex-1 truncate ${h.checkedInToday ? "text-muted line-through" : "text-ink"}`}>{h.title}</span>
                   {h.checkedInToday && (
                     <button
                       onClick={() => setDurationHabit(h)}
-                      className="shrink-0 flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600 transition"
+                      className="shrink-0 flex items-center gap-1 text-xs text-muted hover:text-accent transition"
                       aria-label="ثبت زمان عادت"
                     >
                       <ClockIcon className="w-3.5 h-3.5" />

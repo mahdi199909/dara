@@ -42,10 +42,10 @@ export default function TasksPage() {
   return (
     <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-800">کارها</h1>
+        <h1 className="text-lg font-bold text-ink">کارها</h1>
         <button
           onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700"
+          className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
         >
           <PlusIcon className="w-4 h-4" />
           کار جدید
@@ -69,7 +69,7 @@ export default function TasksPage() {
             key={tab.value}
             onClick={() => setStatusFilter(tab.value)}
             className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full transition ${
-              statusFilter === tab.value ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-500"
+              statusFilter === tab.value ? "bg-accent text-on-accent" : "bg-surface border border-line text-muted"
             }`}
           >
             {tab.label}
@@ -79,40 +79,40 @@ export default function TasksPage() {
 
       <Card>
         {!data ? (
-          <p className="text-sm text-gray-400 text-center py-8">در حال بارگذاری...</p>
+          <p className="text-sm text-muted text-center py-8">در حال بارگذاری...</p>
         ) : data.tasks.length === 0 ? (
           <EmptyState message="هنوز کاری ثبت نکرده‌اید." />
         ) : (
-          <ul className="divide-y divide-gray-50">
+          <ul className="divide-y divide-line">
             {data.tasks.map((task) => (
               <li key={task.id} className="flex items-center gap-3 px-4 py-3">
                 <button
                   onClick={() => toggleStatus(task)}
                   className={`w-5 h-5 rounded-md border shrink-0 flex items-center justify-center transition ${
-                    task.status === "DONE" ? "bg-brand-600 border-brand-600 text-white" : "border-gray-300"
+                    task.status === "DONE" ? "bg-accent border-accent text-on-accent" : "border-line"
                   }`}
                 >
                   {task.status === "DONE" && "✓"}
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm truncate ${task.status === "DONE" ? "line-through text-gray-400" : "text-gray-800"}`}>
+                  <p className={`text-sm truncate ${task.status === "DONE" ? "line-through text-muted" : "text-ink"}`}>
                     {task.title}
                   </p>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-muted">
                     {task.category && <span>{task.category.icon} {task.category.name}</span>}
                     {task.project && <span>· {task.project.name}</span>}
                     {task.dueDate && <span>· سررسید {formatJalali(new Date(task.dueDate))}</span>}
                     {task.startAt && task.endAt && (
                       <span>· {formatDuration(Math.round((new Date(task.endAt).getTime() - new Date(task.startAt).getTime()) / 60000))}</span>
                     )}
-                    {task.directCost > 0 && <span className="text-waste-600">· {format(task.directCost, { withSuffix: true })}</span>}
-                    {task.incomeAmount > 0 && <span className="text-brand-600">· +{format(task.incomeAmount, { withSuffix: true })}</span>}
+                    {task.directCost > 0 && <span className="text-waste">· {format(task.directCost, { withSuffix: true })}</span>}
+                    {task.incomeAmount > 0 && <span className="text-accent">· +{format(task.incomeAmount, { withSuffix: true })}</span>}
                     {!STATUS_TABS.find((t) => t.value === task.status) ? null : task.status !== "DONE" && (
-                      <span className="text-brand-600">· {TASK_STATUS_LABELS[task.status as TaskStatus]}</span>
+                      <span className="text-accent">· {TASK_STATUS_LABELS[task.status as TaskStatus]}</span>
                     )}
                   </div>
                 </div>
-                <button onClick={() => remove(task.id)} className="text-gray-300 hover:text-waste-500 p-1">
+                <button onClick={() => remove(task.id)} className="text-muted hover:text-waste p-1">
                   <TrashIcon className="w-4 h-4" />
                 </button>
               </li>
@@ -157,27 +157,27 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="عنوان کار"
-          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
         <div className="grid grid-cols-3 gap-2">
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm">
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
             <option value="">دسته‌بندی</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
             ))}
           </select>
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm">
+          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
             <option value="">پروژه</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="rounded-xl border border-gray-200 px-2 py-2 text-sm" />
+          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm" />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+          className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40"
         >
           ثبت کار
         </button>

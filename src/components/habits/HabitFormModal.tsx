@@ -80,10 +80,10 @@ export default function HabitFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30">
-      <div className="w-full max-w-md mx-auto bg-white rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+      <div className="w-full max-w-md mx-auto bg-surface rounded-t-2xl shadow-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
         <div className="flex items-center justify-between px-5 pt-5">
-          <h2 className="font-bold text-gray-800">{isEdit ? "ویرایش عادت" : "ساخت عادت"}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+          <h2 className="font-bold text-ink">{isEdit ? "ویرایش عادت" : "ساخت عادت"}</h2>
+          <button onClick={onClose} className="text-muted hover:text-ink p-1">
             <XIcon className="w-5 h-5" />
           </button>
         </div>
@@ -93,7 +93,7 @@ export default function HabitFormModal({
               value={icon}
               onChange={(e) => setIcon(e.target.value)}
               placeholder="🙂"
-              className="rounded-xl border border-gray-200 px-2 py-2.5 text-sm text-center"
+              className="bg-surface rounded-xl border border-line px-2 py-2.5 text-sm text-center"
             />
             <input
               autoFocus
@@ -101,14 +101,14 @@ export default function HabitFormModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="عنوان عادت (مثلاً مطالعه روزانه)"
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+              className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
             />
           </div>
 
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+            className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm"
           >
             <option value="">دسته‌بندی (اختیاری)</option>
             {categories.filter((c: any) => c.isActive).map((c: any) => (
@@ -118,17 +118,17 @@ export default function HabitFormModal({
 
           <div>
             <MoneyInput value={virtualAssetValue} onChange={setVirtualAssetValue} placeholder="ارزش دارایی دیجیتال به‌ازای هر روز" />
-            <p className="text-xs text-gray-400 mt-1">هر روز که این عادت را تیک بزنید، این مبلغ به دارایی دیجیتال شما اضافه می‌شود.</p>
+            <p className="text-xs text-muted mt-1">هر روز که این عادت را تیک بزنید، این مبلغ به دارایی دیجیتال شما اضافه می‌شود.</p>
           </div>
 
           {isEdit && (
-            <label className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5">
-              <span className="text-sm text-gray-600">عادت فعال است</span>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="w-4 h-4 accent-brand-600" />
+            <label className="flex items-center justify-between rounded-xl bg-canvas px-3 py-2.5">
+              <span className="text-sm text-ink">عادت فعال است</span>
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="w-4 h-4 accent-accent" />
             </label>
           )}
 
-          {error && <p className="text-sm text-waste-600">{error}</p>}
+          {error && <p className="text-sm text-waste">{error}</p>}
 
           <div className="flex gap-2">
             {isEdit && (
@@ -136,12 +136,12 @@ export default function HabitFormModal({
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-4 rounded-xl border border-waste-200 text-waste-600 hover:bg-waste-50 transition disabled:opacity-40"
+                className="px-4 rounded-xl border border-waste-200 text-waste hover:bg-waste-50 transition disabled:opacity-40"
               >
                 <TrashIcon className="w-4 h-4" />
               </button>
             )}
-            <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700 disabled:opacity-40">
+            <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40">
               {loading ? "در حال ثبت..." : isEdit ? "ذخیره تغییرات" : "ساخت عادت"}
             </button>
           </div>

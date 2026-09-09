@@ -14,6 +14,13 @@ import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
 import { Preferences } from "@capacitor/preferences";
+import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
+
+const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: "light", label: "روشن" },
+  { value: "dark", label: "تیره" },
+  { value: "system", label: "مطابق سیستم" },
+];
 
 // Only shown once isNativePlatform() resolves true (see BackupTab) — a plain web session has
 // no on-device database to export and no OS share sheet to hand a file to.
@@ -58,7 +65,7 @@ export default function SettingsPage() {
 
   return (
     <div className="px-4 py-6 space-y-4">
-      <h1 className="text-lg font-bold text-gray-800">تنظیمات</h1>
+      <h1 className="text-lg font-bold text-ink">تنظیمات</h1>
 
       <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
         {visibleTabs.map((t) => (
@@ -66,7 +73,7 @@ export default function SettingsPage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full transition ${
-              tab === t.key ? "bg-brand-600 text-white" : "bg-white border border-gray-200 text-gray-500"
+              tab === t.key ? "bg-accent text-on-accent" : "bg-surface border border-line text-muted"
             }`}
           >
             {t.label}
@@ -110,9 +117,9 @@ function LicenseStatusCard() {
 
   return (
     <Card className="p-4">
-      <div className="text-sm font-medium text-gray-700">{LICENSE_STATUS_LABELS[license.status] ?? license.status}</div>
+      <div className="text-sm font-medium text-ink">{LICENSE_STATUS_LABELS[license.status] ?? license.status}</div>
       {license.status === "TRIAL" && license.trialDaysRemaining != null && (
-        <div className="text-xs text-gray-400 mt-1">{license.trialDaysRemaining} روز از دوره‌ی رایگان باقی مانده</div>
+        <div className="text-xs text-muted mt-1">{license.trialDaysRemaining} روز از دوره‌ی رایگان باقی مانده</div>
       )}
     </Card>
   );
@@ -156,7 +163,7 @@ function MembershipUpgradeCard() {
 
   return (
     <Card className="p-5 space-y-4">
-      <h2 className="font-bold text-gray-800 text-sm">ارتقا عضویت</h2>
+      <h2 className="font-bold text-ink text-sm">ارتقا عضویت</h2>
 
       {!selected ? (
         <div className="grid grid-cols-2 gap-3">
@@ -168,12 +175,12 @@ function MembershipUpgradeCard() {
                 key={plan.months}
                 type="button"
                 onClick={() => setSelected(plan)}
-                className="rounded-xl border border-gray-200 p-3 text-center hover:border-brand-400 hover:bg-brand-50 transition"
+                className="rounded-xl border border-line p-3 text-center hover:border-accent hover:bg-accent-soft transition"
               >
-                <div className="text-sm font-bold text-gray-800">{plan.label}</div>
-                <div className="text-xs text-gray-400 mt-1">{format(perMonth, { withSuffix: true })}/ماه</div>
-                <div className="text-sm font-bold text-brand-600 mt-1.5">{format(plan.totalPrice, { withSuffix: true })}</div>
-                <div className="mt-1.5 inline-block text-[11px] bg-brand-100 text-brand-700 rounded-full px-2 py-0.5">
+                <div className="text-sm font-bold text-ink">{plan.label}</div>
+                <div className="text-xs text-muted mt-1">{format(perMonth, { withSuffix: true })}/ماه</div>
+                <div className="text-sm font-bold text-accent mt-1.5">{format(plan.totalPrice, { withSuffix: true })}</div>
+                <div className="mt-1.5 inline-block text-[11px] bg-accent-soft text-accent rounded-full px-2 py-0.5">
                   {discountPercent}٪ تخفیف نسبت به پایه
                 </div>
               </button>
@@ -182,52 +189,52 @@ function MembershipUpgradeCard() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl bg-brand-50 border border-brand-100 p-4 text-center space-y-1">
+          <div className="rounded-xl bg-accent-soft border border-accent p-4 text-center space-y-1">
             <div className="text-2xl">🎉</div>
-            <p className="text-sm font-bold text-brand-700">تبریک! پلن {selected.label} رو انتخاب کردید</p>
-            <p className="text-xs text-brand-600">یک قدم دیگه تا فعال‌سازی اشتراکتون مونده.</p>
+            <p className="text-sm font-bold text-accent">تبریک! پلن {selected.label} رو انتخاب کردید</p>
+            <p className="text-xs text-accent">یک قدم دیگه تا فعال‌سازی اشتراکتون مونده.</p>
           </div>
 
           <div className="space-y-2 text-sm">
-            <p className="text-gray-600">
+            <p className="text-ink">
               مبلغ <strong>{format(selected.totalPrice, { withSuffix: true })}</strong> رو به شماره کارت زیر واریز کنید:
             </p>
             {cardNumber ? (
               <>
                 <div className="flex items-center gap-2">
-                  <div dir="ltr" className="flex-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-center font-mono tracking-wider text-gray-800">
+                  <div dir="ltr" className="flex-1 rounded-xl bg-canvas border border-line px-3 py-2.5 text-center font-mono tracking-wider text-ink">
                     {cardNumber}
                   </div>
                   <button
                     type="button"
                     onClick={copyCardNumber}
-                    className="shrink-0 text-xs bg-gray-100 text-gray-600 px-3 py-2.5 rounded-xl hover:bg-gray-200"
+                    className="shrink-0 text-xs bg-canvas text-ink px-3 py-2.5 rounded-xl hover:bg-line"
                   >
                     {copied ? "کپی شد ✓" : "کپی"}
                   </button>
                 </div>
                 {(bankName || cardHolder) && (
-                  <p className="text-xs text-gray-400 text-center">
+                  <p className="text-xs text-muted text-center">
                     {[bankName, cardHolder].filter(Boolean).join(" — به نام ")}
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-xs text-waste-500">
+              <p className="text-xs text-waste">
                 شماره کارت هنوز تنظیم نشده — NEXT_PUBLIC_PAYMENT_CARD_NUMBER رو در .env مقداردهی کنید.
               </p>
             )}
-            <p className="text-gray-600">
+            <p className="text-ink">
               بعد از واریز، برای فعال‌سازی اشتراک در بله یا تلگرام به این آیدی پیام بدید:{" "}
               {contactId ? (
                 <strong dir="ltr">{contactId}</strong>
               ) : (
-                <span className="text-xs text-waste-500">(NEXT_PUBLIC_PAYMENT_CONTACT_ID تنظیم نشده)</span>
+                <span className="text-xs text-waste">(NEXT_PUBLIC_PAYMENT_CONTACT_ID تنظیم نشده)</span>
               )}
             </p>
           </div>
 
-          <button type="button" onClick={() => setSelected(null)} className="w-full text-center text-xs text-gray-400 hover:text-gray-600">
+          <button type="button" onClick={() => setSelected(null)} className="w-full text-center text-xs text-muted hover:text-ink">
             بازگشت به انتخاب پلن
           </button>
         </div>
@@ -246,6 +253,7 @@ function PersonalTab() {
   const [sleepHour, setSleepHour] = useState(23);
   const [targetHours, setTargetHours] = useState("6");
   const [saved, setSaved] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>("system");
   const { unit, setUnit } = useCurrencyUnit();
 
   async function toggleDailyMoment() {
@@ -258,6 +266,16 @@ function PersonalTab() {
     mutate();
   }
 
+  // Applies instantly and locally (no-flash, no wait for the network round trip — see
+  // src/lib/theme.ts) before persisting, unlike the other toggles above which wait for the
+  // PATCH; a theme switch is exactly the kind of change where the visible feedback IS the point.
+  async function changeTheme(mode: ThemeMode) {
+    setTheme(mode);
+    setThemeMode(mode);
+    await apiPatch("/api/settings", { theme: mode });
+    mutate();
+  }
+
   useEffect(() => {
     if (data) {
       setName(data.user?.name ?? "");
@@ -265,6 +283,7 @@ function PersonalTab() {
       setWakeHour(data.settings.wakeHour ?? 7);
       setSleepHour(data.settings.sleepHour ?? 23);
       setTargetHours(String((data.settings.dailyProductiveTargetMin ?? 360) / 60));
+      if (isThemeMode(data.settings.theme)) setTheme(data.settings.theme);
     }
   }, [data]);
 
@@ -283,20 +302,20 @@ function PersonalTab() {
       <MembershipUpgradeCard />
       <Card className="p-5 space-y-4">
       <div>
-        <label className="block text-sm text-gray-600 mb-1">نام</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" />
+        <label className="block text-sm text-ink mb-1">نام</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
       </div>
       <div>
-        <label className="block text-sm text-gray-600 mb-1">منطقه زمانی</label>
-        <input value={timezone} onChange={(e) => setTimezone(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm" dir="ltr" />
+        <label className="block text-sm text-ink mb-1">منطقه زمانی</label>
+        <input value={timezone} onChange={(e) => setTimezone(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" dir="ltr" />
       </div>
       <div>
-        <label className="block text-sm text-gray-600 mb-1">ساعت‌های بیداری</label>
+        <label className="block text-sm text-ink mb-1">ساعت‌های بیداری</label>
         <div className="flex items-center gap-2">
           <select
             value={wakeHour}
             onChange={(e) => setWakeHour(Number(e.target.value))}
-            className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+            className="bg-surface flex-1 rounded-xl border border-line px-3 py-2.5 text-sm"
           >
             {HOURS_0_23.map((h) => (
               <option key={h} value={h}>
@@ -304,11 +323,11 @@ function PersonalTab() {
               </option>
             ))}
           </select>
-          <span className="text-xs text-gray-400 shrink-0">تا</span>
+          <span className="text-xs text-muted shrink-0">تا</span>
           <select
             value={sleepHour}
             onChange={(e) => setSleepHour(Number(e.target.value))}
-            className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm"
+            className="bg-surface flex-1 rounded-xl border border-line px-3 py-2.5 text-sm"
           >
             {HOURS_0_23.map((h) => (
               <option key={h} value={h}>
@@ -317,10 +336,10 @@ function PersonalTab() {
             ))}
           </select>
         </div>
-        <p className="text-xs text-gray-400 mt-1">ظرفیت نوار «روز» در صفحه اصلی بر همین بازه حساب می‌شود.</p>
+        <p className="text-xs text-muted mt-1">ظرفیت نوار «روز» در صفحه اصلی بر همین بازه حساب می‌شود.</p>
       </div>
       <div>
-        <label className="block text-sm text-gray-600 mb-1">هدف روزانه کار مفید (ساعت)</label>
+        <label className="block text-sm text-ink mb-1">هدف روزانه کار مفید (ساعت)</label>
         <input
           type="number"
           dir="ltr"
@@ -328,12 +347,12 @@ function PersonalTab() {
           step={0.5}
           value={targetHours}
           onChange={(e) => setTargetHours(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-right"
+          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm text-right"
         />
-        <p className="text-xs text-gray-400 mt-1">آدمک صفحه اصلی پیشرفت امروزت را نسبت به همین عدد نشان می‌دهد.</p>
+        <p className="text-xs text-muted mt-1">آدمک صفحه اصلی پیشرفت امروزت را نسبت به همین عدد نشان می‌دهد.</p>
       </div>
       <div>
-        <label className="block text-sm text-gray-600 mb-1">واحد پول</label>
+        <label className="block text-sm text-ink mb-1">واحد پول</label>
         <div className="flex gap-2">
           {CURRENCY_UNITS.map((u) => (
             <button
@@ -341,57 +360,76 @@ function PersonalTab() {
               type="button"
               onClick={() => setUnit(u as CurrencyUnit)}
               className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
-                unit === u ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                unit === u ? "bg-accent text-on-accent" : "bg-canvas text-muted"
               }`}
             >
               {CURRENCY_UNIT_LABELS[u]}
             </button>
           ))}
         </div>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-muted mt-1">
           همه اعدادی که قبلاً ثبت کرده‌اید بر همین اساس نمایش داده می‌شوند — هر تومان = ۱۰ ریال و هر هزار تومان = ۱۰۰۰ تومان.
         </p>
       </div>
-      <div className="text-sm text-gray-500">تقویم: شمسی</div>
+      <div className="text-sm text-muted">تقویم: شمسی</div>
       {data && (
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-700">نمایش لحظه روزانه</p>
-            <p className="text-xs text-gray-400">فقط برای کاربران ویژه، در صفحه اصلی نشان داده می‌شود.</p>
+            <p className="text-sm text-ink">نمایش لحظه روزانه</p>
+            <p className="text-xs text-muted">فقط برای کاربران ویژه، در صفحه اصلی نشان داده می‌شود.</p>
           </div>
           <button
             type="button"
             onClick={toggleDailyMoment}
             dir="ltr"
             className={`w-10 h-[22px] rounded-full transition shrink-0 flex items-center px-0.5 ${
-              data.settings.dailyMomentEnabled ? "bg-brand-500 justify-start" : "bg-gray-300 justify-end"
+              data.settings.dailyMomentEnabled ? "bg-accent justify-start" : "bg-line justify-end"
             }`}
             aria-label={data.settings.dailyMomentEnabled ? "غیرفعال کردن لحظه روزانه" : "فعال کردن لحظه روزانه"}
           >
-            <span className="h-4 w-4 rounded-full bg-white transition" />
+            <span className="h-4 w-4 rounded-full bg-surface transition" />
           </button>
         </div>
       )}
       {data && (
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-700">نمایش آدمک</p>
-            <p className="text-xs text-gray-400">آدمک همراه در صفحه اصلی، بازتاب پیشرفت روزانه‌ات.</p>
+            <p className="text-sm text-ink">نمایش آدمک</p>
+            <p className="text-xs text-muted">آدمک همراه در صفحه اصلی، بازتاب پیشرفت روزانه‌ات.</p>
           </div>
           <button
             type="button"
             onClick={toggleCompanion}
             dir="ltr"
             className={`w-10 h-[22px] rounded-full transition shrink-0 flex items-center px-0.5 ${
-              data.settings.companionEnabled ? "bg-brand-500 justify-start" : "bg-gray-300 justify-end"
+              data.settings.companionEnabled ? "bg-accent justify-start" : "bg-line justify-end"
             }`}
             aria-label={data.settings.companionEnabled ? "غیرفعال کردن آدمک" : "فعال کردن آدمک"}
           >
-            <span className="h-4 w-4 rounded-full bg-white transition" />
+            <span className="h-4 w-4 rounded-full bg-on-accent transition" />
           </button>
         </div>
       )}
-      <button onClick={save} className="rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700">
+      {data && (
+        <div>
+          <p className="text-sm text-ink mb-2">ظاهر</p>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => changeTheme(value)}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+                  theme === value ? "bg-accent text-on-accent" : "bg-canvas text-muted"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <button onClick={save} className="rounded-xl bg-accent text-on-accent px-4 py-2 text-sm font-medium hover:opacity-90">
         {saved ? "ذخیره شد ✓" : "ذخیره"}
       </button>
       </Card>
@@ -435,21 +473,21 @@ function FinancialTab() {
   return (
     <Card className="p-5 space-y-4">
       <div>
-        <label className="block text-sm text-gray-600 mb-1">حقوق ماهانه</label>
+        <label className="block text-sm text-ink mb-1">حقوق ماهانه</label>
         <MoneyInput value={monthlyIncome} onChange={setMonthlyIncome} />
       </div>
       <div>
-        <label className="block text-sm text-gray-600 mb-1">ساعات کاری ماهانه</label>
-        <input type="number" dir="ltr" value={workingHoursMonth} onChange={(e) => setWorkingHoursMonth(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-right" />
+        <label className="block text-sm text-ink mb-1">ساعات کاری ماهانه</label>
+        <input type="number" dir="ltr" value={workingHoursMonth} onChange={(e) => setWorkingHoursMonth(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm text-right" />
       </div>
       <div>
-        <label className="block text-sm text-gray-600 mb-1">ارزش هر ساعت (تنظیم دستی، اختیاری)</label>
+        <label className="block text-sm text-ink mb-1">ارزش هر ساعت (تنظیم دستی، اختیاری)</label>
         <MoneyInput value={hourlyValueOverride} onChange={setHourlyValueOverride} />
       </div>
-      <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-700">
+      <div className="rounded-xl bg-accent-soft p-3 text-sm text-accent">
         ارزش هر ساعت شما: <strong>{format(previewHourlyValue, { withSuffix: true })}</strong>
       </div>
-      <button onClick={save} className="rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700">
+      <button onClick={save} className="rounded-xl bg-accent text-on-accent px-4 py-2 text-sm font-medium hover:opacity-90">
         {saved ? "ذخیره شد ✓" : "ذخیره"}
       </button>
     </Card>
@@ -541,11 +579,11 @@ function CategoriesTab() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted">
         برای هر دسته‌بندی مشخص کنید «هزینه» یا «دارایی» است — همین انتخاب در فرم ثبت کار روی صفحه اصلی پیش‌فرض می‌شود.
       </p>
 
-      <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-sm bg-brand-600 text-white px-3 py-2 rounded-xl hover:bg-brand-700">
+      <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90">
         <PlusIcon className="w-4 h-4" />
         دسته‌بندی جدید
       </button>
@@ -554,10 +592,10 @@ function CategoriesTab() {
         <Card className="p-4">
           <form onSubmit={create} className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
-              <input value={icon} onChange={(e) => setIcon(e.target.value)} className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-center" />
-              <input className="col-span-2 rounded-xl border border-gray-200 px-3 py-2 text-sm" required value={name} onChange={(e) => setName(e.target.value)} placeholder="نام دسته‌بندی" />
+              <input value={icon} onChange={(e) => setIcon(e.target.value)} className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-center" />
+              <input className="bg-surface col-span-2 rounded-xl border border-line px-3 py-2 text-sm" required value={name} onChange={(e) => setName(e.target.value)} placeholder="نام دسته‌بندی" />
             </div>
-            <select value={kind} onChange={(e) => setKind(e.target.value as CategoryKind)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
+            <select value={kind} onChange={(e) => setKind(e.target.value as CategoryKind)} className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm">
               {CATEGORY_KINDS.map((k) => (
                 <option key={k} value={k}>{CATEGORY_KIND_LABELS[k]}</option>
               ))}
@@ -565,7 +603,7 @@ function CategoriesTab() {
             <select
               value={parentCategoryId}
               onChange={(e) => setParentCategoryId(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm"
             >
               <option value="">بدون والد (دسته‌بندی مستقل)</option>
               {topLevelCategories.map((c) => (
@@ -579,14 +617,14 @@ function CategoriesTab() {
                   key={v}
                   onClick={() => setValueType(v)}
                   className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
-                    valueType === v ? "bg-brand-100 text-brand-700 border border-brand-300" : "bg-gray-50 text-gray-500 border border-transparent"
+                    valueType === v ? "bg-accent-soft text-accent border border-accent" : "bg-canvas text-muted border border-transparent"
                   }`}
                 >
                   {VALUE_TYPE_LABELS[v]}
                 </button>
               ))}
             </div>
-            <button type="submit" disabled={creating} className="w-full rounded-xl bg-brand-600 text-white py-2 text-sm font-medium disabled:opacity-40">
+            <button type="submit" disabled={creating} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">
               {creating ? "در حال ثبت..." : "ثبت"}
             </button>
           </form>
@@ -597,19 +635,19 @@ function CategoriesTab() {
         {categories.length === 0 ? (
           <EmptyState message="دسته‌بندی‌ای وجود ندارد." />
         ) : (
-          <ul className="divide-y divide-gray-50">
+          <ul className="divide-y divide-line">
             {topLevelCategories.map((top, index) => {
               function row(c: any, isChild: boolean) {
                 return (
-                  <li key={c.id} className={`px-4 py-3 space-y-2 ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-gray-50/60" : ""}`}>
+                  <li key={c.id} className={`px-4 py-3 space-y-2 ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-canvas/60" : ""}`}>
                     <div className="flex items-center gap-3">
-                      {isChild && <span className="text-gray-300 shrink-0">└</span>}
+                      {isChild && <span className="text-muted shrink-0">└</span>}
                       {!isChild && (
                         <div className="flex flex-col gap-0.5 shrink-0">
                           <button
                             onClick={() => moveGroup(index, -1)}
                             disabled={index === 0}
-                            className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none"
+                            className="text-muted hover:text-ink disabled:opacity-20 leading-none"
                             aria-label="جابه‌جایی به بالا"
                           >
                             ▲
@@ -617,7 +655,7 @@ function CategoriesTab() {
                           <button
                             onClick={() => moveGroup(index, 1)}
                             disabled={index === topLevelCategories.length - 1}
-                            className="text-gray-300 hover:text-gray-600 disabled:opacity-20 leading-none"
+                            className="text-muted hover:text-ink disabled:opacity-20 leading-none"
                             aria-label="جابه‌جایی به پایین"
                           >
                             ▼
@@ -626,20 +664,20 @@ function CategoriesTab() {
                       )}
                       <span className="text-lg">{c.icon}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-800">{c.name}</p>
-                        <p className="text-xs text-gray-400">{CATEGORY_KIND_LABELS[c.kind as CategoryKind]}</p>
+                        <p className="text-sm text-ink">{c.name}</p>
+                        <p className="text-xs text-muted">{CATEGORY_KIND_LABELS[c.kind as CategoryKind]}</p>
                       </div>
                       <button
                         onClick={() => toggleActive(c)}
                         dir="ltr"
                         className={`w-10 h-[22px] rounded-full transition shrink-0 flex items-center px-0.5 ${
-                          c.isActive ? "bg-brand-500 justify-start" : "bg-gray-300 justify-end"
+                          c.isActive ? "bg-accent justify-start" : "bg-line justify-end"
                         }`}
                         aria-label={c.isActive ? "غیرفعال کردن" : "فعال کردن"}
                       >
-                        <span className="h-4 w-4 rounded-full bg-white transition" />
+                        <span className="h-4 w-4 rounded-full bg-surface transition" />
                       </button>
-                      <button onClick={() => remove(c.id)} className="text-gray-300 hover:text-waste-500 p-1 shrink-0">
+                      <button onClick={() => remove(c.id)} className="text-muted hover:text-waste p-1 shrink-0">
                         <TrashIcon className="w-4 h-4" />
                       </button>
                     </div>
@@ -649,7 +687,7 @@ function CategoriesTab() {
                           key={v}
                           onClick={() => setCategoryValueType(c, v)}
                           className={`text-xs px-2.5 py-1 rounded-lg ${
-                            c.valueType === v ? "bg-brand-600 text-white" : "bg-gray-100 text-gray-500"
+                            c.valueType === v ? "bg-accent text-on-accent" : "bg-canvas text-muted"
                           }`}
                         >
                           {VALUE_TYPE_LABELS[v]}
@@ -664,7 +702,7 @@ function CategoriesTab() {
                           }
                         }}
                         className={`text-xs px-2.5 py-1 rounded-lg mr-auto ${
-                          c.generatesVirtualAsset ? "bg-brand-100 text-brand-700" : "bg-gray-100 text-gray-500"
+                          c.generatesVirtualAsset ? "bg-accent-soft text-accent" : "bg-canvas text-muted"
                         }`}
                       >
                         دارایی مجازی {c.generatesVirtualAsset ? `(${format(c.virtualAssetValuePerHour, { withSuffix: true })}/س)` : "خاموش"}
@@ -673,10 +711,10 @@ function CategoriesTab() {
                     {editingRateFor === c.id && (
                       <div className="flex items-center gap-2 pr-9">
                         <MoneyInput value={rateInput} onChange={setRateInput} placeholder="ارزش هر ساعت" autoFocus />
-                        <button onClick={() => saveVirtualAssetRate(c.id)} className="text-xs bg-brand-600 text-white px-3 py-1.5 rounded-lg shrink-0">
+                        <button onClick={() => saveVirtualAssetRate(c.id)} className="text-xs bg-accent text-on-accent px-3 py-1.5 rounded-lg shrink-0">
                           ثبت
                         </button>
-                        <button onClick={() => setEditingRateFor(null)} className="text-xs text-gray-400 shrink-0">
+                        <button onClick={() => setEditingRateFor(null)} className="text-xs text-muted shrink-0">
                           انصراف
                         </button>
                       </div>
@@ -705,17 +743,17 @@ function HistoryTab() {
   return (
     <Card>
       {!data ? (
-        <p className="text-sm text-gray-400 text-center py-8">در حال بارگذاری...</p>
+        <p className="text-sm text-muted text-center py-8">در حال بارگذاری...</p>
       ) : data.logs.length === 0 ? (
         <EmptyState message="هنوز رخدادی ثبت نشده." />
       ) : (
-        <ul className="divide-y divide-gray-50 max-h-[32rem] overflow-y-auto scrollbar-thin">
+        <ul className="divide-y divide-line max-h-[32rem] overflow-y-auto scrollbar-thin">
           {data.logs.map((log) => (
             <li key={log.id} className="px-4 py-2.5 text-sm flex items-center justify-between">
-              <span className="text-gray-700">
+              <span className="text-ink">
                 {AUDIT_ACTION_LABELS[log.action] ?? log.action} · {log.entityType}
               </span>
-              <span className="text-xs text-gray-400">{formatJalali(new Date(log.createdAt), { withTime: true })}</span>
+              <span className="text-xs text-muted">{formatJalali(new Date(log.createdAt), { withTime: true })}</span>
             </li>
           ))}
         </ul>
@@ -870,39 +908,39 @@ function BackupTab() {
   return (
     <div className="space-y-4">
       <Card className="p-5 space-y-3">
-        <h2 className="font-bold text-gray-800 text-sm">خروجی گرفتن از همه اطلاعات</h2>
-        <p className="text-xs text-gray-400 leading-relaxed">
+        <h2 className="font-bold text-ink text-sm">خروجی گرفتن از همه اطلاعات</h2>
+        <p className="text-xs text-muted leading-relaxed">
           یک فایل شامل تمام اطلاعات شما (کارها، فعالیت‌ها، تراکنش‌ها، عادت‌ها و ...) می‌سازد تا آن را از طریق تلگرام، ایمیل، فضای ابری یا هر روش دیگری به گوشی جدید منتقل کنید.
         </p>
         <button
           type="button"
           onClick={handleExport}
           disabled={exporting}
-          className="rounded-xl bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+          className="rounded-xl bg-accent text-on-accent px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40"
         >
           {exporting ? "در حال ساخت فایل..." : "ساخت و اشتراک‌گذاری فایل پشتیبان"}
         </button>
-        {exportMessage && <p className="text-xs text-brand-600">{exportMessage}</p>}
-        {exportError && <p className="text-xs text-waste-500">{exportError}</p>}
+        {exportMessage && <p className="text-xs text-accent">{exportMessage}</p>}
+        {exportError && <p className="text-xs text-waste">{exportError}</p>}
       </Card>
 
       <Card className="p-5 space-y-3">
-        <h2 className="font-bold text-gray-800 text-sm">وارد کردن اطلاعات از فایل پشتیبان</h2>
-        <p className="text-xs text-gray-400 leading-relaxed">
+        <h2 className="font-bold text-ink text-sm">وارد کردن اطلاعات از فایل پشتیبان</h2>
+        <p className="text-xs text-muted leading-relaxed">
           فایل پشتیبانی که قبلاً از گوشی دیگر ساخته‌اید را انتخاب کنید. این کار فقط اطلاعات جدید را اضافه می‌کند — چیزی را جایگزین یا حذف نمی‌کند.
         </p>
-        <label className="inline-block rounded-xl bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium cursor-pointer hover:bg-gray-200">
+        <label className="inline-block rounded-xl bg-canvas text-ink px-4 py-2 text-sm font-medium cursor-pointer hover:bg-line">
           انتخاب فایل پشتیبان
           <input type="file" accept="application/json,.json" onChange={handleFileSelected} className="hidden" />
         </label>
-        {importError && <p className="text-xs text-waste-500">{importError}</p>}
+        {importError && <p className="text-xs text-waste">{importError}</p>}
 
         {pendingImport && (
-          <div className="rounded-xl bg-brand-50 border border-brand-100 p-4 space-y-3">
-            <p className="text-sm text-brand-700">
+          <div className="rounded-xl bg-accent-soft border border-accent p-4 space-y-3">
+            <p className="text-sm text-accent">
               این فایل شامل موارد زیر است — مواردی که از قبل روی این گوشی وجود داشته باشند نادیده گرفته می‌شوند:
             </p>
-            <ul className="text-xs text-gray-600 space-y-1">
+            <ul className="text-xs text-ink space-y-1">
               {pendingImport.counts.map(({ table, count }) => (
                 <li key={table} className="flex items-center justify-between">
                   <span>{TABLE_LABELS_FA[table] ?? table}</span>
@@ -917,7 +955,7 @@ function BackupTab() {
                 type="button"
                 onClick={confirmImport}
                 disabled={importing}
-                className="flex-1 rounded-xl bg-brand-600 text-white py-2 text-sm font-medium hover:bg-brand-700 disabled:opacity-40"
+                className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40"
               >
                 {importing ? "در حال وارد کردن..." : "تأیید و وارد کردن"}
               </button>
@@ -925,7 +963,7 @@ function BackupTab() {
                 type="button"
                 onClick={() => setPendingImport(null)}
                 disabled={importing}
-                className="flex-1 rounded-xl bg-gray-100 text-gray-600 py-2 text-sm"
+                className="flex-1 rounded-xl bg-canvas text-ink py-2 text-sm"
               >
                 انصراف
               </button>
@@ -934,24 +972,24 @@ function BackupTab() {
         )}
 
         {importResult && (
-          <div className="rounded-xl bg-gray-50 border border-gray-100 p-4 space-y-2">
-            <p className="text-sm text-gray-700 font-medium">نتیجه وارد کردن اطلاعات:</p>
+          <div className="rounded-xl bg-canvas border border-line p-4 space-y-2">
+            <p className="text-sm text-ink font-medium">نتیجه وارد کردن اطلاعات:</p>
             {resultTables.length === 0 ? (
-              <p className="text-xs text-gray-400">هیچ داده‌ی جدیدی برای اضافه کردن پیدا نشد.</p>
+              <p className="text-xs text-muted">هیچ داده‌ی جدیدی برای اضافه کردن پیدا نشد.</p>
             ) : (
-              <ul className="text-xs text-gray-600 space-y-1">
+              <ul className="text-xs text-ink space-y-1">
                 {resultTables.map((table) => {
                   const added = importResult.added[table] ?? 0;
                   const skipped = importResult.skipped[table] ?? 0;
                   const errors = importResult.errors[table] ?? 0;
                   return (
                     <li key={table}>
-                      <span className="text-gray-700">{TABLE_LABELS_FA[table] ?? table}: </span>
-                      {added > 0 && <span className="text-brand-600">{added.toLocaleString("fa-IR")} مورد اضافه شد</span>}
+                      <span className="text-ink">{TABLE_LABELS_FA[table] ?? table}: </span>
+                      {added > 0 && <span className="text-accent">{added.toLocaleString("fa-IR")} مورد اضافه شد</span>}
                       {added > 0 && skipped > 0 && "، "}
                       {skipped > 0 && <span>{skipped.toLocaleString("fa-IR")} مورد از قبل موجود بود</span>}
                       {(added > 0 || skipped > 0) && errors > 0 && "، "}
-                      {errors > 0 && <span className="text-waste-500">{errors.toLocaleString("fa-IR")} مورد با خطا مواجه شد</span>}
+                      {errors > 0 && <span className="text-waste">{errors.toLocaleString("fa-IR")} مورد با خطا مواجه شد</span>}
                     </li>
                   );
                 })}
@@ -966,7 +1004,7 @@ function BackupTab() {
 
 const WIDGET_COLOR_KEY = "widget_theme_color";
 const WIDGET_OPACITY_KEY = "widget_theme_opacity";
-const DEFAULT_WIDGET_COLOR = "#1c39bb";
+const DEFAULT_WIDGET_COLOR = "#0e5f54";
 const DEFAULT_WIDGET_OPACITY = 85;
 
 // Background-only theming for the four home-screen widgets (see the four *WidgetProvider.java
@@ -1013,8 +1051,8 @@ function WidgetsTab() {
   return (
     <Card className="p-5 space-y-4">
       <div>
-        <h2 className="font-bold text-gray-800 text-sm">رنگ و شفافیت ویجت‌ها</h2>
-        <p className="text-xs text-gray-400 leading-relaxed mt-1">
+        <h2 className="font-bold text-ink text-sm">رنگ و شفافیت ویجت‌ها</h2>
+        <p className="text-xs text-muted leading-relaxed mt-1">
           روی پس‌زمینهٔ هر چهار ویجت صفحهٔ اصلی (ثبت سریع، عادت‌ها، رویدادهای امروز، سرمایه) اعمال می‌شود. برای دیدن تغییر، به صفحهٔ اصلی گوشی برگردید.
         </p>
       </div>
@@ -1024,18 +1062,18 @@ function WidgetsTab() {
           type="color"
           value={color}
           onChange={(e) => setColor(e.target.value)}
-          className="w-12 h-12 rounded-xl border border-gray-200 cursor-pointer"
+          className="bg-surface w-12 h-12 rounded-xl border border-line cursor-pointer"
         />
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-500 mb-1">رنگ</p>
-          <p className="text-sm text-gray-700 font-mono" dir="ltr">{color}</p>
+          <p className="text-xs text-muted mb-1">رنگ</p>
+          <p className="text-sm text-ink font-mono" dir="ltr">{color}</p>
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-gray-500">شفافیت پس‌زمینه</p>
-          <p className="text-xs text-gray-700 font-medium" dir="ltr">{toPersianDigits(opacity)}٪</p>
+          <p className="text-xs text-muted">شفافیت پس‌زمینه</p>
+          <p className="text-xs text-ink font-medium" dir="ltr">{toPersianDigits(opacity)}٪</p>
         </div>
         <input
           type="range"
@@ -1049,18 +1087,18 @@ function WidgetsTab() {
       </div>
 
       <div
-        className="rounded-2xl border border-gray-200 h-20 flex items-center justify-center text-xs text-gray-500"
+        className="rounded-2xl border border-line h-20 flex items-center justify-center text-xs text-muted"
         style={{ backgroundColor: color, opacity: opacity / 100 }}
       >
         پیش‌نمایش تقریبی
       </div>
 
       <div className="flex gap-2">
-        <button onClick={save} className="flex-1 rounded-xl bg-brand-600 text-white py-2.5 text-sm font-medium hover:bg-brand-700">
+        <button onClick={save} className="flex-1 rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90">
           {saved ? "ذخیره شد" : "ذخیره"}
         </button>
         {customized && (
-          <button onClick={resetToDefault} className="rounded-xl border border-gray-200 text-gray-500 px-4 py-2.5 text-sm hover:bg-gray-50">
+          <button onClick={resetToDefault} className="rounded-xl border border-line text-muted px-4 py-2.5 text-sm hover:bg-canvas">
             بازگشت به پیش‌فرض
           </button>
         )}
