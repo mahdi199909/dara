@@ -47,14 +47,18 @@ async function readPersistedBytes(): Promise<Uint8Array | null> {
     const { data } = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
     return base64ToBytes(data as string);
   } catch (err) {
-    // Capacitor's Filesystem plugin throws this exact message for a genuinely missing file
-    // (first launch) — anything else (a read/decode failure against a file that does exist,
-    // e.g. left truncated by an interrupted flush) is a real problem, not a fresh install, and
-    // must not be silently treated as "no data yet": that would make loadBrowserSqliteDriver
-    // below construct a brand-new *empty* database instead of surfacing the failure, which looks
-    // to the user exactly like all their data vanished. Let it throw instead — FirstRunGate's
-    // own catch already turns this into a visible bootError.
-    if (err instanceof Error && err.message === "File does not exist") return null;
+    // Capacitor's Filesystem plugin reports a genuinely missing file (first launch) with a
+    // message that varies by platform/version — Android has been observed as both the bare
+    // "File does not exist" and the more verbose "'readFile' failed because file at '<path>'
+    // does not exist." (the latter is what a real device actually throws, confirmed from a user
+    // bootError report) — so match on the "does not exist" substring rather than a fixed string.
+    // Anything else (a read/decode failure against a file that does exist, e.g. left truncated by
+    // an interrupted flush) is a real problem, not a fresh install, and must not be silently
+    // treated as "no data yet": that would make loadBrowserSqliteDriver below construct a
+    // brand-new *empty* database instead of surfacing the failure, which looks to the user
+    // exactly like all their data vanished. Let it throw instead — FirstRunGate's own catch
+    // already turns this into a visible bootError.
+    if (err instanceof Error && /does not exist/i.test(err.message)) return null;
     throw err;
   }
 }
