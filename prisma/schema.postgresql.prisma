@@ -89,6 +89,10 @@ model Settings {
   // Light/dark/system UI theme preference — see schema.prisma's copy of this comment.
   theme String @default("system") // light | dark | system
 
+  // Calendar month-view 4th metric — see schema.prisma's copy of this comment.
+  calendarFeaturedType String?
+  calendarFeaturedId   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

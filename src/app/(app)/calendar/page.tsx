@@ -8,7 +8,18 @@ import { getJalaliMonthGrid, isSameDay, addJalaliMonths } from "@/lib/calendarGr
 import { Card, EmptyState } from "@/components/ui/Card";
 import { ChevronRightIcon, ChevronLeftIcon, PlusIcon, CheckSquareIcon } from "@/components/icons";
 import EventFormModal from "@/components/calendar/EventFormModal";
+import DayDetailModal from "@/components/calendar/DayDetailModal";
+import FeaturedMetricPicker from "@/components/calendar/FeaturedMetricPicker";
 import { toPersianDigits } from "@/lib/money";
+import { useCurrencyUnit } from "@/lib/currencyUnit";
+import { dayKeyIso } from "@/lib/calendarGrid";
+
+/** Compact Toman amount for a small calendar cell — "۵۰۰ه"/"۱.۲م", not the full formatted string. */
+function compactMoney(amount: number): string {
+  if (amount < 1000) return toPersianDigits(amount);
+  if (amount < 1_000_000) return `${toPersianDigits(Math.round(amount / 100) / 10)}ه`;
+  return `${toPersianDigits(Math.round(amount / 100_000) / 10)}م`;
+}
 
 const WEEKDAY_HEADERS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
 const VIEWS = [
@@ -28,8 +39,22 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [editingEvent, setEditingEvent] = useState<any>(null);
+  const [detailDay, setDetailDay] = useState<Date | null>(null);
+  const [showFeaturedPicker, setShowFeaturedPicker] = useState(false);
+  const { format } = useCurrencyUnit();
 
   const { jy, jm } = toJalali(cursor);
+
+  const { data: overviewData, mutate: mutateOverview } = useSWR<{ overview: { days: any[]; monthIncome: number; monthExpense: number; featured: any } }>(
+    view === "month" ? `/api/calendar/month-overview?jy=${jy}&jm=${jm}` : null,
+    fetcher
+  );
+  const overview = overviewData?.overview;
+  const overviewByDay = useMemo(() => {
+    const map = new Map<string, { income: number; expense: number; productiveValue: number; featuredValue: number | null }>();
+    for (const d of overview?.days ?? []) map.set(d.date, d);
+    return map;
+  }, [overview]);
 
   const range = useMemo(() => {
     if (view === "month") {
@@ -151,47 +176,70 @@ export default function CalendarPage() {
       )}
 
       {view === "month" && (
-        <Card className="p-3">
-          <div className="grid grid-cols-7 text-center text-xs text-muted mb-2">
-            {WEEKDAY_HEADERS.map((w) => <div key={w}>{w}</div>)}
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {getJalaliMonthGrid(jy, jm).map((day) => {
-              const { jm: dJm, jd } = toJalali(day);
-              const inMonth = dJm === jm;
-              const isToday = isSameDay(day, new Date());
-              const events = occurrencesByDay.get(dayKey(day)) ?? [];
-              const tasks = tasksByDay.get(dayKey(day)) ?? [];
-              return (
-                <button
-                  key={day.toISOString()}
-                  onClick={() => { setSelectedDay(day); setCursor(day); setView("day"); }}
-                  className={`h-20 rounded-xl border p-1 text-right flex flex-col gap-0.5 ${
-                    inMonth ? "bg-surface border-line" : "bg-canvas border-transparent text-muted"
-                  } ${isToday ? "ring-2 ring-brand-400" : ""}`}
-                >
-                  <span className={`text-xs ${inMonth ? "text-ink" : "text-muted"}`}>{toPersianDigits(jd)}</span>
-                  <div className="flex-1 overflow-hidden space-y-0.5 w-full">
-                    {events.slice(0, 2).map((occ) => (
-                      <div key={occ.occurrenceId} className="text-[9px] leading-tight bg-accent-soft text-accent rounded px-1 truncate">
-                        {occ.event.title}
+        <>
+          <Card className="p-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted mb-1">جریان این ماه</p>
+              <div className="flex items-center gap-3 text-sm font-bold">
+                <span className="text-accent">+{format(overview?.monthIncome ?? 0, { withSuffix: true })}</span>
+                <span className="text-waste">-{format(overview?.monthExpense ?? 0, { withSuffix: true })}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowFeaturedPicker(true)}
+              className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
+            >
+              {overview?.featured ? `${overview.featured.icon ?? ""} ${overview.featured.name}` : "دسته‌بندی ویژه +"}
+            </button>
+          </Card>
+
+          <Card className="p-3">
+            <div className="grid grid-cols-7 text-center text-xs text-muted mb-2">
+              {WEEKDAY_HEADERS.map((w) => <div key={w}>{w}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {getJalaliMonthGrid(jy, jm).map((day) => {
+                const { jm: dJm, jd } = toJalali(day);
+                const inMonth = dJm === jm;
+                const isToday = isSameDay(day, new Date());
+                const summary = overviewByDay.get(dayKeyIso(day));
+                return (
+                  <button
+                    key={day.toISOString()}
+                    onClick={() => setDetailDay(day)}
+                    className={`h-24 rounded-xl border p-1 text-right flex flex-col gap-0.5 ${
+                      inMonth ? "bg-surface border-line" : "bg-canvas border-transparent text-muted"
+                    } ${isToday ? "ring-2 ring-brand-400" : ""}`}
+                  >
+                    <span className={`text-xs ${inMonth ? "text-ink" : "text-muted"}`}>{toPersianDigits(jd)}</span>
+                    {summary && (
+                      <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[8px] leading-tight font-medium">
+                        {summary.income > 0 && <span className="text-accent">+{compactMoney(summary.income)}</span>}
+                        {summary.expense > 0 && <span className="text-waste">-{compactMoney(summary.expense)}</span>}
+                        {summary.productiveValue > 0 && <span className="text-ink">⚡{compactMoney(summary.productiveValue)}</span>}
+                        {summary.featuredValue !== null && summary.featuredValue > 0 && (
+                          <span className="text-muted">
+                            ★{overview?.featured?.type === "habit" ? "" : compactMoney(summary.featuredValue) + "د"}
+                          </span>
+                        )}
                       </div>
-                    ))}
-                    {tasks.slice(0, Math.max(0, 2 - events.length)).map((t) => (
-                      <div key={t.id} className="text-[9px] leading-tight bg-amber-50 text-amber-700 rounded px-1 truncate">
-                        ☐ {t.title}
-                      </div>
-                    ))}
-                    {events.length + tasks.length > 2 && (
-                      <div className="text-[9px] text-muted px-1">+{toPersianDigits(events.length + tasks.length - 2)}</div>
                     )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        </>
       )}
+
+      {detailDay && (
+        <DayDetailModal
+          date={detailDay}
+          onClose={() => setDetailDay(null)}
+          onChanged={() => { mutateOverview(); mutate(); }}
+        />
+      )}
+      {showFeaturedPicker && <FeaturedMetricPicker onClose={() => setShowFeaturedPicker(false)} onSaved={mutateOverview} />}
 
       {view === "week" && (
         <div className="grid grid-cols-1 gap-3">
