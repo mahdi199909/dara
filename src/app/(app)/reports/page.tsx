@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { IBM_Plex_Mono } from "next/font/google";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
@@ -15,12 +14,6 @@ import { ChevronRightIcon, ChevronLeftIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import DeltaChip, { type DeltaPolarity } from "@/components/DeltaChip";
 import { phraseDeltaPride, phraseSamePeriodTasksCompleted, phraseSamePeriodVirtualAsset } from "@/lib/phrasing";
-
-// Scoped to this page only — the ledger/ring redesign's numbers read as bookkeeping entries
-// (tabular, monospace) deliberately set apart from the Persian prose around them; the rest of
-// the app keeps Vazirmatn's own numerals. See doc/theme-prompt.md's rebrand for the precedent of
-// a page-scoped font decision documented at its point of use rather than assumed global.
-const plexMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-plex-mono" });
 
 // The only comparison this product ever shows (its own past period — see comparePeriods). Each
 // entry's polarity says which direction is "good"; totalMinutes carries no polarity — logging
@@ -203,31 +196,6 @@ export default function ReportsPage() {
   );
 }
 
-// Deliberately Western digits + comma grouping, not toPersianDigits()/format() — this is the one
-// section styled as a bookkeeping ledger (IBM Plex Mono, see plexMono above), and that font's
-// "latin" subset has no Persian-numeral glyphs to render — mixing in toPersianDigits() here would
-// silently fall back to a different font per-glyph and break the tabular alignment the ledger
-// look depends on. Comparison text underneath each value stays in the app's normal Persian-digit
-// voice (DeltaChip, computePrideLine) — only the primary figures get this treatment. Always full,
-// exact Toman — the ledger shows one canonical unit regardless of the rial/thousand-toman display
-// preference elsewhere in the app.
-function ledgerMoney(toman: number): string {
-  return Math.round(toman).toLocaleString("en-US");
-}
-function ledgerHours(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return `${h}:${String(m).padStart(2, "0")}`;
-}
-// formatJalali() always ends in toPersianDigits() — fine everywhere else, but the one spot this
-// page uses a date (the ledger-head range) sits inside the mono treatment above, so it needs its
-// own Western-digit formatting for the same reason ledgerMoney/ledgerHours do.
-function ledgerDate(date: Date): string {
-  const { jy, jm, jd } = toJalali(date);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${jy}/${pad(jm)}/${pad(jd)}`;
-}
-
 /** Arc path for a ring segment, measured clockwise from 12 o'clock so a 300deg sweep starting at
  * 210deg leaves a 60deg gap centered at the bottom — the same "open ring" the Parva logomark
  * itself draws, not a closed 360deg gauge borrowed from generic dashboards. */
@@ -263,7 +231,7 @@ function ComparisonRing({ current, previous, label }: { current: number; previou
           <path d={ringArcPath(66, 66, 47, RING_START_DEG, curSweep)} fill="none" stroke="rgb(var(--accent))" strokeWidth="10" strokeLinecap="round" />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`${plexMono.className} text-xl font-bold text-ink`}>{ledgerHours(current)}</span>
+          <span className="text-lg font-bold text-ink">{compactDuration(current)}</span>
           <span className="text-[10px] text-muted mt-0.5">{label}</span>
         </div>
       </div>
@@ -271,12 +239,12 @@ function ComparisonRing({ current, previous, label }: { current: number; previou
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
           <span className="text-muted">این بازه</span>
-          <span className={`${plexMono.className} text-ink mr-auto`}>{ledgerHours(current)}</span>
+          <span className="text-ink mr-auto font-semibold">{compactDuration(current)}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-muted shrink-0" />
           <span className="text-muted">بازهٔ قبل</span>
-          <span className={`${plexMono.className} text-ink mr-auto`}>{ledgerHours(previous)}</span>
+          <span className="text-ink mr-auto font-semibold">{compactDuration(previous)}</span>
         </div>
       </div>
     </div>
@@ -305,7 +273,7 @@ function LedgerRow({
       <span className="text-[10px] text-muted/70 w-5 shrink-0">{String(index).padStart(2, "0")}</span>
       <span className="text-sm text-ink flex-1">{label}</span>
       <div className="text-left">
-        <span className={`${plexMono.className} block text-sm font-semibold ${wasteTone ? "text-waste" : "text-ink"}`}>{value}</span>
+        <span className={`block text-sm font-semibold ${wasteTone ? "text-waste" : "text-ink"}`}>{value}</span>
         {previous !== undefined && (
           <span className="text-[11px]">
             <DeltaChip current={current} previous={previous} polarity={polarity} />
@@ -317,6 +285,7 @@ function LedgerRow({
 }
 
 function SummaryTab({ data }: { data: any }) {
+  const { format } = useCurrencyUnit();
   const prideLine = computePrideLine(data.comparison);
   const cmp = data.comparison?.hasEnoughHistory ? data.comparison : null;
 
@@ -324,8 +293,8 @@ function SummaryTab({ data }: { data: any }) {
     <div className="space-y-5">
       <div className="flex items-baseline justify-between pb-3 border-b-2 border-ink">
         <h2 className="text-base font-extrabold text-ink">دفتر این بازه</h2>
-        <span className={`${plexMono.className} text-xs text-muted`} dir="ltr">
-          {ledgerDate(new Date(data.from))}–{ledgerDate(new Date(data.to))}
+        <span className="text-xs text-muted">
+          {formatJalali(new Date(data.from))}–{formatJalali(new Date(data.to))}
         </span>
       </div>
 
@@ -343,7 +312,7 @@ function SummaryTab({ data }: { data: any }) {
           <LedgerRow
             index={1}
             label="سود خالص"
-            value={ledgerMoney(data.report.net)}
+            value={format(data.report.net, { withSuffix: true })}
             current={data.report.net}
             previous={cmp?.previous.net}
             polarity="higherIsBetter"
@@ -351,7 +320,7 @@ function SummaryTab({ data }: { data: any }) {
           <LedgerRow
             index={2}
             label="هزینه"
-            value={ledgerMoney(data.report.expense)}
+            value={format(data.report.expense, { withSuffix: true })}
             wasteTone
             current={data.report.expense}
             previous={cmp?.previous.expense}
@@ -360,7 +329,7 @@ function SummaryTab({ data }: { data: any }) {
           <LedgerRow
             index={3}
             label="دارایی مجازی"
-            value={ledgerMoney(data.report.virtualAssetValue)}
+            value={format(data.report.virtualAssetValue, { withSuffix: true })}
             current={data.report.virtualAssetValue}
             previous={cmp?.previous.virtualAssetValue}
             polarity="higherIsBetter"
@@ -368,7 +337,7 @@ function SummaryTab({ data }: { data: any }) {
           <LedgerRow
             index={4}
             label="کارهای انجام‌شده"
-            value={String(data.report.tasksCompleted)}
+            value={toPersianDigits(data.report.tasksCompleted)}
             current={data.report.tasksCompleted}
             previous={undefined}
             polarity="higherIsBetter"
