@@ -33,6 +33,7 @@ import {
   computeHabitsReport,
   computeCategoryCalendar,
   computeCalendarMonthOverview,
+  computeCalendarYearOverview,
   recordDailyCapitalSnapshot,
   computeDayBattery,
   sumCategoryLifetimeMinutes,
@@ -310,6 +311,17 @@ register("GET", "/api/calendar/month-overview", ({ db, userId, query }) => {
   );
   const overview = computeCalendarMonthOverview(db, userId, start, end, settings?.calendarFeaturedType ?? null, settings?.calendarFeaturedId ?? null);
   return { overview, jy, jm };
+});
+// Mirrors src/app/api/calendar/year-overview/route.ts.
+register("GET", "/api/calendar/year-overview", ({ db, userId, query }) => {
+  const { jy: curJy } = toJalali(new Date());
+  const jy = Number(query.get("jy") ?? curJy);
+  const settings = db.get<{ calendarFeaturedType: string | null; calendarFeaturedId: string | null }>(
+    `SELECT "calendarFeaturedType","calendarFeaturedId" FROM "Settings" WHERE "userId" = ?`,
+    [userId]
+  );
+  const overview = computeCalendarYearOverview(db, userId, jy, settings?.calendarFeaturedType ?? null, settings?.calendarFeaturedId ?? null);
+  return { overview, jy };
 });
 register("GET", "/api/calendar/day-detail", ({ db, userId, query }) => {
   const dateParam = query.get("date");

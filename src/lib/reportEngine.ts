@@ -621,6 +621,92 @@ export async function computeCalendarMonthOverview(
   return { days, monthIncome, monthExpense, featured };
 }
 
+// --- computeCalendarYearOverview ---------------------------------------------------------------
+// Mirrors src/local/reportEngine.ts's copy of this function — see its doc comment.
+
+export interface CalendarMonthSummary {
+  jm: number;
+  income: number;
+  expense: number;
+  productiveValue: number;
+  featuredValue: number | null;
+}
+export interface CalendarYearOverview {
+  months: CalendarMonthSummary[];
+  yearIncome: number;
+  yearExpense: number;
+  featured: CalendarFeaturedMetric | null;
+}
+
+export async function computeCalendarYearOverview(
+  userId: string,
+  jy: number,
+  featuredType: string | null,
+  featuredId: string | null
+): Promise<CalendarYearOverview> {
+  const { start: yearStart } = jalaliMonthRange(jy, 1);
+  const { end: yearEnd } = jalaliMonthRange(jy, 12);
+
+  const byMonth = new Map<number, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  function ensure(jm: number) {
+    if (!byMonth.has(jm)) byMonth.set(jm, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    return byMonth.get(jm)!;
+  }
+  for (let jm = 1; jm <= 12; jm++) ensure(jm);
+
+  const [transactions, vaEntries] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { userId, deletedAt: null, date: { gte: yearStart, lte: yearEnd } },
+      select: { date: true, type: true, amount: true },
+    }),
+    prisma.virtualAssetEntry.findMany({ where: { userId, date: { gte: yearStart, lte: yearEnd } }, select: { date: true, totalValue: true } }),
+  ]);
+
+  let yearIncome = 0;
+  let yearExpense = 0;
+  for (const t of transactions) {
+    const month = ensure(toJalali(t.date).jm);
+    if (t.type === "INCOME") {
+      month.income += t.amount;
+      yearIncome += t.amount;
+    } else if (t.type === "EXPENSE") {
+      month.expense += t.amount;
+      yearExpense += t.amount;
+    }
+  }
+  for (const v of vaEntries) ensure(toJalali(v.date).jm).productiveValue += v.totalValue;
+
+  let featured: CalendarFeaturedMetric | null = null;
+  if (featuredType === "category" && featuredId) {
+    const cat = await prisma.category.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, name: true, icon: true } });
+    if (cat) {
+      featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
+      const stats = await computeCategoryCalendar(userId, yearStart, yearEnd);
+      const stat = stats.find((c) => c.categoryId === featuredId);
+      if (stat) for (const [dayKey, minutes] of Object.entries(stat.days)) ensure(toJalali(new Date(dayKey)).jm).featuredValue += minutes;
+    }
+  } else if (featuredType === "habit" && featuredId) {
+    const habit = await prisma.habit.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, title: true, icon: true } });
+    if (habit) {
+      featured = { type: "habit", id: habit.id, name: habit.title, icon: habit.icon };
+      const checkIns = await prisma.habitCheckIn.findMany({ where: { habitId: featuredId, date: { gte: yearStart, lte: yearEnd } }, select: { date: true } });
+      for (const c of checkIns) ensure(toJalali(c.date).jm).featuredValue += 1;
+    }
+  }
+
+  const months: CalendarMonthSummary[] = Array.from(byMonth.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([jm, v]) => ({
+      jm,
+      income: v.income,
+      expense: v.expense,
+      productiveValue: v.productiveValue,
+      featuredValue: featured ? v.featuredValue : null,
+    }));
+
+  return { months, yearIncome, yearExpense, featured };
+}
+
 // --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
 
 export interface FounderCapital {

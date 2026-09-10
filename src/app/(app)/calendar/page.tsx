@@ -23,11 +23,16 @@ function compactMoney(amount: number): string {
 
 const WEEKDAY_HEADERS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
 const VIEWS = [
+  { key: "year", label: "سال" },
   { key: "month", label: "ماه" },
   { key: "week", label: "هفته" },
   { key: "day", label: "روز" },
   { key: "agenda", label: "برنامه" },
 ] as const;
+const JALALI_MONTH_NAMES = [
+  "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+  "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
+];
 
 function dayKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -55,6 +60,11 @@ export default function CalendarPage() {
     for (const d of overview?.days ?? []) map.set(d.date, d);
     return map;
   }, [overview]);
+
+  const { data: yearOverviewData, mutate: mutateYearOverview } = useSWR<{
+    overview: { months: any[]; yearIncome: number; yearExpense: number; featured: any };
+  }>(view === "year" ? `/api/calendar/year-overview?jy=${jy}` : null, fetcher);
+  const yearOverview = yearOverviewData?.overview;
 
   const range = useMemo(() => {
     if (view === "month") {
@@ -110,7 +120,10 @@ export default function CalendarPage() {
   }, [data]);
 
   function navigate(delta: number) {
-    if (view === "month") {
+    if (view === "year") {
+      const { jy: ny, jm: nm } = addJalaliMonths(jy, jm, delta * 12);
+      setCursor(getJalaliMonthGrid(ny, nm)[8]);
+    } else if (view === "month") {
       const { jy: ny, jm: nm } = addJalaliMonths(jy, jm, delta);
       setCursor(getJalaliMonthGrid(ny, nm)[8]); // a day safely inside the new month
     } else if (view === "week") {
@@ -133,6 +146,11 @@ export default function CalendarPage() {
   function closeForm() {
     setShowForm(false);
     setEditingEvent(null);
+  }
+
+  function openMonth(targetJm: number) {
+    setCursor(getJalaliMonthGrid(jy, targetJm)[8]);
+    setView("month");
   }
 
   return (
@@ -167,12 +185,62 @@ export default function CalendarPage() {
             <ChevronRightIcon className="w-4 h-4" />
           </button>
           <span className="text-sm text-ink text-center truncate px-2">
-            {view === "month" ? formatJalaliMonthYear(cursor) : formatJalali(cursor, { withWeekday: view === "day" })}
+            {view === "year"
+              ? toPersianDigits(jy)
+              : view === "month"
+                ? formatJalaliMonthYear(cursor)
+                : formatJalali(cursor, { withWeekday: view === "day" })}
           </span>
           <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted shrink-0">
             <ChevronLeftIcon className="w-4 h-4" />
           </button>
         </div>
+      )}
+
+      {view === "year" && (
+        <>
+          <Card className="p-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted mb-1">جریان این سال</p>
+              <div className="flex items-center gap-3 text-sm font-bold">
+                <span className="text-accent">+{format(yearOverview?.yearIncome ?? 0, { withSuffix: true })}</span>
+                <span className="text-waste">-{format(yearOverview?.yearExpense ?? 0, { withSuffix: true })}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowFeaturedPicker(true)}
+              className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
+            >
+              {yearOverview?.featured ? `${yearOverview.featured.icon ?? ""} ${yearOverview.featured.name}` : "دسته‌بندی ویژه +"}
+            </button>
+          </Card>
+
+          <div className="grid grid-cols-3 gap-2">
+            {(yearOverview?.months ?? Array.from({ length: 12 }, (_, i) => ({ jm: i + 1, income: 0, expense: 0, productiveValue: 0, featuredValue: null }))).map(
+              (m) => (
+                <button
+                  key={m.jm}
+                  onClick={() => openMonth(m.jm)}
+                  className={`h-24 rounded-xl border p-2 text-right flex flex-col gap-0.5 bg-surface border-line ${
+                    m.jm === jm ? "ring-2 ring-brand-400" : ""
+                  }`}
+                >
+                  <span className="text-xs text-ink">{JALALI_MONTH_NAMES[m.jm - 1]}</span>
+                  <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[9px] leading-tight font-medium">
+                    {m.income > 0 && <span className="text-accent">+{compactMoney(m.income)}</span>}
+                    {m.expense > 0 && <span className="text-waste">-{compactMoney(m.expense)}</span>}
+                    {m.productiveValue > 0 && <span className="text-ink">⚡{compactMoney(m.productiveValue)}</span>}
+                    {m.featuredValue !== null && m.featuredValue > 0 && (
+                      <span className="text-muted">
+                        ★{yearOverview?.featured?.type === "habit" ? toPersianDigits(m.featuredValue) + "روز" : compactMoney(m.featuredValue) + "د"}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            )}
+          </div>
+        </>
       )}
 
       {view === "month" && (
@@ -239,7 +307,15 @@ export default function CalendarPage() {
           onChanged={() => { mutateOverview(); mutate(); }}
         />
       )}
-      {showFeaturedPicker && <FeaturedMetricPicker onClose={() => setShowFeaturedPicker(false)} onSaved={mutateOverview} />}
+      {showFeaturedPicker && (
+        <FeaturedMetricPicker
+          onClose={() => setShowFeaturedPicker(false)}
+          onSaved={() => {
+            mutateOverview();
+            mutateYearOverview();
+          }}
+        />
+      )}
 
       {view === "week" && (
         <div className="grid grid-cols-1 gap-3">

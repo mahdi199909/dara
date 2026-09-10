@@ -13,6 +13,7 @@ vi.mock("@capacitor/preferences", () => ({
   },
 }));
 
+import { toJalali } from "@/lib/jalali";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "./db";
 import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import {
@@ -22,6 +23,7 @@ import {
   computeHabitsReport,
   computeCategoryCalendar,
   computeCalendarMonthOverview,
+  computeCalendarYearOverview,
   computeFounderCapital,
   computeUpgradeEffect,
   comparePeriods,
@@ -272,6 +274,92 @@ describe("local reportEngine", () => {
       const db = await freshDb();
       const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, "category", "does-not-exist");
       expect(overview.featured).toBeNull();
+    });
+  });
+
+  describe("computeCalendarYearOverview", () => {
+    // Jalali year of the fixture dates below, derived rather than hand-computed so the test
+    // can't silently assume a wrong Gregorian<->Jalali mapping.
+    const SAMPLE_DATE = new Date("2026-02-10T08:00:00.000Z");
+    const JY = toJalali(SAMPLE_DATE).jy;
+    const JM = toJalali(SAMPLE_DATE).jm;
+
+    it("always returns all 12 months, even empty ones", async () => {
+      const db = await freshDb();
+      const overview = computeCalendarYearOverview(db, USER_ID, JY, null, null);
+      expect(overview.months).toHaveLength(12);
+      expect(overview.months.map((m) => m.jm)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+      expect(overview.months.every((m) => m.income === 0 && m.expense === 0 && m.productiveValue === 0)).toBe(true);
+    });
+
+    it("buckets income/expense/productive value into the right Jalali month and sums year totals", async () => {
+      const db = await freshDb();
+      db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
+      db.run(
+        `INSERT INTO "Transaction" ("id","userId","type","amount","date","accountId","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+        ["tx_income", USER_ID, "INCOME", 500_000, SAMPLE_DATE.toISOString(), "acc_1", now(), now()]
+      );
+      db.run(
+        `INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+        ["va_1", USER_ID, 60, 200_000, 200_000, SAMPLE_DATE.toISOString(), now(), now()]
+      );
+
+      const overview = computeCalendarYearOverview(db, USER_ID, JY, null, null);
+      expect(overview.yearIncome).toBe(500_000);
+      const month = overview.months.find((m) => m.jm === JM)!;
+      expect(month.income).toBe(500_000);
+      expect(month.productiveValue).toBe(200_000);
+      // every other month stays untouched
+      expect(overview.months.filter((m) => m.jm !== JM).every((m) => m.income === 0 && m.productiveValue === 0)).toBe(true);
+    });
+
+    it("sums a featured category's minutes across the whole month, re-bucketed from its Gregorian day keys", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_learn", "PRODUCTIVE");
+      db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "task_a",
+        USER_ID,
+        "کار ۱",
+        "cat_learn",
+        SAMPLE_DATE.toISOString(),
+        new Date(SAMPLE_DATE.getTime() + 30 * 60000).toISOString(),
+        now(),
+        now(),
+      ]);
+      const nextDay = new Date(SAMPLE_DATE.getTime() + 86_400_000);
+      db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "task_b",
+        USER_ID,
+        "کار ۲",
+        "cat_learn",
+        nextDay.toISOString(),
+        new Date(nextDay.getTime() + 60 * 60000).toISOString(),
+        now(),
+        now(),
+      ]);
+
+      const overview = computeCalendarYearOverview(db, USER_ID, JY, "category", "cat_learn");
+      expect(overview.featured).toEqual({ type: "category", id: "cat_learn", name: "cat_learn", icon: null });
+      const month = overview.months.find((m) => m.jm === toJalali(SAMPLE_DATE).jm)!;
+      expect(month.featuredValue).toBe(90); // 30min + 60min, both fall in the same Jalali month
+    });
+
+    it("counts a featured habit's check-in DAYS per month, not a 1/0 flag", async () => {
+      const db = await freshDb();
+      db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "مطالعه", now(), now()]);
+      db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, [
+        "ci_1",
+        "habit_1",
+        SAMPLE_DATE.toISOString(),
+        now(),
+        now(),
+      ]);
+      const nextDay = new Date(SAMPLE_DATE.getTime() + 86_400_000);
+      db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["ci_2", "habit_1", nextDay.toISOString(), now(), now()]);
+
+      const overview = computeCalendarYearOverview(db, USER_ID, JY, "habit", "habit_1");
+      const month = overview.months.find((m) => m.jm === JM)!;
+      expect(month.featuredValue).toBe(2);
     });
   });
 

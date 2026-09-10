@@ -596,6 +596,113 @@ export function computeCalendarMonthOverview(
   return { days, monthIncome, monthExpense, featured };
 }
 
+// --- computeCalendarYearOverview ---------------------------------------------------------------
+
+export interface CalendarMonthSummary {
+  jm: number; // 1-12
+  income: number;
+  expense: number;
+  productiveValue: number;
+  featuredValue: number | null; // sum of minutes for a featured category; count of check-in DAYS for a featured habit
+}
+export interface CalendarYearOverview {
+  months: CalendarMonthSummary[]; // always all 12, unlike CalendarMonthOverview.days which skips empty ones
+  yearIncome: number;
+  yearExpense: number;
+  featured: CalendarFeaturedMetric | null;
+}
+
+/** The calendar's year view — one step further zoomed out than computeCalendarMonthOverview,
+ * same four figures per cell but bucketed by Jalali month instead of by day. Always returns all
+ * 12 months (even empty ones) since the year grid has a fixed 12 cells to fill, unlike the month
+ * grid's variable day count. */
+export function computeCalendarYearOverview(
+  db: LocalDb,
+  userId: string,
+  jy: number,
+  featuredType: string | null,
+  featuredId: string | null
+): CalendarYearOverview {
+  const { start: yearStart } = jalaliMonthRange(jy, 1);
+  const { end: yearEnd } = jalaliMonthRange(jy, 12);
+  const fromIso = iso(yearStart);
+  const toIso = iso(yearEnd);
+
+  const byMonth = new Map<number, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  function ensure(jm: number) {
+    if (!byMonth.has(jm)) byMonth.set(jm, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    return byMonth.get(jm)!;
+  }
+  for (let jm = 1; jm <= 12; jm++) ensure(jm);
+
+  const transactions = db.all<{ date: string; type: string; amount: number }>(
+    `SELECT "date","type","amount" FROM "Transaction" WHERE "userId" = ? AND "deletedAt" IS NULL AND "date" >= ? AND "date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  let yearIncome = 0;
+  let yearExpense = 0;
+  for (const t of transactions) {
+    const month = ensure(toJalali(parseDate(t.date)).jm);
+    if (t.type === "INCOME") {
+      month.income += t.amount;
+      yearIncome += t.amount;
+    } else if (t.type === "EXPENSE") {
+      month.expense += t.amount;
+      yearExpense += t.amount;
+    }
+  }
+
+  const vaEntries = db.all<{ date: string; totalValue: number }>(
+    `SELECT "date","totalValue" FROM "VirtualAssetEntry" WHERE "userId" = ? AND "date" >= ? AND "date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  for (const v of vaEntries) ensure(toJalali(parseDate(v.date)).jm).productiveValue += v.totalValue;
+
+  let featured: CalendarFeaturedMetric | null = null;
+  if (featuredType === "category" && featuredId) {
+    const cat = db.get<{ id: string; name: string; icon: string | null }>(
+      `SELECT "id","name","icon" FROM "Category" WHERE "id" = ? AND "userId" = ? AND "deletedAt" IS NULL`,
+      [featuredId, userId]
+    );
+    if (cat) {
+      featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
+      const stat = computeCategoryCalendar(db, userId, yearStart, yearEnd).find((c) => c.categoryId === featuredId);
+      // stat.days is keyed by dayKeyIso (Gregorian) — re-bucket each day's minutes into its
+      // Jalali month rather than trusting Gregorian month boundaries, which don't line up.
+      if (stat) for (const [dayKey, minutes] of Object.entries(stat.days)) ensure(toJalali(new Date(dayKey)).jm).featuredValue += minutes;
+    }
+  } else if (featuredType === "habit" && featuredId) {
+    const habit = db.get<{ id: string; title: string; icon: string | null }>(
+      `SELECT "id","title","icon" FROM "Habit" WHERE "id" = ? AND "userId" = ? AND "deletedAt" IS NULL`,
+      [featuredId, userId]
+    );
+    if (habit) {
+      featured = { type: "habit", id: habit.id, name: habit.title, icon: habit.icon };
+      const checkIns = db.all<{ date: string }>(`SELECT "date" FROM "HabitCheckIn" WHERE "habitId" = ? AND "date" >= ? AND "date" <= ?`, [
+        featuredId,
+        fromIso,
+        toIso,
+      ]);
+      // Count of check-in DAYS that month, not a 1/0 flag like the day-level view — a whole
+      // month collapsing a habit to "checked in at all" would throw away the one thing worth
+      // seeing at this zoom level (how consistent, not just whether).
+      for (const c of checkIns) ensure(toJalali(parseDate(c.date)).jm).featuredValue += 1;
+    }
+  }
+
+  const months: CalendarMonthSummary[] = Array.from(byMonth.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([jm, v]) => ({
+      jm,
+      income: v.income,
+      expense: v.expense,
+      productiveValue: v.productiveValue,
+      featuredValue: featured ? v.featuredValue : null,
+    }));
+
+  return { months, yearIncome, yearExpense, featured };
+}
+
 // --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
 
 export interface FounderCapital {
