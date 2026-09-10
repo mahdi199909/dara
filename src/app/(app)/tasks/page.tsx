@@ -6,6 +6,7 @@ import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories, useProjects } from "@/lib/hooks";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { TrashIcon, PlusIcon } from "@/components/icons";
+import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import { formatJalali } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
@@ -128,7 +129,7 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
   const [title, setTitle] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -140,7 +141,7 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
         title,
         categoryId: categoryId || undefined,
         projectId: projectId || undefined,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        dueDate: dueDate ? dueDate.toISOString() : undefined,
       });
       onDone();
     } finally {
@@ -172,7 +173,27 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm" />
+          {dueDate ? (
+            <div className="relative">
+              <JalaliDateInput value={dueDate} onChange={setDueDate} className="pl-6 text-sm" />
+              <button
+                type="button"
+                onClick={() => setDueDate(null)}
+                aria-label="حذف سررسید"
+                className="absolute left-1.5 top-1/2 -translate-y-1/2 text-muted hover:text-ink text-xs w-4 h-4 flex items-center justify-center"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDueDate(new Date())}
+              className="rounded-xl border border-line px-2 py-2 text-sm text-muted hover:bg-canvas"
+            >
+              + سررسید
+            </button>
+          )}
         </div>
         <button
           type="submit"
