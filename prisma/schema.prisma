@@ -91,6 +91,14 @@ model Settings {
   // literal-default pattern as the other preference columns above.
   theme String @default("system") // light | dark | system
 
+  // The 4th metric shown per day in the calendar month view (see computeCalendarMonthOverview)
+  // — the other 3 (income/expense/productive value) are fixed. Deliberately not a real foreign
+  // key to Category/Habit: either could be deleted after being picked, and the calendar just
+  // falls back to "not configured" rather than needing a cascade rule for a purely cosmetic
+  // preference. Both null until the user picks something.
+  calendarFeaturedType String? // "category" | "habit"
+  calendarFeaturedId   String? // Category.id or Habit.id, per calendarFeaturedType
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

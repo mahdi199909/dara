@@ -108,6 +108,21 @@ describe("local settings repository", () => {
     expect(reread.settings.theme).toBe("dark");
   });
 
+  it("defaults calendarFeaturedType/Id to null and persists an explicit choice", async () => {
+    const db = await freshDb();
+    const { settings: defaults } = getSettings(db, USER_ID);
+    expect(defaults.calendarFeaturedType).toBeNull();
+    expect(defaults.calendarFeaturedId).toBeNull();
+
+    const { settings } = updateSettings(db, USER_ID, { calendarFeaturedType: "habit", calendarFeaturedId: "habit_123" });
+    expect(settings.calendarFeaturedType).toBe("habit");
+    expect(settings.calendarFeaturedId).toBe("habit_123");
+
+    const cleared = updateSettings(db, USER_ID, { calendarFeaturedType: null, calendarFeaturedId: null });
+    expect(cleared.settings.calendarFeaturedType).toBeNull();
+    expect(cleared.settings.calendarFeaturedId).toBeNull();
+  });
+
   it("defaults wakeHour/sleepHour to 7/23 and persists an explicit change", async () => {
     const db = await freshDb();
     const { settings: defaults } = getSettings(db, USER_ID);

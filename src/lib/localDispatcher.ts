@@ -32,12 +32,14 @@ import {
   computeHiddenCostReport,
   computeHabitsReport,
   computeCategoryCalendar,
+  computeCalendarMonthOverview,
   recordDailyCapitalSnapshot,
   computeDayBattery,
   sumCategoryLifetimeMinutes,
   comparePeriods,
 } from "@/local/reportEngine";
 import { computeDailyInsight, computeDailyMomentCandidates } from "@/local/insightsData";
+import { fetchByIds } from "@/local/relations";
 import { computeIdentityStatements } from "@/local/identityData";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
@@ -294,6 +296,64 @@ register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
   const { start, end } = jalaliMonthRange(jy, jm);
   const categories = computeCategoryCalendar(db, userId, start, end);
   return { categories, jy, jm };
+});
+
+// Mirrors src/app/api/calendar/month-overview/route.ts and .../day-detail/route.ts.
+register("GET", "/api/calendar/month-overview", ({ db, userId, query }) => {
+  const { jy: curJy, jm: curJm } = toJalali(new Date());
+  const jy = Number(query.get("jy") ?? curJy);
+  const jm = Number(query.get("jm") ?? curJm);
+  const { start, end } = jalaliMonthRange(jy, jm);
+  const settings = db.get<{ calendarFeaturedType: string | null; calendarFeaturedId: string | null }>(
+    `SELECT "calendarFeaturedType","calendarFeaturedId" FROM "Settings" WHERE "userId" = ?`,
+    [userId]
+  );
+  const overview = computeCalendarMonthOverview(db, userId, start, end, settings?.calendarFeaturedType ?? null, settings?.calendarFeaturedId ?? null);
+  return { overview, jy, jm };
+});
+register("GET", "/api/calendar/day-detail", ({ db, userId, query }) => {
+  const dateParam = query.get("date");
+  if (!dateParam) throw new ApiError("پارامتر date لازم است.", 400);
+  const date = new Date(dateParam);
+  if (Number.isNaN(date.getTime())) throw new ApiError("تاریخ نامعتبر است.", 400);
+  const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
+  const dayEnd = new Date(new Date(dayStart).getTime() + 86_400_000 - 1).toISOString();
+
+  const habits = db.all<{ id: string; title: string; icon: string | null; color: string }>(
+    `SELECT "id","title","icon","color" FROM "Habit" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 AND "isTrial" = 0`,
+    [userId]
+  );
+  const checkIns = db.all<{ habitId: string; durationMin: number | null }>(
+    `SELECT hc."habitId", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND hc."date" >= ? AND hc."date" <= ?`,
+    [userId, dayStart, dayEnd]
+  );
+  const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c.durationMin]));
+  const habitsResult = habits.map((h) => ({
+    id: h.id,
+    title: h.title,
+    icon: h.icon,
+    color: h.color,
+    checkedIn: checkInByHabit.has(h.id),
+    durationMin: checkInByHabit.get(h.id) ?? null,
+  }));
+
+  const transactions = db.all<{ id: string; type: string; amount: number; description: string | null; categoryId: string | null }>(
+    `SELECT "id","type","amount","description","categoryId" FROM "Transaction"
+     WHERE "userId" = ? AND "deletedAt" IS NULL AND "date" >= ? AND "date" <= ? ORDER BY "date" ASC`,
+    [userId, dayStart, dayEnd]
+  );
+  const categoryById = fetchByIds<{ id: string; name: string; icon: string | null }>(
+    db,
+    "Category",
+    transactions.map((t) => t.categoryId)
+  );
+  const transactionsResult = transactions.map((t) => {
+    const cat = t.categoryId ? categoryById.get(t.categoryId) : undefined;
+    return { id: t.id, type: t.type, amount: t.amount, description: t.description, category: cat ? { name: cat.name, icon: cat.icon } : null };
+  });
+
+  return { habits: habitsResult, transactions: transactionsResult };
 });
 
 // "سرمایه من" (Founder Capital) — see src/app/api/capital/route.ts for the web shape this mirrors.

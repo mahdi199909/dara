@@ -19,5 +19,7 @@ export const updateSettingsSchema = z.object({
   dailyProductiveTargetMin: z.number().int().min(30).max(900).optional(),
   companionEnabled: z.boolean().optional(),
   theme: z.enum(["light", "dark", "system"]).optional(),
+  calendarFeaturedType: z.enum(["category", "habit"]).nullable().optional(),
+  calendarFeaturedId: z.string().nullable().optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

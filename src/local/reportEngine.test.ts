@@ -21,6 +21,7 @@ import {
   computeNetWorth,
   computeHabitsReport,
   computeCategoryCalendar,
+  computeCalendarMonthOverview,
   computeFounderCapital,
   computeUpgradeEffect,
   comparePeriods,
@@ -191,6 +192,87 @@ describe("local reportEngine", () => {
     expect(learnStat.totalMinutes).toBe(90);
     expect(learnStat.totalDays).toBe(1);
     expect(Object.values(learnStat.days)[0]).toBe(90);
+  });
+
+  describe("computeCalendarMonthOverview", () => {
+    const FROM = new Date("2026-02-01T00:00:00.000Z");
+    const TO = new Date("2026-02-28T23:59:59.999Z");
+
+    it("buckets income/expense per day and sums month totals", async () => {
+      const db = await freshDb();
+      db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
+      db.run(
+        `INSERT INTO "Transaction" ("id","userId","type","amount","date","accountId","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+        ["tx_income", USER_ID, "INCOME", 500_000, "2026-02-10T08:00:00.000Z", "acc_1", now(), now()]
+      );
+      db.run(
+        `INSERT INTO "Transaction" ("id","userId","type","amount","date","accountId","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+        ["tx_expense", USER_ID, "EXPENSE", 120_000, "2026-02-10T09:00:00.000Z", "acc_1", now(), now()]
+      );
+
+      const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, null, null);
+      expect(overview.monthIncome).toBe(500_000);
+      expect(overview.monthExpense).toBe(120_000);
+      const day = overview.days.find((d) => d.date === "2026-02-10")!;
+      expect(day.income).toBe(500_000);
+      expect(day.expense).toBe(120_000);
+      expect(overview.featured).toBeNull();
+      expect(day.featuredValue).toBeNull();
+    });
+
+    it("sums VirtualAssetEntry.totalValue per day as productiveValue", async () => {
+      const db = await freshDb();
+      db.run(
+        `INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+        ["va_1", USER_ID, 60, 200_000, 200_000, "2026-02-12T00:00:00.000Z", now(), now()]
+      );
+      const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, null, null);
+      const day = overview.days.find((d) => d.date === "2026-02-12")!;
+      expect(day.productiveValue).toBe(200_000);
+    });
+
+    it("fills featuredValue with per-day minutes for a featured category", async () => {
+      const db = await freshDb();
+      insertCategory(db, "cat_learn", "PRODUCTIVE");
+      db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+        "task_cal",
+        USER_ID,
+        "کار تقویمی",
+        "cat_learn",
+        "2026-02-15T09:00:00.000Z",
+        "2026-02-15T10:30:00.000Z",
+        now(),
+        now(),
+      ]);
+
+      const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, "category", "cat_learn");
+      expect(overview.featured).toEqual({ type: "category", id: "cat_learn", name: "cat_learn", icon: null });
+      const day = overview.days.find((d) => d.date === "2026-02-15")!;
+      expect(day.featuredValue).toBe(90);
+    });
+
+    it("fills featuredValue with 1/0 check-in status for a featured habit", async () => {
+      const db = await freshDb();
+      db.run(`INSERT INTO "Habit" ("id","userId","title","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["habit_1", USER_ID, "مطالعه", now(), now()]);
+      db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","createdAt","updatedAt") VALUES (?,?,?,?,?)`, [
+        "ci_1",
+        "habit_1",
+        "2026-02-20T00:00:00.000Z",
+        now(),
+        now(),
+      ]);
+
+      const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, "habit", "habit_1");
+      expect(overview.featured).toEqual({ type: "habit", id: "habit_1", name: "مطالعه", icon: null });
+      const checkedDay = overview.days.find((d) => d.date === "2026-02-20")!;
+      expect(checkedDay.featuredValue).toBe(1);
+    });
+
+    it("ignores a featured selection pointing at a deleted/missing category or habit", async () => {
+      const db = await freshDb();
+      const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, "category", "does-not-exist");
+      expect(overview.featured).toBeNull();
+    });
   });
 
   it("computeHiddenCostReport sorts items by hiddenCost descending and sums totals", async () => {

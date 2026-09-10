@@ -537,6 +537,90 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
   });
 }
 
+// --- computeCalendarMonthOverview -------------------------------------------------------------
+// Mirrors src/local/reportEngine.ts's copy of this function — see its doc comment.
+
+export interface CalendarDaySummary {
+  date: string;
+  income: number;
+  expense: number;
+  productiveValue: number;
+  featuredValue: number | null;
+}
+export interface CalendarFeaturedMetric {
+  type: "category" | "habit";
+  id: string;
+  name: string;
+  icon: string | null;
+}
+export interface CalendarMonthOverview {
+  days: CalendarDaySummary[];
+  monthIncome: number;
+  monthExpense: number;
+  featured: CalendarFeaturedMetric | null;
+}
+
+export async function computeCalendarMonthOverview(
+  userId: string,
+  from: Date,
+  to: Date,
+  featuredType: string | null,
+  featuredId: string | null
+): Promise<CalendarMonthOverview> {
+  const byDay = new Map<string, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  function ensure(key: string) {
+    if (!byDay.has(key)) byDay.set(key, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    return byDay.get(key)!;
+  }
+
+  const [transactions, vaEntries] = await Promise.all([
+    prisma.transaction.findMany({ where: { userId, deletedAt: null, date: { gte: from, lte: to } }, select: { date: true, type: true, amount: true } }),
+    prisma.virtualAssetEntry.findMany({ where: { userId, date: { gte: from, lte: to } }, select: { date: true, totalValue: true } }),
+  ]);
+
+  let monthIncome = 0;
+  let monthExpense = 0;
+  for (const t of transactions) {
+    const day = ensure(dayKeyIso(t.date));
+    if (t.type === "INCOME") {
+      day.income += t.amount;
+      monthIncome += t.amount;
+    } else if (t.type === "EXPENSE") {
+      day.expense += t.amount;
+      monthExpense += t.amount;
+    }
+  }
+  for (const v of vaEntries) ensure(dayKeyIso(v.date)).productiveValue += v.totalValue;
+
+  let featured: CalendarFeaturedMetric | null = null;
+  if (featuredType === "category" && featuredId) {
+    const cat = await prisma.category.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, name: true, icon: true } });
+    if (cat) {
+      featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
+      const stats = await computeCategoryCalendar(userId, from, to);
+      const stat = stats.find((c) => c.categoryId === featuredId);
+      if (stat) for (const [key, minutes] of Object.entries(stat.days)) ensure(key).featuredValue = minutes;
+    }
+  } else if (featuredType === "habit" && featuredId) {
+    const habit = await prisma.habit.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, title: true, icon: true } });
+    if (habit) {
+      featured = { type: "habit", id: habit.id, name: habit.title, icon: habit.icon };
+      const checkIns = await prisma.habitCheckIn.findMany({ where: { habitId: featuredId, date: { gte: from, lte: to } }, select: { date: true } });
+      for (const c of checkIns) ensure(dayKeyIso(c.date)).featuredValue = 1;
+    }
+  }
+
+  const days: CalendarDaySummary[] = Array.from(byDay.entries()).map(([date, v]) => ({
+    date,
+    income: v.income,
+    expense: v.expense,
+    productiveValue: v.productiveValue,
+    featuredValue: featured ? v.featuredValue : null,
+  }));
+
+  return { days, monthIncome, monthExpense, featured };
+}
+
 // --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
 
 export interface FounderCapital {

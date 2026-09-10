@@ -27,6 +27,8 @@ interface SettingsRow {
   dailyProductiveTargetMin: number;
   companionEnabled: number;
   theme: string;
+  calendarFeaturedType: string | null;
+  calendarFeaturedId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -105,6 +107,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.dailyProductiveTargetMin !== undefined) set("dailyProductiveTargetMin", settingsBody.dailyProductiveTargetMin);
     if (settingsBody.companionEnabled !== undefined) set("companionEnabled", settingsBody.companionEnabled ? 1 : 0);
     if (settingsBody.theme !== undefined) set("theme", settingsBody.theme);
+    if (settingsBody.calendarFeaturedType !== undefined) set("calendarFeaturedType", settingsBody.calendarFeaturedType);
+    if (settingsBody.calendarFeaturedId !== undefined) set("calendarFeaturedId", settingsBody.calendarFeaturedId);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 
