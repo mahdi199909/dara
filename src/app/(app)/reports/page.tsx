@@ -213,6 +213,14 @@ function ringArcPath(cx: number, cy: number, r: number, startDeg: number, sweepD
 const RING_START_DEG = 210;
 const RING_SWEEP_DEG = 300;
 
+/** The ring's center label has real room for maybe one word — "ساعت" alone, not the full
+ * "X ساعت و Y دقیقه" (formatDuration, used in the legend below where there's more space). Still
+ * a whole, real Persian word, just the one unit that matters at a glance. */
+function ringCenterLabel(minutes: number): string {
+  const hours = Math.round(minutes / 60);
+  return `${toPersianDigits(hours)} ساعت`;
+}
+
 /** The month/summary tab's headline comparison — two open rings sharing one origin point, the
  * current period's arc reaching further around than the previous one's. Replaces a generic
  * line-chart sparkline with a shape that's actually this app's own (see the logo). */
@@ -231,7 +239,7 @@ function ComparisonRing({ current, previous, label }: { current: number; previou
           <path d={ringArcPath(66, 66, 47, RING_START_DEG, curSweep)} fill="none" stroke="rgb(var(--accent))" strokeWidth="10" strokeLinecap="round" />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-bold text-ink">{compactDuration(current)}</span>
+          <span className="text-base font-bold text-ink">{ringCenterLabel(current)}</span>
           <span className="text-[10px] text-muted mt-0.5">{label}</span>
         </div>
       </div>
@@ -239,12 +247,12 @@ function ComparisonRing({ current, previous, label }: { current: number; previou
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
           <span className="text-muted">این بازه</span>
-          <span className="text-ink mr-auto font-semibold">{compactDuration(current)}</span>
+          <span className="text-ink mr-auto font-semibold">{formatDuration(current)}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-muted shrink-0" />
           <span className="text-muted">بازهٔ قبل</span>
-          <span className="text-ink mr-auto font-semibold">{compactDuration(previous)}</span>
+          <span className="text-ink mr-auto font-semibold">{formatDuration(previous)}</span>
         </div>
       </div>
     </div>
