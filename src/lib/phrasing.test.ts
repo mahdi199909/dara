@@ -45,13 +45,13 @@ describe("phraseBuildAdded", () => {
 describe("phraseMilestoneProgress", () => {
   it("reports the total and the remaining time to the next milestone", () => {
     const result = phraseMilestoneProgress(2820, 50, 180);
-    expect(result).toBe("جمع: ۴۷ ساعت — ۳ ساعت تا مایل‌استون ۵۰ ساعت.");
+    expect(result).toBe("جمع: ۴۷ ساعت — ۳ ساعت تا نشان خودکار بعدی (۵۰ ساعت).");
   });
 
   it("reports just the total, with no invented claim, once there's no next milestone", () => {
     const result = phraseMilestoneProgress(30_600, null, null);
     expect(result).toBe("جمع: ۵۱۰ ساعت.");
-    expect(result).not.toContain("مایل‌استون");
+    expect(result).not.toContain("نشان خودکار");
   });
 });
 

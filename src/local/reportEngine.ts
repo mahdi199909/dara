@@ -420,6 +420,15 @@ export function computeHabitsReport(db: LocalDb, userId: string, from: Date, to:
 
 // --- computeCategoryCalendar ------------------------------------------------------------------
 
+export interface CategoryCalendarItem {
+  type: "TIME_ENTRY" | "TASK" | "EVENT" | "HABIT";
+  title: string;
+  minutes: number;
+  // ISO datetime when this item has a real time-of-day (TimeEntry/Task/Event always do), null
+  // for HabitCheckIn — a check-in is normalized to local midnight with no time-of-day recorded.
+  timeOfDay: string | null;
+}
+
 export interface CategoryCalendarStat {
   categoryId: string;
   name: string;
@@ -428,6 +437,22 @@ export interface CategoryCalendarStat {
   totalMinutes: number;
   totalDays: number;
   days: Record<string, number>;
+  dayItems: Record<string, CategoryCalendarItem[]>;
+}
+
+function sortDayItems(items: CategoryCalendarItem[]): CategoryCalendarItem[] {
+  // Items with a real time-of-day come first, earliest first; timeless (habit) items follow,
+  // keeping their original relative order — the request was to surface *timed* items forward,
+  // not to invent an ordering for the ones that were never timed to begin with.
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      if (a.item.timeOfDay && b.item.timeOfDay) return a.item.timeOfDay.localeCompare(b.item.timeOfDay);
+      if (a.item.timeOfDay && !b.item.timeOfDay) return -1;
+      if (!a.item.timeOfDay && b.item.timeOfDay) return 1;
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
 }
 
 export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date, to: Date): CategoryCalendarStat[] {
@@ -438,57 +463,94 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
     `SELECT "id","name","icon","color" FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL`,
     [userId]
   );
-  const timeEntries = db.all<{ startAt: string; durationMin: number | null; categoryId: string | null }>(
-    `SELECT te."startAt", te."durationMin", a."categoryId" FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+  const timeEntries = db.all<{ title: string | null; startAt: string; durationMin: number | null; categoryId: string | null }>(
+    `SELECT a."title", te."startAt", te."durationMin", a."categoryId" FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
      WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" <= ? AND te."durationMin" IS NOT NULL`,
     [userId, fromIso, toIso]
   );
-  const tasks = db.all<{ categoryId: string | null; startAt: string; endAt: string }>(
-    `SELECT "categoryId","startAt","endAt" FROM "Task" WHERE "userId" = ? AND "deletedAt" IS NULL AND "startAt" >= ? AND "startAt" <= ? AND "endAt" IS NOT NULL`,
+  const tasks = db.all<{ title: string; categoryId: string | null; startAt: string; endAt: string }>(
+    `SELECT "title","categoryId","startAt","endAt" FROM "Task" WHERE "userId" = ? AND "deletedAt" IS NULL AND "startAt" >= ? AND "startAt" <= ? AND "endAt" IS NOT NULL`,
     [userId, fromIso, toIso]
   );
-  const completions = db.all<{ occurrenceDate: string; categoryId: string | null; eventStartAt: string; eventEndAt: string; eventAllDay: number }>(
-    `SELECT ec."occurrenceDate", e."categoryId", e."startAt" as "eventStartAt", e."endAt" as "eventEndAt", e."allDay" as "eventAllDay"
+  const completions = db.all<{
+    occurrenceDate: string;
+    categoryId: string | null;
+    eventTitle: string;
+    eventStartAt: string;
+    eventEndAt: string;
+    eventAllDay: number;
+  }>(
+    `SELECT ec."occurrenceDate", e."categoryId", e."title" as "eventTitle", e."startAt" as "eventStartAt", e."endAt" as "eventEndAt", e."allDay" as "eventAllDay"
      FROM "EventCompletion" ec JOIN "Event" e ON e."id" = ec."eventId"
      WHERE e."userId" = ? AND e."deletedAt" IS NULL AND ec."occurrenceDate" >= ? AND ec."occurrenceDate" <= ?`,
     [userId, fromIso, toIso]
   );
-  const habitCheckIns = db.all<{ date: string; durationMin: number | null; categoryId: string | null }>(
-    `SELECT hc."date", hc."durationMin", h."categoryId" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+  const habitCheckIns = db.all<{ title: string; date: string; durationMin: number | null; categoryId: string | null }>(
+    `SELECT h."title", hc."date", hc."durationMin", h."categoryId" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
      WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."date" >= ? AND hc."date" <= ? AND hc."durationMin" IS NOT NULL`,
     [userId, fromIso, toIso]
   );
 
   const byCategory = new Map<string, Map<string, number>>();
-  function addMinutes(categoryId: string | null, date: Date, minutes: number) {
+  const itemsByCategory = new Map<string, Map<string, CategoryCalendarItem[]>>();
+  function addMinutes(categoryId: string | null, date: Date, minutes: number, item: CategoryCalendarItem) {
     if (!categoryId || minutes <= 0) return;
     const key = dayKeyIso(date);
     if (!byCategory.has(categoryId)) byCategory.set(categoryId, new Map());
     const dayMap = byCategory.get(categoryId)!;
     dayMap.set(key, (dayMap.get(key) ?? 0) + minutes);
+
+    if (!itemsByCategory.has(categoryId)) itemsByCategory.set(categoryId, new Map());
+    const dayItemsMap = itemsByCategory.get(categoryId)!;
+    if (!dayItemsMap.has(key)) dayItemsMap.set(key, []);
+    dayItemsMap.get(key)!.push(item);
   }
 
-  for (const te of timeEntries) addMinutes(te.categoryId, parseDate(te.startAt), te.durationMin ?? 0);
+  for (const te of timeEntries) {
+    addMinutes(te.categoryId, parseDate(te.startAt), te.durationMin ?? 0, {
+      type: "TIME_ENTRY",
+      title: te.title ?? "فعالیت",
+      minutes: te.durationMin ?? 0,
+      timeOfDay: te.startAt,
+    });
+  }
   for (const t of tasks) {
     const minutes = Math.max(0, Math.round((parseDate(t.endAt).getTime() - parseDate(t.startAt).getTime()) / 60000));
-    addMinutes(t.categoryId, parseDate(t.startAt), minutes);
+    addMinutes(t.categoryId, parseDate(t.startAt), minutes, { type: "TASK", title: t.title, minutes, timeOfDay: t.startAt });
   }
   for (const c of completions) {
     if (c.eventAllDay) continue;
     const minutes = Math.max(0, Math.round((parseDate(c.eventEndAt).getTime() - parseDate(c.eventStartAt).getTime()) / 60000));
-    addMinutes(c.categoryId, parseDate(c.occurrenceDate), minutes);
+    addMinutes(c.categoryId, parseDate(c.occurrenceDate), minutes, {
+      type: "EVENT",
+      title: c.eventTitle,
+      minutes,
+      timeOfDay: c.eventStartAt,
+    });
   }
-  for (const checkIn of habitCheckIns) addMinutes(checkIn.categoryId, parseDate(checkIn.date), checkIn.durationMin ?? 0);
+  for (const checkIn of habitCheckIns) {
+    addMinutes(checkIn.categoryId, parseDate(checkIn.date), checkIn.durationMin ?? 0, {
+      type: "HABIT",
+      title: checkIn.title,
+      minutes: checkIn.durationMin ?? 0,
+      timeOfDay: null,
+    });
+  }
 
   return categories.map((cat) => {
     const dayMap = byCategory.get(cat.id) ?? new Map<string, number>();
+    const dayItemsMap = itemsByCategory.get(cat.id) ?? new Map<string, CategoryCalendarItem[]>();
     const days: Record<string, number> = {};
+    const dayItems: Record<string, CategoryCalendarItem[]> = {};
     let totalMinutes = 0;
     for (const [key, minutes] of dayMap) {
       days[key] = minutes;
       totalMinutes += minutes;
     }
-    return { categoryId: cat.id, name: cat.name, icon: cat.icon, color: cat.color, totalMinutes, totalDays: dayMap.size, days };
+    for (const [key, items] of dayItemsMap) {
+      dayItems[key] = sortDayItems(items);
+    }
+    return { categoryId: cat.id, name: cat.name, icon: cat.icon, color: cat.color, totalMinutes, totalDays: dayMap.size, days, dayItems };
   });
 }
 

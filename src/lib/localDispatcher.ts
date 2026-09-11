@@ -24,6 +24,7 @@ import * as auditLogsRepo from "@/local/repositories/auditLogs";
 import * as searchRepo from "@/local/repositories/search";
 import * as exportRepo from "@/local/repositories/export";
 import * as quickCaptureRepo from "@/local/repositories/quickCapture";
+import * as titleSuggestionsRepo from "@/local/repositories/titleSuggestions";
 import * as dashboardRepo from "@/local/repositories/dashboard";
 import * as licenseCacheRepo from "@/local/repositories/licenseCache";
 import {
@@ -50,7 +51,7 @@ import { createCategorySchema, updateCategorySchema, reorderCategoriesSchema } f
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
-import { createInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
+import { createInstallmentPlanSchema, updateInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
 import { createAssetSchema, updateAssetSchema } from "@/lib/schemas/assets";
 import { createActivitySchema, updateActivitySchema, addTimeEntrySchema } from "@/lib/schemas/activities";
 import { createEventSchema, updateEventSchema, toggleEventCompletionSchema, createReminderSchema } from "@/lib/schemas/events";
@@ -166,6 +167,9 @@ register(
   201
 );
 register("GET", "/api/installment-plans/:id", ({ db, userId, params }) => ({ plan: installmentsRepo.getInstallmentPlan(db, userId, params.id) }));
+register("PATCH", "/api/installment-plans/:id", ({ db, userId, params, body }) => ({
+  plan: installmentsRepo.updateInstallmentPlan(db, userId, params.id, updateInstallmentPlanSchema.parse(body)),
+}));
 register("DELETE", "/api/installment-plans/:id", ({ db, userId, params }) => installmentsRepo.deleteInstallmentPlan(db, userId, params.id));
 register("POST", "/api/installments/:id/pay", ({ db, userId, params, body }) =>
   installmentsRepo.payInstallment(db, userId, params.id, payInstallmentSchema.parse(body))
@@ -269,6 +273,10 @@ register("GET", "/api/search", ({ db, userId, query }) => ({ results: searchRepo
 register("GET", "/api/export/:entity", ({ db, userId, params }) => exportRepo.exportCsv(db, userId, params.entity));
 
 register("POST", "/api/quick-capture", ({ db, userId, body }) => quickCaptureRepo.quickCapture(db, userId, body as any), 201);
+
+register("GET", "/api/quick-capture/suggestions", ({ db, userId, query }) => ({
+  suggestions: titleSuggestionsRepo.getTitleSuggestions(db, userId, query.get("q") ?? ""),
+}));
 
 register("GET", "/api/dashboard", ({ db, userId }) => dashboardRepo.getDashboard(db, userId));
 

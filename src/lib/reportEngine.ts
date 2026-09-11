@@ -453,6 +453,15 @@ export async function computeHabitsReport(userId: string, from: Date, to: Date):
   };
 }
 
+export interface CategoryCalendarItem {
+  type: "TIME_ENTRY" | "TASK" | "EVENT" | "HABIT";
+  title: string;
+  minutes: number;
+  // ISO datetime when this item has a real time-of-day (TimeEntry/Task/Event always do), null
+  // for HabitCheckIn — a check-in is normalized to local midnight with no time-of-day recorded.
+  timeOfDay: string | null;
+}
+
 export interface CategoryCalendarStat {
   categoryId: string;
   name: string;
@@ -461,6 +470,22 @@ export interface CategoryCalendarStat {
   totalMinutes: number;
   totalDays: number;
   days: Record<string, number>; // dayKeyIso(date) -> minutes, only days with minutes > 0
+  dayItems: Record<string, CategoryCalendarItem[]>; // dayKeyIso(date) -> items, timed items first (by time), then timeless ones
+}
+
+function sortDayItems(items: CategoryCalendarItem[]): CategoryCalendarItem[] {
+  // Items with a real time-of-day come first, earliest first; timeless (habit) items follow,
+  // keeping their original relative order — the request was to surface *timed* items forward,
+  // not to invent an ordering for the ones that were never timed to begin with.
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => {
+      if (a.item.timeOfDay && b.item.timeOfDay) return a.item.timeOfDay.localeCompare(b.item.timeOfDay);
+      if (a.item.timeOfDay && !b.item.timeOfDay) return -1;
+      if (!a.item.timeOfDay && b.item.timeOfDay) return 1;
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
 }
 
 /**
@@ -475,55 +500,81 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
     prisma.category.findMany({ where: { userId, deletedAt: null } }),
     prisma.timeEntry.findMany({
       where: { activity: { userId, deletedAt: null }, startAt: { gte: from, lte: to }, durationMin: { not: null } },
-      include: { activity: { select: { categoryId: true } } },
+      include: { activity: { select: { categoryId: true, title: true } } },
     }),
     prisma.task.findMany({
       where: { userId, deletedAt: null, startAt: { gte: from, lte: to }, endAt: { not: null } },
-      select: { categoryId: true, startAt: true, endAt: true },
+      select: { title: true, categoryId: true, startAt: true, endAt: true },
     }),
     prisma.eventCompletion.findMany({
       where: { occurrenceDate: { gte: from, lte: to }, event: { userId, deletedAt: null } },
-      include: { event: { select: { categoryId: true, startAt: true, endAt: true, allDay: true } } },
+      include: { event: { select: { categoryId: true, title: true, startAt: true, endAt: true, allDay: true } } },
     }),
     prisma.habitCheckIn.findMany({
       where: { habit: { userId, deletedAt: null }, date: { gte: from, lte: to }, durationMin: { not: null } },
-      include: { habit: { select: { categoryId: true } } },
+      include: { habit: { select: { categoryId: true, title: true } } },
     }),
   ]);
 
   const byCategory = new Map<string, Map<string, number>>();
+  const itemsByCategory = new Map<string, Map<string, CategoryCalendarItem[]>>();
 
-  function addMinutes(categoryId: string | null, date: Date, minutes: number) {
+  function addMinutes(categoryId: string | null, date: Date, minutes: number, item: CategoryCalendarItem) {
     if (!categoryId || minutes <= 0) return;
     const key = dayKeyIso(date);
     if (!byCategory.has(categoryId)) byCategory.set(categoryId, new Map());
     const dayMap = byCategory.get(categoryId)!;
     dayMap.set(key, (dayMap.get(key) ?? 0) + minutes);
+
+    if (!itemsByCategory.has(categoryId)) itemsByCategory.set(categoryId, new Map());
+    const dayItemsMap = itemsByCategory.get(categoryId)!;
+    if (!dayItemsMap.has(key)) dayItemsMap.set(key, []);
+    dayItemsMap.get(key)!.push(item);
   }
 
   for (const te of timeEntries) {
-    addMinutes(te.activity.categoryId, te.startAt, te.durationMin ?? 0);
+    addMinutes(te.activity.categoryId, te.startAt, te.durationMin ?? 0, {
+      type: "TIME_ENTRY",
+      title: te.activity.title ?? "فعالیت",
+      minutes: te.durationMin ?? 0,
+      timeOfDay: te.startAt.toISOString(),
+    });
   }
   for (const t of tasks) {
     const minutes = Math.max(0, Math.round((t.endAt!.getTime() - t.startAt!.getTime()) / 60000));
-    addMinutes(t.categoryId, t.startAt!, minutes);
+    addMinutes(t.categoryId, t.startAt!, minutes, { type: "TASK", title: t.title, minutes, timeOfDay: t.startAt!.toISOString() });
   }
   for (const c of completions) {
     if (c.event.allDay) continue;
     const minutes = Math.max(0, Math.round((c.event.endAt.getTime() - c.event.startAt.getTime()) / 60000));
-    addMinutes(c.event.categoryId, c.occurrenceDate, minutes);
+    addMinutes(c.event.categoryId, c.occurrenceDate, minutes, {
+      type: "EVENT",
+      title: c.event.title,
+      minutes,
+      timeOfDay: c.event.startAt.toISOString(),
+    });
   }
   for (const checkIn of habitCheckIns) {
-    addMinutes(checkIn.habit.categoryId, checkIn.date, checkIn.durationMin ?? 0);
+    addMinutes(checkIn.habit.categoryId, checkIn.date, checkIn.durationMin ?? 0, {
+      type: "HABIT",
+      title: checkIn.habit.title,
+      minutes: checkIn.durationMin ?? 0,
+      timeOfDay: null,
+    });
   }
 
   return categories.map((cat) => {
     const dayMap = byCategory.get(cat.id) ?? new Map<string, number>();
+    const dayItemsMap = itemsByCategory.get(cat.id) ?? new Map<string, CategoryCalendarItem[]>();
     const days: Record<string, number> = {};
+    const dayItems: Record<string, CategoryCalendarItem[]> = {};
     let totalMinutes = 0;
     for (const [key, minutes] of dayMap) {
       days[key] = minutes;
       totalMinutes += minutes;
+    }
+    for (const [key, items] of dayItemsMap) {
+      dayItems[key] = sortDayItems(items);
     }
     return {
       categoryId: cat.id,
@@ -533,6 +584,7 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
       totalMinutes,
       totalDays: dayMap.size,
       days,
+      dayItems,
     };
   });
 }

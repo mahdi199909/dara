@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
+import { useAccounts } from "@/lib/hooks";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatDuration } from "@/lib/money";
 import { formatJalali } from "@/lib/jalali";
@@ -71,53 +72,54 @@ export default function AssetsPage() {
       </div>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-ink text-sm">دارایی‌های واقعی</h2>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-1.5 rounded-xl hover:opacity-90"
-          >
-            <PlusIcon className="w-4 h-4" />
-            دارایی جدید
-          </button>
-        </div>
-
-        {showForm && <AssetForm onDone={() => { setShowForm(false); mutateAssets(); }} onCancel={() => setShowForm(false)} />}
-
-        <div className="grid grid-cols-1 gap-3">
-          {assetsData?.assets.map((a) =>
-            editingAssetId === a.id ? (
-              <AssetForm
-                key={a.id}
-                asset={a}
-                onDone={() => { setEditingAssetId(null); mutateAssets(); }}
-                onCancel={() => setEditingAssetId(null)}
-              />
-            ) : (
-              <Card key={a.id} className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-bold text-ink">{a.name}</p>
-                    <p className="text-xs text-muted mt-0.5">{a.category || "—"} · خرید {formatJalali(new Date(a.purchaseDate))}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => setEditingAssetId(a.id)} aria-label="ویرایش" className="p-1.5 text-muted hover:text-accent transition">
-                      <EditIcon className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => deleteAsset(a.id)} aria-label="حذف" className="p-1.5 text-muted hover:text-waste transition">
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  </div>
+        <h2 className="font-bold text-ink text-sm">دارایی مجازی به تفکیک دسته‌بندی</h2>
+        <p className="text-xs text-muted -mt-2">
+          دارایی مجازی از کارها و فعالیت‌های مفیدی مثل مطالعه، یادگیری و استراحت بدون تکنولوژی که در دسته‌بندی آن‌ها فعال شده، محاسبه می‌شود. این یک معیار داخلی برای رشد شخصی است، نه پول نقد یا دارایی قابل‌فروش. نشان‌ها (۱۰، ۲۵، ۵۰، ۱۰۰، ۲۵۰ و ۵۰۰ ساعت) پله‌های ثابت و خودکار هستند؛ جایی برای تغییر دادن آن‌ها وجود ندارد، فقط پیشرفت شما را نشان می‌دهند.
+        </p>
+        {!vaData || vaData.byCategory.length === 0 ? (
+          <Card>
+            <EmptyState message="هنوز دارایی مجازی ایجاد نشده. برای فعال‌سازی به تنظیمات > دسته‌بندی‌ها بروید." />
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {vaData.byCategory.map((bucket) => (
+              <Card key={bucket.categoryId} className="overflow-hidden">
+                <button
+                  onClick={() => setOpenCategory(openCategory === bucket.categoryId ? null : bucket.categoryId)}
+                  className="w-full flex items-center justify-between px-4 py-3"
+                >
+                  <span className="text-sm text-ink flex items-center gap-2">
+                    <span>{bucket.icon}</span>
+                    {bucket.name}
+                    <span className="text-xs text-muted">({bucket.entries.length})</span>
+                  </span>
+                  <span className="text-sm font-bold text-accent">{format(bucket.total, { withSuffix: true })}</span>
+                </button>
+                <div className="px-4 pb-3">
+                  <MilestoneCaption totalMinutes={bucket.entries.reduce((s: number, e: any) => s + e.durationMin, 0)} />
                 </div>
-                <div className="flex items-center justify-between mt-3">
-                  <span className="text-xs text-muted">قیمت خرید: {format(a.purchasePrice, { withSuffix: true })}</span>
-                  <span className="text-base font-bold text-accent">{format(a.currentValue, { withSuffix: true })}</span>
-                </div>
+                {openCategory === bucket.categoryId && (
+                  <ul className="divide-y divide-line border-t border-line">
+                    {bucket.entries.map((e: any) => (
+                      <li key={e.id} className="flex items-center justify-between px-4 py-2.5">
+                        <div>
+                          <p className="text-sm text-ink">{(e.activity ?? e.task)?.title}</p>
+                          <p className="text-xs text-muted">{formatDuration(e.durationMin)} · {formatJalali(new Date(e.date))}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-ink">{format(e.totalValue, { withSuffix: true })}</span>
+                          <button onClick={() => deleteVirtualEntry(e.id)} aria-label="حذف" className="p-1 text-muted hover:text-waste transition">
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </Card>
-            )
-          )}
-          {assetsData?.assets.length === 0 && <EmptyState message="هنوز دارایی واقعی ثبت نکرده‌اید." />}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {vaData && vaData.habitEntries.length > 0 && (
@@ -174,54 +176,53 @@ export default function AssetsPage() {
       )}
 
       <section className="space-y-3">
-        <h2 className="font-bold text-ink text-sm">دارایی مجازی به تفکیک دسته‌بندی</h2>
-        <p className="text-xs text-muted -mt-2">
-          دارایی مجازی از کارها و فعالیت‌های مفیدی مثل مطالعه، یادگیری و استراحت بدون تکنولوژی که در دسته‌بندی آن‌ها فعال شده، محاسبه می‌شود. این یک معیار داخلی برای رشد شخصی است، نه پول نقد یا دارایی قابل‌فروش.
-        </p>
-        {!vaData || vaData.byCategory.length === 0 ? (
-          <Card>
-            <EmptyState message="هنوز دارایی مجازی ایجاد نشده. برای فعال‌سازی به تنظیمات > دسته‌بندی‌ها بروید." />
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {vaData.byCategory.map((bucket) => (
-              <Card key={bucket.categoryId} className="overflow-hidden">
-                <button
-                  onClick={() => setOpenCategory(openCategory === bucket.categoryId ? null : bucket.categoryId)}
-                  className="w-full flex items-center justify-between px-4 py-3"
-                >
-                  <span className="text-sm text-ink flex items-center gap-2">
-                    <span>{bucket.icon}</span>
-                    {bucket.name}
-                    <span className="text-xs text-muted">({bucket.entries.length})</span>
-                  </span>
-                  <span className="text-sm font-bold text-accent">{format(bucket.total, { withSuffix: true })}</span>
-                </button>
-                <div className="px-4 pb-3">
-                  <MilestoneCaption totalMinutes={bucket.entries.reduce((s: number, e: any) => s + e.durationMin, 0)} />
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-ink text-sm">دارایی‌های واقعی</h2>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-1.5 rounded-xl hover:opacity-90"
+          >
+            <PlusIcon className="w-4 h-4" />
+            دارایی جدید
+          </button>
+        </div>
+
+        {showForm && <AssetForm onDone={() => { setShowForm(false); mutateAssets(); }} onCancel={() => setShowForm(false)} />}
+
+        <div className="grid grid-cols-1 gap-3">
+          {assetsData?.assets.map((a) =>
+            editingAssetId === a.id ? (
+              <AssetForm
+                key={a.id}
+                asset={a}
+                onDone={() => { setEditingAssetId(null); mutateAssets(); }}
+                onCancel={() => setEditingAssetId(null)}
+              />
+            ) : (
+              <Card key={a.id} className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-ink">{a.name}</p>
+                    <p className="text-xs text-muted mt-0.5">{a.category || "—"} · خرید {formatJalali(new Date(a.purchaseDate))}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setEditingAssetId(a.id)} aria-label="ویرایش" className="p-1.5 text-muted hover:text-accent transition">
+                      <EditIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteAsset(a.id)} aria-label="حذف" className="p-1.5 text-muted hover:text-waste transition">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                {openCategory === bucket.categoryId && (
-                  <ul className="divide-y divide-line border-t border-line">
-                    {bucket.entries.map((e: any) => (
-                      <li key={e.id} className="flex items-center justify-between px-4 py-2.5">
-                        <div>
-                          <p className="text-sm text-ink">{(e.activity ?? e.task)?.title}</p>
-                          <p className="text-xs text-muted">{formatDuration(e.durationMin)} · {formatJalali(new Date(e.date))}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-ink">{format(e.totalValue, { withSuffix: true })}</span>
-                          <button onClick={() => deleteVirtualEntry(e.id)} aria-label="حذف" className="p-1 text-muted hover:text-waste transition">
-                            <TrashIcon className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-xs text-muted">قیمت خرید: {format(a.purchasePrice, { withSuffix: true })}</span>
+                  <span className="text-base font-bold text-accent">{format(a.currentValue, { withSuffix: true })}</span>
+                </div>
               </Card>
-            ))}
-          </div>
-        )}
+            )
+          )}
+          {assetsData?.assets.length === 0 && <EmptyState message="هنوز دارایی واقعی ثبت نکرده‌اید." />}
+        </div>
       </section>
     </div>
   );
@@ -229,10 +230,12 @@ export default function AssetsPage() {
 
 function AssetForm({ asset, onDone, onCancel }: { asset?: any; onDone: () => void; onCancel: () => void }) {
   const isEdit = !!asset;
+  const { accounts } = useAccounts();
   const [name, setName] = useState(asset?.name ?? "");
   const [category, setCategory] = useState(asset?.category ?? "");
   const [purchasePrice, setPurchasePrice] = useState(asset ? String(asset.purchasePrice) : "");
   const [currentValue, setCurrentValue] = useState(asset ? String(asset.currentValue) : "");
+  const [accountId, setAccountId] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -246,12 +249,24 @@ function AssetForm({ asset, onDone, onCancel }: { asset?: any; onDone: () => voi
           currentValue: currentValue ? Number(currentValue) : undefined,
         });
       } else {
-        await apiPost("/api/assets", {
+        const created: any = await apiPost("/api/assets", {
           name,
           category: category || undefined,
           purchasePrice: Number(purchasePrice),
           currentValue: currentValue ? Number(currentValue) : undefined,
         });
+        // Recording which account the purchase came out of is just a normal EXPENSE transaction
+        // linked back to this asset (Transaction.assetId already exists for this) — not a new
+        // field on Asset itself, so it shows up in the account's balance/history like any other spend.
+        if (accountId && Number(purchasePrice) > 0) {
+          await apiPost("/api/transactions", {
+            type: "EXPENSE",
+            amount: Number(purchasePrice),
+            accountId,
+            assetId: created?.asset?.id,
+            description: name,
+          });
+        }
       }
       onDone();
     } finally {
@@ -268,6 +283,14 @@ function AssetForm({ asset, onDone, onCancel }: { asset?: any; onDone: () => voi
           <MoneyInput value={purchasePrice} onChange={setPurchasePrice} placeholder="قیمت خرید" required disabled={isEdit} />
           <MoneyInput value={currentValue} onChange={setCurrentValue} placeholder="ارزش فعلی (اختیاری)" />
         </div>
+        {!isEdit && (
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-2 py-2 text-sm">
+            <option value="">هزینه از کدام حساب کسر شود؟ (اختیاری)</option>
+            {accounts.map((a: any) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        )}
         <div className="flex gap-2">
           {isEdit && (
             <button type="button" onClick={onCancel} className="flex-1 rounded-xl border border-line text-muted py-2 text-sm hover:bg-canvas">

@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
 import { formatDuration, truncateLabel, toPersianDigits } from "@/lib/money";
-import { formatJalali, formatJalaliMonthYear, toJalali } from "@/lib/jalali";
+import { formatJalali, formatJalaliMonthYear, toJalali, formatTime } from "@/lib/jalali";
 import { getJalaliMonthGrid, addJalaliMonths, dayKeyIso } from "@/lib/calendarGrid";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
@@ -92,19 +92,12 @@ export default function ReportsPage() {
     const isNative = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
     const filename = `${entity}.csv`;
     try {
-      let csv: string;
       if (isNative) {
         const { dispatchLocal } = await import("@/lib/localDispatcher");
         const res = dispatchLocal("GET", `/api/export/${entity}`);
         if (res.status >= 400) throw new Error((res.json as { error?: string })?.error ?? `HTTP ${res.status}`);
-        csv = (res.json as { csv: string }).csv;
-      } else {
-        const res = await fetch(`/api/export/${entity}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        csv = await res.text();
-      }
+        const csv = (res.json as { csv: string }).csv;
 
-      if (isNative) {
         // Directory.Cache, not Documents — see settings/page.tsx's BackupTab for why: on a lot of
         // real devices the public Documents directory doesn't already exist, and writeFile fails
         // with "Missing parent directory" rather than creating it. Cache is always there and is
@@ -114,7 +107,13 @@ export default function ReportsPage() {
         const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
         await Share.share({ title: filename, dialogTitle: "ارسال فایل خروجی", files: [uri] });
       } else {
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const res = await fetch(`/api/export/${entity}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // res.blob() keeps the server's raw bytes — including the UTF-8 BOM toCsv() prepends —
+        // intact. res.text() would decode them through TextDecoder first, which silently strips a
+        // leading BOM per the WHATWG spec, so Excel then guesses the wrong codepage and garbles
+        // every Persian string in the file while ASCII numbers/dates stay readable.
+        const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -580,6 +579,7 @@ function compactDuration(minutes: number): string {
 function CategoryCalendarTab() {
   const [cursor, setCursor] = useState(new Date());
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
   const { jy, jm } = toJalali(cursor);
   const { data } = useSWR<{ categories: any[]; jy: number; jm: number }>(
     `/api/reports/category-calendar?jy=${jy}&jm=${jm}`,
@@ -589,10 +589,14 @@ function CategoryCalendarTab() {
   function navigate(delta: number) {
     const { jy: ny, jm: nm } = addJalaliMonths(jy, jm, delta);
     setCursor(getJalaliMonthGrid(ny, nm)[8]); // a day safely inside the new month
+    setSelectedDayKey(null);
   }
 
   const selected = data?.categories.find((c: any) => c.categoryId === selectedCategoryId) ?? null;
   const maxDayMinutes = selected ? Math.max(1, ...(Object.values(selected.days) as number[])) : 1;
+  const selectedDayItems: any[] = (selectedDayKey && selected?.dayItems?.[selectedDayKey]) || [];
+
+  const ITEM_TYPE_LABELS: Record<string, string> = { TIME_ENTRY: "فعالیت", TASK: "کار", EVENT: "رویداد", HABIT: "عادت" };
 
   return (
     <div className="space-y-4">
@@ -617,7 +621,10 @@ function CategoryCalendarTab() {
             {data.categories.map((c: any) => (
               <button
                 key={c.categoryId}
-                onClick={() => setSelectedCategoryId(selectedCategoryId === c.categoryId ? null : c.categoryId)}
+                onClick={() => {
+                  setSelectedCategoryId(selectedCategoryId === c.categoryId ? null : c.categoryId);
+                  setSelectedDayKey(null);
+                }}
                 className={`shrink-0 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition ${
                   selectedCategoryId === c.categoryId
                     ? "bg-accent text-on-accent border-accent"
@@ -659,13 +666,24 @@ function CategoryCalendarTab() {
               {getJalaliMonthGrid(jy, jm).map((day) => {
                 const { jm: dJm, jd } = toJalali(day);
                 const inMonth = dJm === jm;
-                const minutes = inMonth ? selected.days[dayKeyIso(day)] ?? 0 : 0;
+                const dayKey = dayKeyIso(day);
+                const minutes = inMonth ? selected.days[dayKey] ?? 0 : 0;
                 const intensity = minutes > 0 ? Math.min(1, minutes / maxDayMinutes) : 0;
+                const isSelectedDay = selectedDayKey === dayKey;
                 return (
-                  <div
+                  <button
                     key={day.toISOString()}
+                    type="button"
+                    disabled={minutes === 0}
+                    onClick={() => setSelectedDayKey(isSelectedDay ? null : dayKey)}
                     className={`aspect-square rounded-xl border p-1.5 flex flex-col items-center justify-center gap-0.5 ${
-                      !inMonth ? "bg-canvas border-transparent text-muted" : minutes > 0 ? "border-accent-soft" : "bg-surface border-line"
+                      !inMonth
+                        ? "bg-canvas border-transparent text-muted"
+                        : minutes > 0
+                          ? isSelectedDay
+                            ? "border-accent ring-2 ring-accent"
+                            : "border-accent-soft"
+                          : "bg-surface border-line"
                     }`}
                     style={minutes > 0 ? { backgroundColor: `rgb(var(--accent) / ${0.12 + intensity * 0.55})` } : undefined}
                   >
@@ -673,11 +691,32 @@ function CategoryCalendarTab() {
                       {toPersianDigits(jd)}
                     </span>
                     {minutes > 0 && <span className="text-[9px] text-accent">{compactDuration(minutes)}</span>}
-                  </div>
+                  </button>
                 );
               })}
             </div>
           </Card>
+
+          {selectedDayKey && selectedDayItems.length > 0 && (
+            <Card className="p-0 overflow-hidden">
+              <div className="px-4 py-3 border-b border-line">
+                <p className="text-sm font-bold text-ink">{formatJalali(new Date(selectedDayKey))}</p>
+              </div>
+              <ul className="divide-y divide-line">
+                {selectedDayItems.map((item, i) => (
+                  <li key={i} className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-ink truncate">{item.title}</p>
+                      <p className="text-xs text-muted mt-0.5">
+                        {ITEM_TYPE_LABELS[item.type] ?? item.type} · {item.timeOfDay ? formatTime(new Date(item.timeOfDay)) : "بدون زمان مشخص"}
+                      </p>
+                    </div>
+                    <span className="text-accent font-medium shrink-0">{formatDuration(item.minutes)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
         </>
       )}
     </div>

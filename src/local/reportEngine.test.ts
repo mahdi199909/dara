@@ -14,6 +14,7 @@ vi.mock("@capacitor/preferences", () => ({
 }));
 
 import { toJalali } from "@/lib/jalali";
+import { dayKeyIso } from "@/lib/calendarGrid";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "./db";
 import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import {
@@ -194,6 +195,63 @@ describe("local reportEngine", () => {
     expect(learnStat.totalMinutes).toBe(90);
     expect(learnStat.totalDays).toBe(1);
     expect(Object.values(learnStat.days)[0]).toBe(90);
+  });
+
+  it("computeCategoryCalendar sorts a day's items with timed ones first (earliest first), then timeless habit check-ins", async () => {
+    const db = await freshDb();
+    insertCategory(db, "cat_learn", "PRODUCTIVE");
+    db.run(`INSERT INTO "Habit" ("id","userId","categoryId","title","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+      "habit_cal",
+      USER_ID,
+      "cat_learn",
+      "مطالعه روزانه",
+      now(),
+      now(),
+    ]);
+    // Local-noon anchor for the day (not midnight/an edge hour) so a day-key derived from it via
+    // dayKeyIso can't slip into an adjacent day under any real local timezone offset.
+    const day = new Date(2026, 1, 15, 12, 0, 0);
+    const afternoon = new Date(day.getTime() + 2 * 3600_000);
+    const morning = new Date(day.getTime() - 4 * 3600_000);
+
+    // Afternoon task first in insertion order, morning task second — the sort must reorder these.
+    db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+      "task_afternoon",
+      USER_ID,
+      "کار بعدازظهر",
+      "cat_learn",
+      afternoon.toISOString(),
+      new Date(afternoon.getTime() + 30 * 60000).toISOString(),
+      now(),
+      now(),
+    ]);
+    db.run(`INSERT INTO "Task" ("id","userId","title","categoryId","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, [
+      "task_morning",
+      USER_ID,
+      "کار صبح",
+      "cat_learn",
+      morning.toISOString(),
+      new Date(morning.getTime() + 30 * 60000).toISOString(),
+      now(),
+      now(),
+    ]);
+    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+      "ci_learn",
+      "habit_cal",
+      day.toISOString(),
+      20,
+      now(),
+      now(),
+    ]);
+
+    const calendar = computeCategoryCalendar(db, USER_ID, new Date(2026, 1, 1), new Date(2026, 1, 28, 23, 59, 59));
+    const learnStat = calendar.find((c) => c.categoryId === "cat_learn")!;
+    const items = learnStat.dayItems[dayKeyIso(day)];
+    expect(items).toHaveLength(3);
+    expect(items.map((i) => i.title)).toEqual(["کار صبح", "کار بعدازظهر", "مطالعه روزانه"]);
+    expect(items[0].timeOfDay).not.toBeNull();
+    expect(items[1].timeOfDay).not.toBeNull();
+    expect(items[2].timeOfDay).toBeNull(); // habit check-ins have no time-of-day
   });
 
   describe("computeCalendarMonthOverview", () => {

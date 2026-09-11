@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { mutate } from "swr";
-import { apiPost, ApiClientError } from "@/lib/apiClient";
+import useSWR, { mutate } from "swr";
+import { apiPost, fetcher, ApiClientError } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
@@ -59,6 +59,12 @@ export default function CaptureForm({
   const [addingCategoryError, setAddingCategoryError] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { data: suggestionsData } = useSWR<{ suggestions: { title: string; count: number }[] }>(
+    showSuggestions ? `/api/quick-capture/suggestions?q=${encodeURIComponent(title)}` : null,
+    fetcher
+  );
+  const suggestions = suggestionsData?.suggestions ?? [];
   const [entityType, setEntityType] = useState<CaptureEntityType>("TASK");
   const [valueType, setValueType] = useState<ValueType>("EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -207,14 +213,40 @@ export default function CaptureForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <input
-        autoFocus
-        required
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="چیکار کردی؟"
-        className="bg-surface w-full rounded-xl border border-line px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-400"
-      />
+      <div className="relative">
+        <input
+          autoFocus
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setShowSuggestions(false)}
+          placeholder="چیکار کردی؟"
+          className="bg-surface w-full rounded-xl border border-line px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-400"
+        />
+        {showSuggestions && suggestions.length > 0 && (
+          <ul className="absolute z-10 top-full mt-1 w-full max-h-48 overflow-y-auto scrollbar-thin bg-surface rounded-xl border border-line shadow-lg divide-y divide-line">
+            {suggestions.map((s) => (
+              <li key={s.title}>
+                <button
+                  type="button"
+                  // mousedown (not click) fires before the input's blur, and preventDefault stops
+                  // that blur from happening at all — otherwise the dropdown would close itself
+                  // before the click ever registers.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setTitle(s.title);
+                    setShowSuggestions(false);
+                  }}
+                  className="w-full text-right px-4 py-2.5 text-sm text-ink hover:bg-canvas transition"
+                >
+                  {s.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="flex gap-2">
         {CAPTURE_TYPES.map((t) => (

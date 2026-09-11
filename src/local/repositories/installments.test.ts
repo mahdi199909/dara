@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "../db";
 import { createNodeSqliteDriver } from "../drivers/nodeSqlite";
-import { createInstallmentPlan, deleteInstallmentPlan, getInstallmentPlan, payInstallment } from "./installments";
+import { createInstallmentPlan, deleteInstallmentPlan, getInstallmentPlan, payInstallment, updateInstallmentPlan } from "./installments";
 
 const USER_ID = "user_inst_1";
 const now = () => new Date().toISOString();
@@ -83,6 +83,38 @@ describe("local installments", () => {
     payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
 
     expect(() => deleteInstallmentPlan(db, USER_ID, plan.id)).toThrow("طرحی که پرداخت انجام‌شده دارد قابل حذف نیست تا صحت گزارش‌ها حفظ شود.");
+  });
+
+  it("updates title/notes without touching the schedule", async () => {
+    const db = await freshDb();
+    const plan = createInstallmentPlan(db, USER_ID, { title: "وام", totalAmount: 1000000, installmentAmount: 1000000, numberOfInstallments: 1, dueDay: 5 });
+
+    const updated = updateInstallmentPlan(db, USER_ID, plan.id, { title: "وام خودرو", notes: "یادداشت" });
+    expect(updated.title).toBe("وام خودرو");
+    expect(updated.notes).toBe("یادداشت");
+    expect(updated.installments[0].dueDate).toBe(plan.installments[0].dueDate);
+  });
+
+  it("changing dueDay re-dates only PENDING installments, leaving PAID ones' history untouched", async () => {
+    const db = await freshDb();
+    db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
+    const plan = createInstallmentPlan(db, USER_ID, {
+      title: "وام",
+      totalAmount: 2000000,
+      installmentAmount: 1000000,
+      numberOfInstallments: 2,
+      dueDay: 5,
+      startDate: new Date(2026, 0, 1).toISOString(),
+    });
+    payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
+
+    const updated = updateInstallmentPlan(db, USER_ID, plan.id, { dueDay: 20 });
+    expect(updated.dueDay).toBe(20);
+    // Installment #1 was already PAID — its due date must stay exactly as originally scheduled.
+    expect(updated.installments[0].dueDate).toBe(plan.installments[0].dueDate);
+    expect(new Date(updated.installments[0].dueDate).getDate()).toBe(5);
+    // Installment #2 was still PENDING — it gets re-dated onto the new dueDay.
+    expect(new Date(updated.installments[1].dueDate).getDate()).toBe(20);
   });
 
   it("throws a 404 for another user's plan", async () => {

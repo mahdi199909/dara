@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateInstallmentSchedule, summarizeInstallments, computeLoanInterest } from "./installments";
+import { generateInstallmentSchedule, summarizeInstallments, computeLoanInterest, computeEffectiveAnnualRate } from "./installments";
 
 describe("generateInstallmentSchedule", () => {
   it("generates the requested number of monthly installments on the due day", () => {
@@ -17,14 +17,48 @@ describe("generateInstallmentSchedule", () => {
     expect(schedule[29].index).toBe(30);
   });
 
-  it("clamps an out-of-range due day to 28", () => {
+  it("keeps day 31 as-is in a 31-day month", () => {
     const schedule = generateInstallmentSchedule({
-      startDate: new Date(2026, 0, 1),
+      startDate: new Date(2026, 0, 1), // installments land Feb (i=0) then March 2026 (i=1, 31 days)
+      dueDay: 31,
+      numberOfInstallments: 2,
+      installmentAmount: 1000,
+    });
+    expect(schedule[1].dueDate.getMonth()).toBe(2); // March
+    expect(schedule[1].dueDate.getDate()).toBe(31);
+  });
+
+  it("clamps day 31 to 30 in a 30-day month", () => {
+    const schedule = generateInstallmentSchedule({
+      startDate: new Date(2026, 4, 1), // first installment lands in June 2026 (30 days)
       dueDay: 31,
       numberOfInstallments: 1,
       installmentAmount: 1000,
     });
+    expect(schedule[0].dueDate.getMonth()).toBe(5); // June
+    expect(schedule[0].dueDate.getDate()).toBe(30);
+  });
+
+  it("clamps day 31 to 28 in February of a non-leap year", () => {
+    const schedule = generateInstallmentSchedule({
+      startDate: new Date(2026, 0, 1), // 2026 is not a leap year
+      dueDay: 31,
+      numberOfInstallments: 1,
+      installmentAmount: 1000,
+    });
+    expect(schedule[0].dueDate.getMonth()).toBe(1); // February
     expect(schedule[0].dueDate.getDate()).toBe(28);
+  });
+
+  it("clamps day 31 to 29 in February of a leap year", () => {
+    const schedule = generateInstallmentSchedule({
+      startDate: new Date(2027, 11, 1), // first installment lands in Jan 2028; 2028 is a leap year
+      dueDay: 31,
+      numberOfInstallments: 2,
+      installmentAmount: 1000,
+    });
+    expect(schedule[1].dueDate.getMonth()).toBe(1); // February 2028
+    expect(schedule[1].dueDate.getDate()).toBe(29);
   });
 });
 
@@ -58,5 +92,37 @@ describe("computeLoanInterest", () => {
     expect(result.totalPayable).toBe(13_200_000);
     expect(result.interest).toBe(1_200_000);
     expect(result.interestPercent).toBeCloseTo(10, 5);
+  });
+});
+
+describe("computeEffectiveAnnualRate", () => {
+  it("returns zero when there's no real interest (installmentAmount × n equals principal)", () => {
+    const result = computeEffectiveAnnualRate({ totalAmount: 300_000_000, installmentAmount: 10_000_000, numberOfInstallments: 30 });
+    expect(result.monthlyRate).toBe(0);
+    expect(result.effectiveAnnualRate).toBe(0);
+  });
+
+  it("recovers a known monthly rate from its own amortization formula (round-trip)", () => {
+    const principal = 10_000_000;
+    const n = 12;
+    const knownMonthlyRate = 0.02; // 2%/month, chosen arbitrarily
+    const installmentAmount = (principal * knownMonthlyRate) / (1 - Math.pow(1 + knownMonthlyRate, -n));
+
+    const result = computeEffectiveAnnualRate({ totalAmount: principal, installmentAmount, numberOfInstallments: n });
+    expect(result.monthlyRate).toBeCloseTo(knownMonthlyRate, 6);
+    expect(result.effectiveAnnualRate).toBeCloseTo(Math.pow(1 + knownMonthlyRate, 12) - 1, 6);
+  });
+
+  it("gives a higher effective annual rate than the flat total-interest percentage (compounding effect)", () => {
+    // Same 12,000,000 / 1,100,000 / 12 plan as the computeLoanInterest example above (10% flat)
+    const result = computeEffectiveAnnualRate({ totalAmount: 12_000_000, installmentAmount: 1_100_000, numberOfInstallments: 12 });
+    expect(result.monthlyRate).toBeGreaterThan(0);
+    expect(result.effectiveAnnualRatePercent).toBeGreaterThan(10);
+  });
+
+  it("returns zero for degenerate or non-positive inputs", () => {
+    expect(computeEffectiveAnnualRate({ totalAmount: 0, installmentAmount: 100, numberOfInstallments: 12 }).monthlyRate).toBe(0);
+    expect(computeEffectiveAnnualRate({ totalAmount: 100, installmentAmount: 0, numberOfInstallments: 12 }).monthlyRate).toBe(0);
+    expect(computeEffectiveAnnualRate({ totalAmount: 100, installmentAmount: 100, numberOfInstallments: 0 }).monthlyRate).toBe(0);
   });
 });

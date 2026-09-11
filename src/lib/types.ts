@@ -51,6 +51,7 @@ export const REMINDER_OFFSET_PRESETS = [
   { label: "30 دقیقه قبل", minutes: 30 },
   { label: "1 ساعت قبل", minutes: 60 },
   { label: "1 روز قبل", minutes: 60 * 24 },
+  { label: "3 روز قبل", minutes: 60 * 24 * 3 },
 ] as const;
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {

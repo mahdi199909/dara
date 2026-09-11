@@ -18,5 +18,15 @@ export const createInstallmentPlanSchema = z.object({
 });
 export type CreateInstallmentPlanInput = z.infer<typeof createInstallmentPlanSchema>;
 
+// Scoped to the fields that don't risk corrupting a plan's financial history: totalAmount/
+// installmentAmount/numberOfInstallments are left immutable since changing them after some
+// installments are already PAID would make the existing schedule and past payments inconsistent.
+export const updateInstallmentPlanSchema = z.object({
+  title: z.string().min(1).max(150).optional(),
+  dueDay: z.number().int().min(1).max(31).optional(),
+  notes: z.string().max(1000).optional(),
+});
+export type UpdateInstallmentPlanInput = z.infer<typeof updateInstallmentPlanSchema>;
+
 export const payInstallmentSchema = z.object({ accountId: z.string() });
 export type PayInstallmentInput = z.infer<typeof payInstallmentSchema>;

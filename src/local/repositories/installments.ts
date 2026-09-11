@@ -14,8 +14,8 @@
 //   - POST /api/installments/[id]/pay creates a linked EXPENSE Transaction row directly (not
 //     through a Transaction repository — that's separate, parallel work not available here).
 import { ApiError } from "@/lib/apiErrorBase";
-import { generateInstallmentSchedule, summarizeInstallments, type InstallmentSummary } from "@/lib/installments";
-import type { CreateInstallmentPlanInput, PayInstallmentInput } from "@/lib/schemas/installments";
+import { generateInstallmentSchedule, recomputeInstallmentDueDate, summarizeInstallments, type InstallmentSummary } from "@/lib/installments";
+import type { CreateInstallmentPlanInput, PayInstallmentInput, UpdateInstallmentPlanInput } from "@/lib/schemas/installments";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 
@@ -167,6 +167,45 @@ export function createInstallmentPlan(db: LocalDb, userId: string, input: Create
 
   const fresh = getOwnedPlan(db, userId, id);
   writeLocalAuditLog(db, { userId, action: "CREATE", entityType: "InstallmentPlan", entityId: id, newValue: fresh });
+  return fresh;
+}
+
+export function updateInstallmentPlan(
+  db: LocalDb,
+  userId: string,
+  id: string,
+  input: UpdateInstallmentPlanInput
+): InstallmentPlanWithInstallments {
+  const existing = getOwnedPlan(db, userId, id);
+  const ts = now();
+
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const set = (col: string, value: unknown) => {
+    sets.push(`"${col}" = ?`);
+    params.push(value);
+  };
+
+  if (input.title !== undefined) set("title", input.title);
+  if (input.dueDay !== undefined) set("dueDay", input.dueDay);
+  if (input.notes !== undefined) set("notes", input.notes);
+  set("updatedAt", ts);
+
+  db.run(`UPDATE "InstallmentPlan" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, id]);
+
+  // Re-date only installments that haven't been paid yet — PAID ones keep their real historical
+  // due date so past reports/receipts stay accurate.
+  if (input.dueDay !== undefined && input.dueDay !== existing.dueDay) {
+    const startDate = new Date(existing.startDate);
+    for (const installment of existing.installments) {
+      if (installment.status === "PAID") continue;
+      const dueDate = recomputeInstallmentDueDate(startDate, input.dueDay, installment.index);
+      db.run(`UPDATE "Installment" SET "dueDate" = ?, "updatedAt" = ? WHERE "id" = ?`, [dueDate.toISOString(), ts, installment.id]);
+    }
+  }
+
+  const fresh = getOwnedPlan(db, userId, id);
+  writeLocalAuditLog(db, { userId, action: "UPDATE", entityType: "InstallmentPlan", entityId: id, oldValue: existing, newValue: fresh });
   return fresh;
 }
 

@@ -36,15 +36,18 @@ export function phraseBuild(minutes: number, label: string, totalMinutes: number
 }
 
 /**
- * The "X ساعت — Y تا مایل‌استون Z ساعت" progress line — UpgradeToast's second line and the
- * assets page's per-asset progress caption. `remaining` is null once there's no next milestone
- * (already past the highest threshold), in which case this reports the total alone rather than
- * inventing a "no more milestones" claim.
+ * The "X ساعت — Y تا نشان خودکار بعدی (Z ساعت)" progress line — UpgradeToast's second line and
+ * the assets page's per-asset progress caption. `remaining` is null once there's no next
+ * milestone (already past the highest threshold), in which case this reports the total alone
+ * rather than inventing a "no more milestones" claim.
  */
 export function phraseMilestoneProgress(totalMinutes: number, nextMilestoneHours: number | null, remainingMinutes: number | null): string {
   const total = `جمع: ${formatDuration(totalMinutes)}`;
   if (nextMilestoneHours === null || remainingMinutes === null) return `${total}.`;
-  return `${total} — ${formatDuration(remainingMinutes)} تا مایل‌استون ${toPersianDigits(nextMilestoneHours)} ساعت.`;
+  // "نشان خودکار" (automatic badge), not "مایل‌استون" — this is a fixed system checkpoint
+  // (10/25/50/100/250/500 ساعت, see MILESTONE_HOURS) the user can't set or edit, and the old
+  // wording alone left that ambiguous enough that it read like a user-configurable goal.
+  return `${total} — ${formatDuration(remainingMinutes)} تا نشان خودکار بعدی (${toPersianDigits(nextMilestoneHours)} ساعت).`;
 }
 
 /** "هزینه پنهان" — the other «پنهان» moment: a cost that was sitting at zero in the user's own

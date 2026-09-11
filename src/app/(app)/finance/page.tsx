@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { fetcher, apiPost } from "@/lib/apiClient";
+import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories, useAccounts } from "@/lib/hooks";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali } from "@/lib/jalali";
-import { PlusIcon } from "@/components/icons";
+import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type AccountType } from "@/lib/types";
-import { computeLoanInterest } from "@/lib/installments";
+import { computeLoanInterest, computeEffectiveAnnualRate } from "@/lib/installments";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 
@@ -51,12 +51,26 @@ function TransactionsTab() {
   const { categories } = useCategories();
   const { accounts } = useAccounts();
   const [showForm, setShowForm] = useState(false);
+  const [editingTx, setEditingTx] = useState<any | null>(null);
   const { format } = useCurrencyUnit();
+
+  async function remove(id: string) {
+    if (!confirm("این تراکنش حذف شود؟")) return;
+    try {
+      await apiDelete(`/api/transactions/${id}`);
+      mutate();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "حذف تراکنش ناموفق بود.");
+    }
+  }
 
   return (
     <div className="space-y-3">
       <button
-        onClick={() => setShowForm((v) => !v)}
+        onClick={() => {
+          setEditingTx(null);
+          setShowForm((v) => !v);
+        }}
         className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
       >
         <PlusIcon className="w-4 h-4" />
@@ -74,6 +88,18 @@ function TransactionsTab() {
         />
       )}
 
+      {editingTx && (
+        <EditTransactionForm
+          tx={editingTx}
+          categories={categories}
+          onDone={() => {
+            setEditingTx(null);
+            mutate();
+          }}
+          onCancel={() => setEditingTx(null)}
+        />
+      )}
+
       <Card>
         {!data ? (
           <p className="text-sm text-muted text-center py-8">در حال بارگذاری...</p>
@@ -82,8 +108,8 @@ function TransactionsTab() {
         ) : (
           <ul className="divide-y divide-line">
             {data.transactions.map((tx) => (
-              <li key={tx.id} className="flex items-center justify-between px-4 py-3">
-                <div className="min-w-0">
+              <li key={tx.id} className="flex items-center justify-between px-4 py-3 gap-2">
+                <div className="min-w-0 flex-1">
                   <p className="text-sm text-ink truncate">{tx.description || tx.category?.name || "تراکنش"}</p>
                   <p className="text-xs text-muted mt-0.5">
                     {tx.account.name} · {formatJalali(new Date(tx.date))}
@@ -97,12 +123,103 @@ function TransactionsTab() {
                   {tx.type === "EXPENSE" ? "-" : tx.type === "INCOME" ? "+" : ""}
                   {format(tx.amount, { withSuffix: true })}
                 </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingTx(tx);
+                    }}
+                    aria-label="ویرایش"
+                    className="p-1.5 rounded-lg text-muted hover:bg-canvas"
+                  >
+                    <EditIcon className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => remove(tx.id)} aria-label="حذف" className="p-1.5 rounded-lg text-waste hover:bg-canvas">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </Card>
     </div>
+  );
+}
+
+function EditTransactionForm({
+  tx,
+  categories,
+  onDone,
+  onCancel,
+}: {
+  tx: any;
+  categories: any[];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [amount, setAmount] = useState(String(tx.amount));
+  const [description, setDescription] = useState(tx.description ?? "");
+  const [categoryId, setCategoryId] = useState(tx.categoryId ?? "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Only amount/description/category are editable after creation — type and account would
+  // require re-deriving account balances, which the API intentionally doesn't support (see
+  // updateTransactionSchema in src/lib/schemas/transactions.ts).
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!amount) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiPatch(`/api/transactions/${tx.id}`, {
+        amount: Number(amount),
+        description: description || null,
+        categoryId: categoryId || null,
+      });
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ذخیره تغییرات ناموفق بود.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <form onSubmit={submit} className="space-y-3">
+        <p className="text-xs text-muted">
+          {tx.type === "EXPENSE" ? "هزینه" : tx.type === "INCOME" ? "درآمد" : "انتقال"} · {tx.account?.name}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <MoneyInput value={amount} onChange={setAmount} placeholder="مبلغ" required />
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="توضیحات"
+            className="bg-surface rounded-xl border border-line px-3 py-2 text-sm"
+          />
+        </div>
+        {tx.type !== "TRANSFER" && (
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-2 py-2 text-sm">
+            <option value="">دسته‌بندی</option>
+            {categories.map((c: any) => (
+              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+            ))}
+          </select>
+        )}
+        {error && <p className="text-xs text-waste">{error}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
+            ذخیره تغییرات
+          </button>
+          <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
+            انصراف
+          </button>
+        </div>
+      </form>
+    </Card>
   );
 }
 
@@ -192,6 +309,7 @@ function NewTransactionForm({ categories, accounts, onDone }: { categories: any[
 function AccountsTab() {
   const { data, mutate } = useSWR<{ accounts: any[] }>("/api/accounts", fetcher);
   const [showForm, setShowForm] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<any | null>(null);
   const [name, setName] = useState("");
   const [type, setType] = useState<AccountType>("BANK_ACCOUNT");
   const [initialBalance, setInitialBalance] = useState("");
@@ -213,10 +331,23 @@ function AccountsTab() {
     }
   }
 
+  async function remove(id: string) {
+    if (!confirm("این حساب حذف شود؟")) return;
+    try {
+      await apiDelete(`/api/accounts/${id}`);
+      mutate();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "حذف حساب ناموفق بود.");
+    }
+  }
+
   return (
     <div className="space-y-3">
       <button
-        onClick={() => setShowForm((v) => !v)}
+        onClick={() => {
+          setEditingAccount(null);
+          setShowForm((v) => !v);
+        }}
         className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
       >
         <PlusIcon className="w-4 h-4" />
@@ -249,11 +380,41 @@ function AccountsTab() {
         </Card>
       )}
 
+      {editingAccount && (
+        <EditAccountForm
+          account={editingAccount}
+          onDone={() => {
+            setEditingAccount(null);
+            mutate();
+          }}
+          onCancel={() => setEditingAccount(null)}
+        />
+      )}
+
       <div className="grid grid-cols-1 gap-3">
         {data?.accounts.map((a) => (
           <Card key={a.id} className="p-4">
-            <p className="text-xs text-muted">{ACCOUNT_TYPE_LABELS[a.type as AccountType]}</p>
-            <p className="font-bold text-ink mt-0.5">{a.name}</p>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs text-muted">{ACCOUNT_TYPE_LABELS[a.type as AccountType]}</p>
+                <p className="font-bold text-ink mt-0.5 truncate">{a.name}</p>
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingAccount(a);
+                  }}
+                  aria-label="ویرایش"
+                  className="p-1.5 rounded-lg text-muted hover:bg-canvas"
+                >
+                  <EditIcon className="w-4 h-4" />
+                </button>
+                <button onClick={() => remove(a.id)} aria-label="حذف" className="p-1.5 rounded-lg text-waste hover:bg-canvas">
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
             <p className="text-lg font-bold text-accent mt-2">{format(a.balance, { withSuffix: true })}</p>
           </Card>
         ))}
@@ -263,16 +424,61 @@ function AccountsTab() {
   );
 }
 
+function EditAccountForm({ account, onDone, onCancel }: { account: any; onDone: () => void; onCancel: () => void }) {
+  const [name, setName] = useState(account.name);
+  const [type, setType] = useState<AccountType>(account.type);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiPatch(`/api/accounts/${account.id}`, { name, type });
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ذخیره تغییرات ناموفق بود.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <form onSubmit={submit} className="space-y-3">
+        <input
+          autoFocus
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="نام حساب"
+          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
+        />
+        <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className="bg-surface w-full rounded-xl border border-line px-2 py-2 text-sm">
+          {ACCOUNT_TYPES.map((t) => (
+            <option key={t} value={t}>{ACCOUNT_TYPE_LABELS[t]}</option>
+          ))}
+        </select>
+        {error && <p className="text-xs text-waste">{error}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
+            ذخیره تغییرات
+          </button>
+          <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
+            انصراف
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 function InstallmentsTab() {
   const { data, mutate } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
   const { accounts } = useAccounts();
   const [showForm, setShowForm] = useState(false);
-  const { format } = useCurrencyUnit();
-
-  async function pay(installmentId: string, accountId: string) {
-    await apiPost(`/api/installments/${installmentId}/pay`, { accountId });
-    mutate();
-  }
 
   return (
     <div className="space-y-3">
@@ -288,52 +494,198 @@ function InstallmentsTab() {
 
       {data?.plans.length === 0 && <EmptyState message="هنوز طرح قسطی ثبت نکرده‌اید." />}
 
-      {data?.plans.map((plan) => {
-        const nextDue = plan.installments.find((i: any) => i.status !== "PAID");
-        const interest = computeLoanInterest({
-          totalAmount: plan.totalAmount,
-          installmentAmount: plan.installmentAmount,
-          numberOfInstallments: plan.numberOfInstallments,
-        });
-        return (
-          <Card key={plan.id} className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-ink">{plan.title}</h3>
-              {nextDue && accounts[0] && (
-                <button
-                  onClick={() => pay(nextDue.id, accounts[0].id)}
-                  className="text-xs bg-accent-soft text-accent px-3 py-1.5 rounded-lg hover:bg-accent-soft"
-                >
-                  پرداخت قسط بعدی
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <StatItem label="کل بدهی" value={format(plan.summary.totalAmount, { withSuffix: true })} />
-              <StatItem label="پرداخت‌شده" value={format(plan.summary.paidAmount, { withSuffix: true })} tone="positive" />
-              <StatItem label="باقی‌مانده" value={format(plan.summary.remainingAmount, { withSuffix: true })} tone="negative" />
-              <StatItem
-                label="سررسید بعدی"
-                value={plan.summary.nextDueDate ? formatJalali(new Date(plan.summary.nextDueDate)) : "—"}
-              />
-            </div>
-            {interest.interest > 0 && (
-              <div className="mt-3 rounded-xl bg-waste-50 px-3 py-2 flex items-center justify-between text-xs">
-                <span className="text-muted">
-                  مبلغ اصل: {format(plan.totalAmount, { withSuffix: true })} · مجموع بازپرداخت: {format(interest.totalPayable, { withSuffix: true })}
-                </span>
-                <span className="text-waste font-bold shrink-0">
-                  سود واقعی: {format(interest.interest, { withSuffix: true })} ({interest.interestPercent.toFixed(1)}٪)
-                </span>
-              </div>
-            )}
-            <p className="text-xs text-muted mt-3">
-              {plan.summary.paidCount} از {plan.summary.totalCount} قسط پرداخت‌شده
-            </p>
-          </Card>
-        );
-      })}
+      {data?.plans.map((plan) => (
+        <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} />
+      ))}
     </div>
+  );
+}
+
+const INSTALLMENT_STATUS_LABELS: Record<string, string> = { PENDING: "در انتظار", PAID: "پرداخت‌شده", OVERDUE: "دیرکرد" };
+
+function InstallmentPlanCard({ plan, accounts, onChanged }: { plan: any; accounts: any[]; onChanged: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [payAccountId, setPayAccountId] = useState(accounts[0]?.id ?? "");
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const { format } = useCurrencyUnit();
+
+  const interest = computeLoanInterest({
+    totalAmount: plan.totalAmount,
+    installmentAmount: plan.installmentAmount,
+    numberOfInstallments: plan.numberOfInstallments,
+  });
+  const annualRate = computeEffectiveAnnualRate({
+    totalAmount: plan.totalAmount,
+    installmentAmount: plan.installmentAmount,
+    numberOfInstallments: plan.numberOfInstallments,
+  });
+
+  async function pay(installmentId: string) {
+    if (!payAccountId) return;
+    setPayingId(installmentId);
+    try {
+      await apiPost(`/api/installments/${installmentId}/pay`, { accountId: payAccountId });
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "پرداخت ناموفق بود.");
+    } finally {
+      setPayingId(null);
+    }
+  }
+
+  async function remove() {
+    if (!confirm("این طرح قسط حذف شود؟")) return;
+    try {
+      await apiDelete(`/api/installment-plans/${plan.id}`);
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "حذف طرح ناموفق بود.");
+    }
+  }
+
+  if (editing) {
+    return <EditInstallmentPlanForm plan={plan} onDone={() => { setEditing(false); onChanged(); }} onCancel={() => setEditing(false)} />;
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-ink">{plan.title}</h3>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button onClick={() => setEditing(true)} aria-label="ویرایش" className="p-1.5 rounded-lg text-muted hover:bg-canvas">
+            <EditIcon className="w-4 h-4" />
+          </button>
+          <button onClick={remove} aria-label="حذف" className="p-1.5 rounded-lg text-waste hover:bg-canvas">
+            <TrashIcon className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <StatItem label="کل بدهی" value={format(plan.summary.totalAmount, { withSuffix: true })} />
+        <StatItem label="پرداخت‌شده" value={format(plan.summary.paidAmount, { withSuffix: true })} tone="positive" />
+        <StatItem label="باقی‌مانده" value={format(plan.summary.remainingAmount, { withSuffix: true })} tone="negative" />
+        <StatItem
+          label="سررسید بعدی"
+          value={plan.summary.nextDueDate ? formatJalali(new Date(plan.summary.nextDueDate)) : "—"}
+        />
+      </div>
+      {interest.interest > 0 && (
+        <div className="mt-3 rounded-xl bg-waste-50 px-3 py-2 space-y-1 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-muted">
+              مبلغ اصل: {format(plan.totalAmount, { withSuffix: true })} · مجموع بازپرداخت: {format(interest.totalPayable, { withSuffix: true })}
+            </span>
+            <span className="text-waste font-bold shrink-0">
+              سود واقعی: {format(interest.interest, { withSuffix: true })} ({interest.interestPercent.toFixed(1)}٪)
+            </span>
+          </div>
+          {annualRate.effectiveAnnualRate > 0 && (
+            <div className="flex items-center justify-between border-t border-waste/10 pt-1">
+              <span className="text-muted">نرخ سود واقعی سالانه (با احتساب مرکب ماهانه)</span>
+              <span className="text-waste font-bold shrink-0">{annualRate.effectiveAnnualRatePercent.toFixed(1)}٪</span>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-xs text-muted mt-3 mb-1.5">
+        {plan.summary.paidCount} از {plan.summary.totalCount} قسط پرداخت‌شده
+      </p>
+
+      {plan.summary.remainingCount > 0 && (
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-xs text-muted">پرداخت از حساب</p>
+          <select value={payAccountId} onChange={(e) => setPayAccountId(e.target.value)} className="text-xs bg-surface rounded-lg border border-line px-2 py-1">
+            {accounts.length === 0 && <option value="">حسابی ثبت نشده</option>}
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <ul className="rounded-xl border border-line divide-y divide-line overflow-hidden">
+        {plan.installments.map((inst: any) => (
+          <li key={inst.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+            <span className="text-muted shrink-0">قسط {inst.index}</span>
+            <span className="text-ink flex-1 truncate">{formatJalali(new Date(inst.dueDate))}</span>
+            <span className="font-medium shrink-0">{format(inst.amount, { withSuffix: true })}</span>
+            {inst.status === "PAID" ? (
+              <span className="text-accent shrink-0">{INSTALLMENT_STATUS_LABELS.PAID}</span>
+            ) : (
+              <button
+                onClick={() => pay(inst.id)}
+                disabled={!payAccountId || payingId === inst.id}
+                className={`shrink-0 px-2.5 py-1 rounded-lg font-medium disabled:opacity-40 ${
+                  inst.status === "OVERDUE" ? "bg-waste-soft text-waste" : "bg-accent-soft text-accent"
+                }`}
+              >
+                {payingId === inst.id ? "..." : "پرداخت"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function EditInstallmentPlanForm({ plan, onDone, onCancel }: { plan: any; onDone: () => void; onCancel: () => void }) {
+  const [title, setTitle] = useState(plan.title);
+  const [dueDay, setDueDay] = useState(String(plan.dueDay));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || !dueDay) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiPatch(`/api/installment-plans/${plan.id}`, { title, dueDay: Number(dueDay) });
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ذخیره تغییرات ناموفق بود.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <form onSubmit={submit} className="space-y-3">
+        <input
+          autoFocus
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="عنوان"
+          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
+        />
+        <div>
+          <input
+            type="number"
+            dir="ltr"
+            required
+            min={1}
+            max={31}
+            value={dueDay}
+            onChange={(e) => setDueDay(e.target.value)}
+            placeholder="روز سررسید (۱ تا ۳۱)"
+            className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right"
+          />
+          <p className="text-xs text-muted mt-1">فقط اقساط پرداخت‌نشده با روز سررسید جدید تنظیم می‌شوند؛ اقساط پرداخت‌شده تغییر نمی‌کنند.</p>
+        </div>
+        {error && <p className="text-xs text-waste">{error}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
+            ذخیره تغییرات
+          </button>
+          <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
+            انصراف
+          </button>
+        </div>
+      </form>
+    </Card>
   );
 }
 
@@ -350,6 +702,14 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
   const preview =
     totalAmount && installmentAmount && numberOfInstallments
       ? computeLoanInterest({
+          totalAmount: Number(totalAmount),
+          installmentAmount: Number(installmentAmount),
+          numberOfInstallments: Number(numberOfInstallments),
+        })
+      : null;
+  const previewAnnualRate =
+    totalAmount && installmentAmount && numberOfInstallments
+      ? computeEffectiveAnnualRate({
           totalAmount: Number(totalAmount),
           installmentAmount: Number(installmentAmount),
           numberOfInstallments: Number(numberOfInstallments),
@@ -388,7 +748,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
         </div>
         <div className="grid grid-cols-2 gap-2">
           <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
-          <input type="number" dir="ltr" required min={1} max={28} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۲۸)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
+          <input type="number" dir="ltr" required min={1} max={31} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۳۱)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
         </div>
 
         {preview && (
@@ -403,6 +763,12 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
                 {format(preview.interest, { withSuffix: true })} ({preview.interestPercent.toFixed(1)}٪)
               </span>
             </div>
+            {previewAnnualRate && previewAnnualRate.effectiveAnnualRate > 0 && (
+              <div className="flex justify-between border-t border-line pt-1">
+                <span className="text-muted">نرخ سود واقعی سالانه (مرکب)</span>
+                <span className="font-bold text-waste">{previewAnnualRate.effectiveAnnualRatePercent.toFixed(1)}٪</span>
+              </div>
+            )}
           </div>
         )}
 
