@@ -142,7 +142,7 @@ async function main() {
     data: {
       userId: user.id,
       title: "طراحی PCB برد کنترل",
-      status: "IN_PROGRESS",
+      status: "TODO",
       categoryId: cat("پروژه").id,
       projectId: pcbProject.id,
       dueDate: new Date(now.getTime() + 3 * 86400000),

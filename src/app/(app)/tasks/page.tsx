@@ -15,7 +15,6 @@ import { useCurrencyUnit } from "@/lib/currencyUnit";
 const STATUS_TABS: { value: TaskStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "همه" },
   { value: "TODO", label: "انجام‌نشده" },
-  { value: "IN_PROGRESS", label: "در حال انجام" },
   { value: "DONE", label: "انجام‌شده" },
 ];
 

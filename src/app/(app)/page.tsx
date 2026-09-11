@@ -10,8 +10,9 @@ import type { CaptureSummary } from "@/components/CaptureForm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import { EmptyState } from "@/components/ui/Card";
-import { formatTime } from "@/lib/jalali";
+import { formatTime, formatJalali } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
+import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
 import { phraseCaptureReaction, type CaptureReactionKind } from "@/lib/phrasing";
 import { useCompanion } from "@/components/companion/useCompanion";
@@ -56,7 +57,7 @@ function CompanionRow({
   }
 
   return (
-    <div className="shrink-0 w-full rounded-2xl bg-surface border border-line shadow-card px-3 py-2 space-y-1.5" aria-label={ariaLabel}>
+    <div className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card px-3 py-2 space-y-1.5" aria-label={ariaLabel}>
       <p className="text-xs text-ink leading-snug line-clamp-2 text-right">{message}</p>
       <div className="flex items-center justify-between">
         <button
@@ -71,6 +72,47 @@ function CompanionRow({
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Sits beside CompanionRow, same size, on Home's top row — the nearest unpaid installment
+ * across every plan, one page-snapped card per swipe so scrolling the strip reveals the next
+ * few without needing its own dedicated page visit. Always renders (even with nothing due) so
+ * the two-column row stays a stable, equal split rather than CompanionRow silently going full
+ * width whenever there's nothing to show here.
+ */
+function UpcomingInstallmentsCard() {
+  const { data } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
+  const { format } = useCurrencyUnit();
+
+  const upcoming = (data?.plans ?? [])
+    .flatMap((plan: any) => plan.installments.filter((i: any) => i.status !== "PAID").map((i: any) => ({ ...i, planTitle: plan.title })))
+    .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 4);
+
+  return (
+    <Link
+      href="/finance"
+      className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card px-3 py-2 flex flex-col"
+    >
+      <p className="text-xs text-muted mb-1">سررسید نزدیک</p>
+      {upcoming.length === 0 ? (
+        <p className="flex-1 text-xs text-muted flex items-center">قسطی برای پرداخت نیست.</p>
+      ) : (
+        <div className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-thin -mx-1">
+          {upcoming.map((inst) => (
+            <div key={inst.id} className="w-full shrink-0 snap-center px-1 flex flex-col justify-center">
+              <p className="text-sm font-bold text-ink truncate">{inst.planTitle}</p>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className="text-[11px] text-muted">{formatJalali(new Date(inst.dueDate))}</span>
+                <span className="text-xs font-bold text-accent">{format(inst.amount, { withSuffix: true })}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Link>
   );
 }
 
@@ -203,11 +245,14 @@ export default function HomePage() {
     >
       <DailyMomentCard />
 
-      <CompanionRow
-        reaction={reaction}
-        onOpenCapture={() => openCapture()}
-        onLogGap={(start, end) => openCapture({ start, end })}
-      />
+      <div className="shrink-0 flex items-stretch gap-2">
+        <CompanionRow
+          reaction={reaction}
+          onOpenCapture={() => openCapture()}
+          onLogGap={(start, end) => openCapture({ start, end })}
+        />
+        <UpcomingInstallmentsCard />
+      </div>
 
       <div className="flex-1 min-h-0 flex flex-col bg-surface rounded-2xl border border-line shadow-card">
         <h2 className="shrink-0 font-bold text-ink text-sm px-4 pt-3 pb-2">رویدادهای امروز</h2>

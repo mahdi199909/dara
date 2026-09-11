@@ -194,7 +194,7 @@ model Task {
 
   title       String
   description String?
-  status      String  @default("TODO") // TODO | IN_PROGRESS | DONE | CANCELLED
+  status      String  @default("TODO") // TODO | DONE | CANCELLED
   dueDate     DateTime?
 
   categoryId String?

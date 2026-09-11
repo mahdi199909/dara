@@ -72,6 +72,56 @@ export default function AssetsPage() {
       </div>
 
       <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-ink text-sm">دارایی‌های واقعی</h2>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-1.5 rounded-xl hover:opacity-90"
+          >
+            <PlusIcon className="w-4 h-4" />
+            دارایی جدید
+          </button>
+        </div>
+
+        {showForm && <AssetForm onDone={() => { setShowForm(false); mutateAssets(); }} onCancel={() => setShowForm(false)} />}
+
+        <div className="grid grid-cols-1 gap-3">
+          {assetsData?.assets.map((a) =>
+            editingAssetId === a.id ? (
+              <AssetForm
+                key={a.id}
+                asset={a}
+                onDone={() => { setEditingAssetId(null); mutateAssets(); }}
+                onCancel={() => setEditingAssetId(null)}
+              />
+            ) : (
+              <Card key={a.id} className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-ink">{a.name}</p>
+                    <p className="text-xs text-muted mt-0.5">{a.category || "—"} · خرید {formatJalali(new Date(a.purchaseDate))}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setEditingAssetId(a.id)} aria-label="ویرایش" className="p-1.5 text-muted hover:text-accent transition">
+                      <EditIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => deleteAsset(a.id)} aria-label="حذف" className="p-1.5 text-muted hover:text-waste transition">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-xs text-muted">قیمت خرید: {format(a.purchasePrice, { withSuffix: true })}</span>
+                  <span className="text-base font-bold text-accent">{format(a.currentValue, { withSuffix: true })}</span>
+                </div>
+              </Card>
+            )
+          )}
+          {assetsData?.assets.length === 0 && <EmptyState message="هنوز دارایی واقعی ثبت نکرده‌اید." />}
+        </div>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="font-bold text-ink text-sm">دارایی مجازی به تفکیک دسته‌بندی</h2>
         <p className="text-xs text-muted -mt-2">
           دارایی مجازی از کارها و فعالیت‌های مفیدی مثل مطالعه، یادگیری و استراحت بدون تکنولوژی که در دسته‌بندی آن‌ها فعال شده، محاسبه می‌شود. این یک معیار داخلی برای رشد شخصی است، نه پول نقد یا دارایی قابل‌فروش. نشان‌ها (۱۰، ۲۵، ۵۰، ۱۰۰، ۲۵۰ و ۵۰۰ ساعت) پله‌های ثابت و خودکار هستند؛ جایی برای تغییر دادن آن‌ها وجود ندارد، فقط پیشرفت شما را نشان می‌دهند.
@@ -174,56 +224,6 @@ export default function AssetsPage() {
           </div>
         </section>
       )}
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-ink text-sm">دارایی‌های واقعی</h2>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-1.5 rounded-xl hover:opacity-90"
-          >
-            <PlusIcon className="w-4 h-4" />
-            دارایی جدید
-          </button>
-        </div>
-
-        {showForm && <AssetForm onDone={() => { setShowForm(false); mutateAssets(); }} onCancel={() => setShowForm(false)} />}
-
-        <div className="grid grid-cols-1 gap-3">
-          {assetsData?.assets.map((a) =>
-            editingAssetId === a.id ? (
-              <AssetForm
-                key={a.id}
-                asset={a}
-                onDone={() => { setEditingAssetId(null); mutateAssets(); }}
-                onCancel={() => setEditingAssetId(null)}
-              />
-            ) : (
-              <Card key={a.id} className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-bold text-ink">{a.name}</p>
-                    <p className="text-xs text-muted mt-0.5">{a.category || "—"} · خرید {formatJalali(new Date(a.purchaseDate))}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => setEditingAssetId(a.id)} aria-label="ویرایش" className="p-1.5 text-muted hover:text-accent transition">
-                      <EditIcon className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => deleteAsset(a.id)} aria-label="حذف" className="p-1.5 text-muted hover:text-waste transition">
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-3">
-                  <span className="text-xs text-muted">قیمت خرید: {format(a.purchasePrice, { withSuffix: true })}</span>
-                  <span className="text-base font-bold text-accent">{format(a.currentValue, { withSuffix: true })}</span>
-                </div>
-              </Card>
-            )
-          )}
-          {assetsData?.assets.length === 0 && <EmptyState message="هنوز دارایی واقعی ثبت نکرده‌اید." />}
-        </div>
-      </section>
     </div>
   );
 }

@@ -291,7 +291,7 @@ async function main() {
       { userId: user.id, title: "طراحی معماری اپ", status: "DONE", categoryId: p2Cat.id, projectId: p2.id, createdAt: daysAgo(155), completedAt: daysAgo(150) },
       { userId: user.id, title: "پیاده‌سازی صفحه لاگین", status: "DONE", categoryId: p2Cat.id, projectId: p2.id, createdAt: daysAgo(125), completedAt: daysAgo(120) },
       { userId: user.id, title: "پیاده‌سازی صفحه اصلی اپ", status: "DONE", categoryId: p2Cat.id, projectId: p2.id, createdAt: daysAgo(85), completedAt: daysAgo(80) },
-      { userId: user.id, title: "اتصال به دیتابیس", status: "IN_PROGRESS", categoryId: p2Cat.id, projectId: p2.id, createdAt: daysAgo(20) },
+      { userId: user.id, title: "اتصال به دیتابیس", status: "TODO", categoryId: p2Cat.id, projectId: p2.id, createdAt: daysAgo(20) },
       { userId: user.id, title: "طراحی آیکون اپ", status: "TODO", categoryId: p2Cat.id, projectId: p2.id, createdAt: daysAgo(5) },
     ],
   });
@@ -415,7 +415,7 @@ async function main() {
   await prisma.task.createMany({
     data: [
       { userId: user.id, title: "طراحی شماتیک", status: "DONE", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(33), completedAt: daysAgo(30) },
-      { userId: user.id, title: "سفارش PCB", status: "IN_PROGRESS", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(10) },
+      { userId: user.id, title: "سفارش PCB", status: "TODO", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(10) },
       { userId: user.id, title: "لحیم‌کاری قطعات", status: "TODO", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(3) },
     ],
   });

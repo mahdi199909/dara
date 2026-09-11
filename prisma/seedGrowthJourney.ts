@@ -332,7 +332,7 @@ async function main() {
     data: [
       { userId: user.id, title: "طراحی برنامه دوره تدریس", status: "DONE", categoryId: p4Cat.id, projectId: p4.id, createdAt: daysAgo(144), completedAt: daysAgo(141) },
       { userId: user.id, title: "تعیین قیمت جلسات", status: "DONE", categoryId: p4Cat.id, projectId: p4.id, createdAt: daysAgo(141), completedAt: daysAgo(140) },
-      { userId: user.id, title: "پیدا کردن مشتری‌های جدید", status: "IN_PROGRESS", categoryId: p4Cat.id, projectId: p4.id, createdAt: daysAgo(30) },
+      { userId: user.id, title: "پیدا کردن مشتری‌های جدید", status: "TODO", categoryId: p4Cat.id, projectId: p4.id, createdAt: daysAgo(30) },
       { userId: user.id, title: "ساخت صفحه معرفی خدمات", status: "TODO", categoryId: p4Cat.id, projectId: p4.id, createdAt: daysAgo(6) },
     ],
   });
@@ -398,7 +398,7 @@ async function main() {
   await prisma.task.createMany({
     data: [
       { userId: user.id, title: "ثبت‌نام مسابقه", status: "DONE", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(44), completedAt: daysAgo(44) },
-      { userId: user.id, title: "افزایش مسافت هفتگی", status: "IN_PROGRESS", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(15) },
+      { userId: user.id, title: "افزایش مسافت هفتگی", status: "TODO", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(15) },
       { userId: user.id, title: "تمرین نهایی قبل از مسابقه", status: "TODO", categoryId: p6Cat.id, projectId: p6.id, createdAt: daysAgo(2) },
     ],
   });

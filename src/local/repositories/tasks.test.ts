@@ -40,7 +40,7 @@ describe("local tasks repository", () => {
 
   it("lists only the calling user's non-deleted tasks, ordered like the web route", async () => {
     const db = await freshDb();
-    createTask(db, USER_ID, { title: "کار دوم", status: "IN_PROGRESS" });
+    createTask(db, USER_ID, { title: "کار دوم", status: "CANCELLED" });
     createTask(db, USER_ID, { title: "کار اول", status: "TODO" });
     db.run(`INSERT INTO "User" ("id","email","passwordHash","name","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
       "someone_else",
@@ -53,7 +53,7 @@ describe("local tasks repository", () => {
     const otherUserTask = createTask(db, "someone_else", { title: "کار غریبه" });
 
     const tasks = listTasks(db, USER_ID);
-    // ORDER BY status ASC sorts "IN_PROGRESS" before "TODO" lexicographically, same as the web route.
+    // ORDER BY status ASC sorts "CANCELLED" before "TODO" lexicographically, same as the web route.
     expect(tasks.map((t) => t.title)).toEqual(["کار دوم", "کار اول"]);
     expect(tasks.find((t) => t.id === otherUserTask.id)).toBeUndefined();
   });

@@ -213,7 +213,7 @@ export default function CaptureForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="relative">
+      <div>
         <input
           autoFocus
           required
@@ -225,26 +225,27 @@ export default function CaptureForm({
           className="bg-surface w-full rounded-xl border border-line px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
         {showSuggestions && suggestions.length > 0 && (
-          <ul className="absolute z-10 top-full mt-1 w-full max-h-48 overflow-y-auto scrollbar-thin bg-surface rounded-xl border border-line shadow-lg divide-y divide-line">
+          // Horizontal scroll, inline in the form's own flow — not an absolute-positioned
+          // dropdown — so it never overlaps or hides the fields below it.
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-thin pt-2 pb-0.5">
             {suggestions.map((s) => (
-              <li key={s.title}>
-                <button
-                  type="button"
-                  // mousedown (not click) fires before the input's blur, and preventDefault stops
-                  // that blur from happening at all — otherwise the dropdown would close itself
-                  // before the click ever registers.
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setTitle(s.title);
-                    setShowSuggestions(false);
-                  }}
-                  className="w-full text-right px-4 py-2.5 text-sm text-ink hover:bg-canvas transition"
-                >
-                  {s.title}
-                </button>
-              </li>
+              <button
+                key={s.title}
+                type="button"
+                // mousedown (not click) fires before the input's blur, and preventDefault stops
+                // that blur from happening at all — otherwise the suggestions would disappear
+                // before the click ever registers.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setTitle(s.title);
+                  setShowSuggestions(false);
+                }}
+                className="shrink-0 text-sm px-3 py-1.5 rounded-full border border-line bg-surface text-ink hover:border-accent hover:text-accent transition"
+              >
+                {s.title}
+              </button>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 

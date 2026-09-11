@@ -23,7 +23,10 @@ export const CAPTURE_TYPE_LABELS: Record<CaptureEntityType, string> = {
 export const PROJECT_STATUSES = ["ACTIVE", "COMPLETED", "ARCHIVED"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-export const TASK_STATUSES = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"] as const;
+// IN_PROGRESS was retired — nothing in the product ever set it (only demo seed scripts did);
+// the only status control in the UI (the task row checkbox) just toggles TODO <-> DONE, so it
+// was an unreachable, confusing status with a filter tab but no way for a user to ever enter it.
+export const TASK_STATUSES = ["TODO", "DONE", "CANCELLED"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const RECURRENCE_FREQS = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;
@@ -64,7 +67,6 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   TODO: "انجام‌نشده",
-  IN_PROGRESS: "در حال انجام",
   DONE: "انجام‌شده",
   CANCELLED: "لغوشده",
 };

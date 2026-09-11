@@ -10,6 +10,7 @@ import android.text.TextUtils;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -17,8 +18,10 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -55,6 +58,7 @@ public class QuickCaptureActivity extends Activity {
 
         setupDurationChips();
         loadCategories();
+        loadTitleSuggestions();
 
         findViewById(R.id.capture_submit).setOnClickListener(v -> submit());
     }
@@ -126,6 +130,102 @@ public class QuickCaptureActivity extends Activity {
             });
             row.addView(chip);
         }
+    }
+
+    /**
+     * Past Activity titles as tappable chips, so a repeated entry (a routine, a recurring
+     * project) never needs retyping — mirrors the web app's Quick Capture suggestions
+     * (src/lib/titleSuggestions.ts) with the same "frecency" idea: log-scaled use count times an
+     * exponential recency decay, so a title used a lot but long ago doesn't drown out one you've
+     * started using again this week. Reimplemented here in Java rather than shared, since this
+     * native popup has no route to the JS/TS runtime.
+     */
+    private void loadTitleSuggestions() {
+        HorizontalScrollView scroll = findViewById(R.id.suggestion_scroll);
+        LinearLayout row = findViewById(R.id.suggestion_row);
+        List<TitleSuggestion> suggestions = readTopTitles();
+
+        if (suggestions.isEmpty()) {
+            scroll.setVisibility(View.GONE);
+            return;
+        }
+
+        EditText titleInput = findViewById(R.id.capture_title);
+        for (TitleSuggestion s : suggestions) {
+            TextView chip = new TextView(this);
+            chip.setText(s.title);
+            chip.setTextColor(0xFF374151);
+            chip.setTextSize(13);
+            chip.setBackgroundResource(R.drawable.chip_unselected);
+            int pad = (int) (10 * getResources().getDisplayMetrics().density);
+            int padV = (int) (8 * getResources().getDisplayMetrics().density);
+            chip.setPadding(pad, padV, pad, padV);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            lp.setMarginEnd((int) (6 * getResources().getDisplayMetrics().density));
+            chip.setLayoutParams(lp);
+            chip.setOnClickListener(v -> titleInput.setText(s.title));
+            row.addView(chip);
+        }
+    }
+
+    private static class TitleSuggestion {
+        final String title;
+        final double score;
+
+        TitleSuggestion(String title, double score) {
+            this.title = title;
+            this.score = score;
+        }
+    }
+
+    /** Same 14-day half-life as titleSuggestions.ts's RECENCY_HALF_LIFE_DAYS. */
+    private static final double RECENCY_HALF_LIFE_DAYS = 14.0;
+
+    /** Top 8 past Activity titles for this device's user, ranked by frecency, most first. */
+    private List<TitleSuggestion> readTopTitles() {
+        List<TitleSuggestion> result = new ArrayList<>();
+        String dbPath = getFilesDir().getAbsolutePath() + "/dara.sqlite3";
+        SQLiteDatabase db = null;
+        SimpleDateFormat isoFmt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+        isoFmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+        long now = System.currentTimeMillis();
+
+        try {
+            db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY);
+            Cursor cursor = db.rawQuery(
+                "SELECT title, COUNT(*) as cnt, MAX(createdAt) as lastUsed " +
+                "FROM Activity " +
+                "WHERE userId = ? AND deletedAt IS NULL " +
+                "GROUP BY title " +
+                "ORDER BY lastUsed DESC " +
+                "LIMIT 50",
+                new String[] { LOCAL_USER_ID }
+            );
+            while (cursor.moveToNext()) {
+                String title = cursor.getString(0);
+                int count = cursor.getInt(1);
+                String lastUsed = cursor.getString(2);
+                double daysSince = 999;
+                try {
+                    daysSince = Math.max(0, (now - isoFmt.parse(lastUsed).getTime()) / 86_400_000.0);
+                } catch (ParseException ignored) {
+                    // Unparseable timestamp — treat as very old rather than crashing the ranking.
+                }
+                double score = Math.log(1 + count) * Math.exp(-daysSince / RECENCY_HALF_LIFE_DAYS);
+                result.add(new TitleSuggestion(title, score));
+            }
+            cursor.close();
+        } catch (Exception e) {
+            // Database not created yet, or some other read issue — no suggestions, same as an
+            // empty result; the form still works fine with just manual typing.
+        } finally {
+            if (db != null) db.close();
+        }
+
+        Collections.sort(result, (a, b) -> Double.compare(b.score, a.score));
+        return result.subList(0, Math.min(8, result.size()));
     }
 
     /** id, icon, name — ordered by how often each category is used on Activity rows, most first. */

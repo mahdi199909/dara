@@ -25,6 +25,8 @@ export default function FinancePage() {
     <div className="px-4 py-6 space-y-4">
       <h1 className="text-lg font-bold text-ink">مالی</h1>
 
+      <FinanceSummary />
+
       <div className="flex gap-2">
         {TABS.map((t) => (
           <button
@@ -42,6 +44,39 @@ export default function FinancePage() {
       {tab === "transactions" && <TransactionsTab />}
       {tab === "accounts" && <AccountsTab />}
       {tab === "installments" && <InstallmentsTab />}
+    </div>
+  );
+}
+
+/**
+ * موجودی نقد: sum of every account's balance — real, spendable money.
+ * دارایی نقد شونده: registered real assets (Asset.currentValue) — physical things you could
+ * actually go sell for cash, just not as instantly as an account balance.
+ * دارایی غیر نقد شونده: virtual/digital assets — the app's own internal growth metric, already
+ * described elsewhere as "نه پول نقد یا دارایی قابل‌فروش" (not cash or a sellable asset), which
+ * is exactly what "non-liquid" means here.
+ */
+function FinanceSummary() {
+  const { accounts } = useAccounts();
+  const { data: assetsData } = useSWR<{ assets: any[] }>("/api/assets", fetcher);
+  const { data: vaData } = useSWR<{ total: number }>("/api/virtual-assets", fetcher);
+  const { format } = useCurrencyUnit();
+
+  const cash = accounts.reduce((s: number, a: any) => s + a.balance, 0);
+  const liquid = assetsData?.assets.reduce((s, a) => s + a.currentValue, 0) ?? 0;
+  const nonLiquid = vaData?.total ?? 0;
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <Card className="p-3">
+        <StatItem label="موجودی نقد" value={format(cash, { withSuffix: true })} />
+      </Card>
+      <Card className="p-3">
+        <StatItem label="دارایی نقد شونده" value={format(liquid, { withSuffix: true })} tone="positive" />
+      </Card>
+      <Card className="p-3">
+        <StatItem label="دارایی غیر نقد شونده" value={format(nonLiquid, { withSuffix: true })} />
+      </Card>
     </div>
   );
 }
@@ -494,9 +529,18 @@ function InstallmentsTab() {
 
       {data?.plans.length === 0 && <EmptyState message="هنوز طرح قسطی ثبت نکرده‌اید." />}
 
-      {data?.plans.map((plan) => (
-        <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} />
-      ))}
+      {data?.plans
+        // Chronological — the plan due soonest first; fully-paid plans (no nextDueDate) sink to the end.
+        .slice()
+        .sort((a, b) => {
+          if (!a.summary.nextDueDate && !b.summary.nextDueDate) return 0;
+          if (!a.summary.nextDueDate) return 1;
+          if (!b.summary.nextDueDate) return -1;
+          return new Date(a.summary.nextDueDate).getTime() - new Date(b.summary.nextDueDate).getTime();
+        })
+        .map((plan) => (
+          <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} />
+        ))}
     </div>
   );
 }
@@ -603,7 +647,7 @@ function InstallmentPlanCard({ plan, accounts, onChanged }: { plan: any; account
         </div>
       )}
 
-      <ul className="rounded-xl border border-line divide-y divide-line overflow-hidden">
+      <ul className="rounded-xl border border-line divide-y divide-line overflow-y-auto scrollbar-thin max-h-[7.5rem]">
         {plan.installments.map((inst: any) => (
           <li key={inst.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
             <span className="text-muted shrink-0">قسط {inst.index}</span>
@@ -690,17 +734,19 @@ function EditInstallmentPlanForm({ plan, onDone, onCancel }: { plan: any; onDone
 }
 
 function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = useState<"PLAN" | "SIMPLE">("PLAN");
   const [title, setTitle] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
   const [installmentAmount, setInstallmentAmount] = useState("");
   const [numberOfInstallments, setNumberOfInstallments] = useState("");
+  const [simpleAmount, setSimpleAmount] = useState("");
   const [dueDay, setDueDay] = useState("");
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([60 * 24]);
   const [loading, setLoading] = useState(false);
   const { format } = useCurrencyUnit();
 
   const preview =
-    totalAmount && installmentAmount && numberOfInstallments
+    mode === "PLAN" && totalAmount && installmentAmount && numberOfInstallments
       ? computeLoanInterest({
           totalAmount: Number(totalAmount),
           installmentAmount: Number(installmentAmount),
@@ -708,7 +754,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
         })
       : null;
   const previewAnnualRate =
-    totalAmount && installmentAmount && numberOfInstallments
+    mode === "PLAN" && totalAmount && installmentAmount && numberOfInstallments
       ? computeEffectiveAnnualRate({
           totalAmount: Number(totalAmount),
           installmentAmount: Number(installmentAmount),
@@ -724,11 +770,15 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
     e.preventDefault();
     setLoading(true);
     try {
+      // "بدهی ساده" is just a 1-installment plan — same backend, same pay/edit/delete UI, just
+      // without asking for a totalAmount separate from the single payment amount.
+      const amount = mode === "SIMPLE" ? Number(simpleAmount) : Number(installmentAmount);
+      const count = mode === "SIMPLE" ? 1 : Number(numberOfInstallments);
       await apiPost("/api/installment-plans", {
         title,
-        totalAmount: Number(totalAmount),
-        installmentAmount: Number(installmentAmount),
-        numberOfInstallments: Number(numberOfInstallments),
+        totalAmount: mode === "SIMPLE" ? amount : Number(totalAmount),
+        installmentAmount: amount,
+        numberOfInstallments: count,
         dueDay: Number(dueDay),
         reminderOffsets,
       });
@@ -741,15 +791,36 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
   return (
     <Card className="p-4">
       <form onSubmit={submit} className="space-y-3">
-        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان (مثلاً وام خودرو)" className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
-        <div className="grid grid-cols-2 gap-2">
-          <MoneyInput value={totalAmount} onChange={setTotalAmount} placeholder="مبلغ کل وام (اصل)" required />
-          <MoneyInput value={installmentAmount} onChange={setInstallmentAmount} placeholder="مبلغ هر قسط" required />
+        <div className="flex gap-2">
+          {(
+            [
+              { key: "PLAN", label: "طرح قسط‌دار" },
+              { key: "SIMPLE", label: "بدهی ساده" },
+            ] as const
+          ).map((m) => (
+            <button
+              type="button"
+              key={m.key}
+              onClick={() => setMode(m.key)}
+              className={`flex-1 text-sm py-1.5 rounded-lg ${mode === m.key ? "bg-accent text-on-accent" : "bg-canvas text-muted"}`}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
-          <input type="number" dir="ltr" required min={1} max={31} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۳۱)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
-        </div>
+        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "SIMPLE" ? "عنوان (مثلاً قرض از رضا)" : "عنوان (مثلاً وام خودرو)"} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
+        {mode === "SIMPLE" ? (
+          <MoneyInput value={simpleAmount} onChange={setSimpleAmount} placeholder="مبلغ" required />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <MoneyInput value={totalAmount} onChange={setTotalAmount} placeholder="مبلغ کل وام (اصل)" required />
+              <MoneyInput value={installmentAmount} onChange={setInstallmentAmount} placeholder="مبلغ هر قسط" required />
+            </div>
+            <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right" />
+          </>
+        )}
+        <input type="number" dir="ltr" required min={1} max={31} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۳۱)" className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right" />
 
         {preview && (
           <div className="rounded-xl bg-canvas p-3 text-xs space-y-1">

@@ -91,12 +91,12 @@ export function computeCompanionState(input: CompanionInput, seed: string): Comp
     seed
   );
 
+  // Label is always "ثبت کار" — BLINDFOLDED still pre-fills the day's biggest unlogged gap via
+  // LOG_GAP under the hood (see onLogGap), it just no longer says something different on the
+  // button itself; the smart pre-fill was a nice touch but a differently-worded button read as
+  // a second, separate feature rather than the same one action.
   const action: CompanionState["action"] =
-    mood === "ASLEEP"
-      ? { label: "", kind: "NONE" }
-      : mood === "BLINDFOLDED"
-        ? { label: "پر کردن بازه", kind: "LOG_GAP" }
-        : { label: "ثبت کار", kind: "CAPTURE" };
+    mood === "ASLEEP" ? { label: "", kind: "NONE" } : mood === "BLINDFOLDED" ? { label: "ثبت کار", kind: "LOG_GAP" } : { label: "ثبت کار", kind: "CAPTURE" };
 
   return { mood, completion, pace, achievedMinutes: achieved, targetMinutes: input.targetMinutes, remainingMinutes, message, action };
 }
