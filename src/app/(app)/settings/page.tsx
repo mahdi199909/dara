@@ -1077,7 +1077,7 @@ function WidgetsTab() {
         </div>
         <input
           type="range"
-          min={10}
+          min={0}
           max={100}
           value={opacity}
           onChange={(e) => setOpacity(Number(e.target.value))}
