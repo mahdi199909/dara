@@ -14,6 +14,7 @@ import { ChevronRightIcon, ChevronLeftIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import DeltaChip, { type DeltaPolarity } from "@/components/DeltaChip";
 import { phraseDeltaPride, phraseSamePeriodTasksCompleted, phraseSamePeriodVirtualAsset } from "@/lib/phrasing";
+import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 
 // The only comparison this product ever shows (its own past period — see comparePeriods). Each
 // entry's polarity says which direction is "good"; totalMinutes carries no polarity — logging
@@ -194,23 +195,6 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-/** Arc path for a ring segment, measured clockwise from 12 o'clock so a 300deg sweep starting at
- * 210deg leaves a 60deg gap centered at the bottom — the same "open ring" the Parva logomark
- * itself draws, not a closed 360deg gauge borrowed from generic dashboards. */
-function ringArcPath(cx: number, cy: number, r: number, startDeg: number, sweepDeg: number): string {
-  const toXY = (deg: number) => {
-    const rad = (deg * Math.PI) / 180;
-    return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
-  };
-  const [x1, y1] = toXY(startDeg);
-  const [x2, y2] = toXY(startDeg + sweepDeg);
-  const largeArc = sweepDeg > 180 ? 1 : 0;
-  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
-}
-
-const RING_START_DEG = 210;
-const RING_SWEEP_DEG = 300;
 
 /** The ring's center label has real room for maybe one word — "ساعت" alone, not the full
  * "X ساعت و Y دقیقه" (formatDuration, used in the legend below where there's more space). Still

@@ -7,6 +7,7 @@ import { useCategories, useAccounts } from "@/lib/hooks";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali, toJalali } from "@/lib/jalali";
 import { toPersianDigits } from "@/lib/money";
+import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type AccountType } from "@/lib/types";
 import { computeLoanInterest, computeEffectiveAnnualRate } from "@/lib/installments";
@@ -514,6 +515,25 @@ function EditAccountForm({ account, onDone, onCancel }: { account: any; onDone: 
   );
 }
 
+/** This month's paid-vs-total ratio as the same "open ring" gauge reports/page.tsx uses — the
+ * dashboard's focal visual, not just three plain numbers. */
+function MonthInstallmentRing({ paid, total }: { paid: number; total: number }) {
+  const ratio = total > 0 ? Math.min(1, paid / total) : 0;
+  const sweep = RING_SWEEP_DEG * ratio;
+  return (
+    <div className="relative w-[132px] h-[132px] shrink-0">
+      <svg viewBox="0 0 132 132" width="132" height="132">
+        <path d={ringArcPath(66, 66, 58, RING_START_DEG, RING_SWEEP_DEG)} fill="none" stroke="rgb(var(--line))" strokeWidth="14" strokeLinecap="round" />
+        <path d={ringArcPath(66, 66, 58, RING_START_DEG, sweep)} fill="none" stroke="rgb(var(--accent))" strokeWidth="14" strokeLinecap="round" />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-extrabold text-ink">{toPersianDigits(Math.round(ratio * 100))}٪</span>
+        <span className="text-[10px] text-muted mt-0.5">پرداخت‌شده</span>
+      </div>
+    </div>
+  );
+}
+
 function InstallmentsTab() {
   const { data, mutate } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
   const { accounts } = useAccounts();
@@ -521,29 +541,84 @@ function InstallmentsTab() {
   const { format } = useCurrencyUnit();
 
   // This Jalali month's installments across every plan — a planning overview independent of
-  // any single plan's own card, which only shows that one plan's totals.
+  // any single plan's own card, which only shows that one plan's totals. Carries planTitle
+  // through so the horizontal strip below can label each chip without a second lookup.
   const { jy: curJy, jm: curJm } = toJalali(new Date());
-  const thisMonthInstallments = (data?.plans ?? []).flatMap((plan: any) =>
-    plan.installments.filter((i: any) => {
-      const { jy, jm } = toJalali(new Date(i.dueDate));
-      return jy === curJy && jm === curJm;
-    })
-  );
+  const thisMonthInstallments = (data?.plans ?? [])
+    .flatMap((plan: any) =>
+      plan.installments
+        .filter((i: any) => {
+          const { jy, jm } = toJalali(new Date(i.dueDate));
+          return jy === curJy && jm === curJm;
+        })
+        .map((i: any) => ({ ...i, planTitle: plan.title }))
+    )
+    .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   const thisMonthTotal = thisMonthInstallments.reduce((s: number, i: any) => s + i.amount, 0);
   const thisMonthPaid = thisMonthInstallments.filter((i: any) => i.status === "PAID").reduce((s: number, i: any) => s + i.amount, 0);
   const thisMonthRemaining = thisMonthTotal - thisMonthPaid;
 
+  // Lifetime totals across every plan (not just this month) — the "big picture" debt situation,
+  // below the month dashboard. Each plan's own summary (summarizeInstallments) already has these.
+  const overallTotal = (data?.plans ?? []).reduce((s: number, p: any) => s + p.summary.totalAmount, 0);
+  const overallPaid = (data?.plans ?? []).reduce((s: number, p: any) => s + p.summary.paidAmount, 0);
+  const overallRemaining = overallTotal - overallPaid;
+
   return (
     <div className="space-y-3">
-      {thisMonthInstallments.length > 0 && (
-        <Card className="p-4">
-          <p className="text-xs text-muted mb-2">اقساط این ماه</p>
+      {data && data.plans.length > 0 && (
+        <>
+          <Card className="p-5">
+            <p className="text-sm font-bold text-ink mb-4">اقساط این ماه</p>
+            <div className="flex items-center gap-5">
+              <MonthInstallmentRing paid={thisMonthPaid} total={thisMonthTotal} />
+              <div className="flex-1 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">مجموع</span>
+                  <span className="text-base font-bold text-ink">{format(thisMonthTotal, { withSuffix: true })}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">پرداخت‌شده</span>
+                  <span className="text-base font-bold text-accent">{format(thisMonthPaid, { withSuffix: true })}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">باقی‌مانده</span>
+                  <span className="text-base font-bold text-waste">{format(thisMonthRemaining, { withSuffix: true })}</span>
+                </div>
+              </div>
+            </div>
+
+            {thisMonthInstallments.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto scrollbar-thin snap-x snap-mandatory pt-4 mt-4 border-t border-line -mx-1 px-1">
+                {thisMonthInstallments.map((i: any) => (
+                  <div key={i.id} className="shrink-0 snap-start w-[128px] rounded-xl border border-line bg-canvas p-2.5">
+                    <p className="text-xs text-ink truncate">{i.planTitle}</p>
+                    <p className="text-[10px] text-muted mt-1">{formatJalali(new Date(i.dueDate))}</p>
+                    <p className={`text-xs font-bold mt-1.5 ${i.status === "PAID" ? "text-accent" : "text-ink"}`}>
+                      {format(i.amount, { withSuffix: true })}
+                    </p>
+                    {i.status === "PAID" && <p className="text-[10px] text-accent mt-0.5">پرداخت‌شده</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
           <div className="grid grid-cols-3 gap-2">
-            <StatItem label="مجموع" value={format(thisMonthTotal, { withSuffix: true })} />
-            <StatItem label="پرداخت‌شده" value={format(thisMonthPaid, { withSuffix: true })} tone="positive" />
-            <StatItem label="باقی‌مانده" value={format(thisMonthRemaining, { withSuffix: true })} tone="negative" />
+            <Card className="p-3 text-center">
+              <p className="text-[11px] text-muted mb-1">مجموع کل اقساط</p>
+              <p className="text-sm font-bold text-ink">{format(overallTotal, { withSuffix: true })}</p>
+            </Card>
+            <Card className="p-3 text-center">
+              <p className="text-[11px] text-muted mb-1">کل پرداخت‌شده</p>
+              <p className="text-sm font-bold text-accent">{format(overallPaid, { withSuffix: true })}</p>
+            </Card>
+            <Card className="p-3 text-center">
+              <p className="text-[11px] text-muted mb-1">کل باقی‌مانده</p>
+              <p className="text-sm font-bold text-waste">{format(overallRemaining, { withSuffix: true })}</p>
+            </Card>
           </div>
-        </Card>
+        </>
       )}
 
       <button
