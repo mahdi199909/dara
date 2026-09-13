@@ -22,9 +22,9 @@ interface DayBatteryDto {
 }
 
 const SEGMENT_CLASS: Record<string, string> = {
-  PRODUCTIVE: "bg-accent",
+  PRODUCTIVE: "bg-accent", // the app's own teal/blue-green accent
   NEUTRAL: "bg-muted",
-  WASTE: "bg-amber-500", // not red — the day battery never judges, see the product brief
+  WASTE: "bg-orange-800", // brownish-orange, not red — the day battery never judges, see the product brief
   REMAINING: "bg-canvas",
 };
 
@@ -67,7 +67,7 @@ export default function DayBattery({ onLogGap }: { onLogGap: (start: Date, end: 
 
   return (
     <Card className="p-4">
-      <div className="w-full h-[14px] rounded-full overflow-hidden flex bg-canvas" dir="rtl">
+      <div className="w-full h-[8px] rounded-full overflow-hidden flex bg-canvas" dir="rtl">
         {battery.segments.map((seg, i) => {
           const isUnlogged = seg.kind === "UNLOGGED";
           const widthPct = (seg.minutes / battery.capacityMinutes) * 100;

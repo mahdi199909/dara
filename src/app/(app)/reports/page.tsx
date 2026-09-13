@@ -355,6 +355,71 @@ function SummaryTab({ data }: { data: any }) {
   );
 }
 
+/**
+ * Groups a flat timeByCategory/expenseByCategory list into parent rows with their sub-categories
+ * indented beneath — a parent that has no direct entries of its own (everything logged under its
+ * children instead) still gets a synthetic header row here, built from a child's own carried
+ * parentName, since otherwise its children's totals would have nowhere to be grouped under.
+ */
+function groupByParent<T extends { categoryId: string; name: string; color: string; parentCategoryId: string | null; parentName: string | null }>(
+  items: T[],
+  getValue: (item: T) => number
+) {
+  const topLevel = items.filter((i) => !i.parentCategoryId);
+  const childrenByParent = new Map<string, T[]>();
+  for (const i of items) {
+    if (!i.parentCategoryId) continue;
+    const list = childrenByParent.get(i.parentCategoryId) ?? [];
+    list.push(i);
+    childrenByParent.set(i.parentCategoryId, list);
+  }
+  const parentIds = new Set([...topLevel.map((i) => i.categoryId), ...childrenByParent.keys()]);
+  return Array.from(parentIds)
+    .map((parentId) => {
+      const own = topLevel.find((i) => i.categoryId === parentId);
+      const children = childrenByParent.get(parentId) ?? [];
+      return {
+        id: parentId,
+        name: own?.name ?? children[0]?.parentName ?? "?",
+        color: own?.color ?? children[0]?.color ?? "#999",
+        value: (own ? getValue(own) : 0) + children.reduce((s, c) => s + getValue(c), 0),
+        children: children.map((c) => ({ id: c.categoryId, name: c.name, color: c.color, value: getValue(c) })),
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
+function CategoryLegend({ groups, formatValue }: { groups: ReturnType<typeof groupByParent>; formatValue: (v: number) => string }) {
+  return (
+    <div className="space-y-1 mt-3">
+      {groups.map((g) => (
+        <div key={g.id}>
+          <div className="flex items-center justify-between text-xs py-1">
+            <span className="flex items-center gap-1.5 text-ink">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+              {g.name}
+            </span>
+            <span className="font-bold text-ink">{formatValue(g.value)}</span>
+          </div>
+          {g.children.length > 0 && (
+            <div className="pr-4 border-r border-line mr-1 space-y-0.5">
+              {g.children.map((c) => (
+                <div key={c.id} className="flex items-center justify-between text-[11px] py-0.5">
+                  <span className="flex items-center gap-1.5 text-muted">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                    {c.name}
+                  </span>
+                  <span className="text-muted">{formatValue(c.value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TimeTab({ data }: { data: any }) {
   const cmp = data.comparison?.hasEnoughHistory ? data.comparison : null;
   return (
@@ -387,6 +452,9 @@ function TimeTab({ data }: { data: any }) {
               <Tooltip formatter={(v: number) => formatDuration(v)} />
             </PieChart>
           </ResponsiveContainer>
+        )}
+        {data.report.timeByCategory.length > 0 && (
+          <CategoryLegend groups={groupByParent(data.report.timeByCategory, (i: any) => i.minutes)} formatValue={formatDuration} />
         )}
       </Card>
 
@@ -467,6 +535,12 @@ function FinanceTab({ data }: { data: any }) {
             <Tooltip formatter={(v: number) => format(v, { withSuffix: true })} />
           </PieChart>
         </ResponsiveContainer>
+      )}
+      {data.report.expenseByCategory.length > 0 && (
+        <CategoryLegend
+          groups={groupByParent(data.report.expenseByCategory, (i: any) => i.amount)}
+          formatValue={(v) => format(v, { withSuffix: true })}
+        />
       )}
     </Card>
   );

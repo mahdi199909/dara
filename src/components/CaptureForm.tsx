@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { apiPost, fetcher, ApiClientError } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
+import { notifySaved } from "@/lib/savedToast";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
 import TimePicker from "@/components/ui/TimePicker";
@@ -220,6 +221,7 @@ export default function CaptureForm({
       }
 
       refreshAllCaches();
+      notifySaved();
 
       const pickedCategory = categoryId ? categories.find((c: any) => c.id === categoryId) : null;
       const durationMin = startTime && endTime ? Math.round((new Date(`${day10}T${endTime}:00`).getTime() - new Date(`${day10}T${startTime}:00`).getTime()) / 60000) : undefined;

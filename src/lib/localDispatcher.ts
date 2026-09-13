@@ -37,6 +37,7 @@ import {
   computeCalendarYearOverview,
   recordDailyCapitalSnapshot,
   computeDayBattery,
+  computeDayActivity,
   sumCategoryLifetimeMinutes,
   comparePeriods,
 } from "@/local/reportEngine";
@@ -391,6 +392,10 @@ register("GET", "/api/capital", ({ db, userId, query }) => {
 });
 
 register("GET", "/api/day-battery", ({ db, userId }) => ({ battery: computeDayBattery(db, userId) }));
+
+register("GET", "/api/day-activity", ({ db, userId, query }) => ({
+  items: computeDayActivity(db, userId, new Date(query.get("from")!), new Date(query.get("to")!)),
+}));
 
 register("GET", "/api/insights", ({ db, userId }) => ({ insight: computeDailyInsight(db, userId) }));
 

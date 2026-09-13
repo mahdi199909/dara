@@ -40,7 +40,7 @@ describe("generateNarrative", () => {
 
   it("renders only Act 1 (چه خرج کردی) when there's time but no hidden cost and no productive category", () => {
     const report = baseReport({
-      timeByCategory: [{ categoryId: "c1", name: "شبکه‌های اجتماعی", color: "#000", kind: "WASTE", minutes: 60 }],
+      timeByCategory: [{ categoryId: "c1", name: "شبکه‌های اجتماعی", color: "#000", parentCategoryId: null, parentName: null, kind: "WASTE", minutes: 60 }],
     });
     const result = generateNarrative(report, emptyHiddenCost(), 0);
     expect(result).toContain("«شبکه‌های اجتماعی»");
@@ -51,8 +51,8 @@ describe("generateNarrative", () => {
   it("renders all three acts in fixed order: spend, then hidden, then build", () => {
     const report = baseReport({
       timeByCategory: [
-        { categoryId: "c1", name: "شبکه‌های اجتماعی", color: "#000", kind: "WASTE", minutes: 120 },
-        { categoryId: "c2", name: "برنامه‌نویسی", color: "#000", kind: "PRODUCTIVE", minutes: 60 },
+        { categoryId: "c1", name: "شبکه‌های اجتماعی", color: "#000", parentCategoryId: null, parentName: null, kind: "WASTE", minutes: 120 },
+        { categoryId: "c2", name: "برنامه‌نویسی", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 60 },
       ],
     });
     const hiddenCost = emptyHiddenCost({
@@ -70,13 +70,13 @@ describe("generateNarrative", () => {
   });
 
   it("omits Act 2 when the period has no hidden cost", () => {
-    const report = baseReport({ timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", kind: "PRODUCTIVE", minutes: 60 }] });
+    const report = baseReport({ timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 60 }] });
     const result = generateNarrative(report, emptyHiddenCost(), 60);
     expect(result).not.toContain("صفر ثبت شده بود");
   });
 
   it("omits Act 3 when no category in the period is PRODUCTIVE", () => {
-    const report = baseReport({ timeByCategory: [{ categoryId: "c1", name: "تفریح", color: "#000", kind: "NEUTRAL", minutes: 60 }] });
+    const report = baseReport({ timeByCategory: [{ categoryId: "c1", name: "تفریح", color: "#000", parentCategoryId: null, parentName: null, kind: "NEUTRAL", minutes: 60 }] });
     const result = generateNarrative(report, emptyHiddenCost(), 999);
     expect(result).not.toContain("پنهان");
     expect(result).not.toContain("۹۹۹");

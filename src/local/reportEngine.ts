@@ -33,12 +33,12 @@ export interface TimeAndMoneyReport {
   neutralMin: number;
   wasteMin: number;
   productiveRatio: number;
-  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number }[];
+  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number; parentCategoryId: string | null; parentName: string | null }[];
   timeByProject: { projectId: string; name: string; minutes: number }[];
   income: number;
   expense: number;
   net: number;
-  expenseByCategory: { categoryId: string; name: string; color: string; amount: number }[];
+  expenseByCategory: { categoryId: string; name: string; color: string; amount: number; parentCategoryId: string | null; parentName: string | null }[];
   timeCost: number;
   opportunityCost: number;
   realCost: number;
@@ -52,6 +52,7 @@ interface CategoryRow {
   name: string;
   color: string;
   kind: string;
+  parentCategoryId: string | null;
 }
 interface ProjectRow {
   id: string;
@@ -109,6 +110,11 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
     ...transactions.map((r) => r.categoryId),
   ];
   const categoryById = fetchByIds<CategoryRow>(db, "Category", allCategoryIds);
+  // A sub-category's parent might never appear as a direct categoryId on any entry (everything
+  // logged under the child, none directly on the parent) — fetch any missing parents too so
+  // parentName always resolves, not just when the parent happens to have its own direct entries.
+  const missingParentIds = [...categoryById.values()].map((c) => c.parentCategoryId).filter((id): id is string => !!id && !categoryById.has(id));
+  for (const [id, row] of fetchByIds<CategoryRow>(db, "Category", missingParentIds)) categoryById.set(id, row);
   const projectById = fetchByIds<ProjectRow>(
     db,
     "Project",
@@ -119,7 +125,7 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
   let productiveMin = 0;
   let neutralMin = 0;
   let wasteMin = 0;
-  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number }>();
+  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number; parentCategoryId: string | null; parentName: string | null }>();
   const byProject = new Map<string, { name: string; minutes: number }>();
 
   function addTime(categoryId: string | null, projectId: string | null, minutes: number) {
@@ -131,7 +137,8 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
     else neutralMin += minutes;
 
     if (cat) {
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
+      const parentName = cat.parentCategoryId ? categoryById.get(cat.parentCategoryId)?.name ?? null : null;
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0, parentCategoryId: cat.parentCategoryId, parentName };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -156,14 +163,15 @@ export function computeTimeAndMoneyReport(db: LocalDb, userId: string, from: Dat
 
   let income = 0;
   let expense = 0;
-  const expenseByCategory = new Map<string, { name: string; color: string; amount: number }>();
+  const expenseByCategory = new Map<string, { name: string; color: string; amount: number; parentCategoryId: string | null; parentName: string | null }>();
   for (const tx of transactions) {
     if (tx.type === "INCOME") income += tx.amount;
     else if (tx.type === "EXPENSE") {
       expense += tx.amount;
       const cat = tx.categoryId ? categoryById.get(tx.categoryId) : undefined;
       if (cat) {
-        const entry = expenseByCategory.get(cat.id) ?? { name: cat.name, color: cat.color, amount: 0 };
+        const parentName = cat.parentCategoryId ? categoryById.get(cat.parentCategoryId)?.name ?? null : null;
+        const entry = expenseByCategory.get(cat.id) ?? { name: cat.name, color: cat.color, amount: 0, parentCategoryId: cat.parentCategoryId, parentName };
         entry.amount += tx.amount;
         expenseByCategory.set(cat.id, entry);
       }
@@ -434,6 +442,7 @@ export interface CategoryCalendarStat {
   name: string;
   icon: string | null;
   color: string;
+  parentCategoryId: string | null;
   totalMinutes: number;
   totalDays: number;
   days: Record<string, number>;
@@ -459,8 +468,8 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
   const fromIso = iso(from);
   const toIso = iso(to);
 
-  const categories = db.all<{ id: string; name: string; icon: string | null; color: string }>(
-    `SELECT "id","name","icon","color" FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL`,
+  const categories = db.all<{ id: string; name: string; icon: string | null; color: string; parentCategoryId: string | null }>(
+    `SELECT "id","name","icon","color","parentCategoryId" FROM "Category" WHERE "userId" = ? AND "deletedAt" IS NULL`,
     [userId]
   );
   const timeEntries = db.all<{ title: string | null; startAt: string; durationMin: number | null; categoryId: string | null }>(
@@ -550,8 +559,80 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
     for (const [key, items] of dayItemsMap) {
       dayItems[key] = sortDayItems(items);
     }
-    return { categoryId: cat.id, name: cat.name, icon: cat.icon, color: cat.color, totalMinutes, totalDays: dayMap.size, days, dayItems };
+    return { categoryId: cat.id, name: cat.name, icon: cat.icon, color: cat.color, parentCategoryId: cat.parentCategoryId, totalMinutes, totalDays: dayMap.size, days, dayItems };
   });
+}
+
+// --- computeDayActivity ("Home: امروز") -----------------------------------------------------
+
+export interface DayActivityItem {
+  type: "HABIT" | "TRANSACTION" | "TIME_ENTRY";
+  id: string;
+  title: string;
+  timeOfDay: string; // ISO — a real logged moment for all three sources (HabitCheckIn.createdAt included)
+  isIncome: boolean | null; // TRANSACTION only
+  amount: number | null; // Toman — TRANSACTION only
+  minutes: number | null; // HABIT (if a duration was logged) / TIME_ENTRY
+  categoryIcon: string | null;
+  categoryColor: string | null;
+}
+
+/**
+ * The Home page's "امروز" feed — everything logged for one day that ISN'T already covered by
+ * /api/events (which returns both event occurrences AND taskOccurrences, recurrence-expanded —
+ * see that route's own comment). Deliberately excludes Task/Event entirely rather than
+ * re-deriving occurrence expansion here a second time. A standalone Transaction linked to a Task
+ * or Event (see directCostSync.ts) is excluded too — its amount is already shown on that
+ * TASK/EVENT item itself, so including it here would show the same real-world entry twice.
+ */
+export function computeDayActivity(db: LocalDb, userId: string, from: Date, to: Date): DayActivityItem[] {
+  const fromIso = iso(from);
+  const toIso = iso(to);
+
+  const timeEntries = db.all<{ id: string; title: string | null; startAt: string; durationMin: number | null; categoryId: string | null }>(
+    `SELECT a."id", a."title", te."startAt", te."durationMin", a."categoryId" FROM "TimeEntry" te JOIN "Activity" a ON a."id" = te."activityId"
+     WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" <= ? AND te."durationMin" IS NOT NULL`,
+    [userId, fromIso, toIso]
+  );
+  const habitCheckIns = db.all<{ id: string; title: string; categoryId: string | null; createdAt: string; durationMin: number | null }>(
+    `SELECT hc."id" as "id", h."title", h."categoryId", hc."createdAt", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."date" >= ? AND hc."date" <= ?`,
+    [userId, fromIso, toIso]
+  );
+  const transactions = db.all<{ id: string; type: string; amount: number; date: string; description: string | null; categoryId: string | null }>(
+    `SELECT "id","type","amount","date","description","categoryId" FROM "Transaction"
+     WHERE "userId" = ? AND "deletedAt" IS NULL AND "date" >= ? AND "date" <= ? AND "taskId" IS NULL AND "eventId" IS NULL`,
+    [userId, fromIso, toIso]
+  );
+
+  const allCategoryIds = [...timeEntries.map((r) => r.categoryId), ...habitCheckIns.map((r) => r.categoryId), ...transactions.map((r) => r.categoryId)];
+  const categoryById = fetchByIds<{ id: string; name: string; icon: string | null; color: string }>(db, "Category", allCategoryIds);
+
+  const items: DayActivityItem[] = [];
+  for (const te of timeEntries) {
+    const cat = te.categoryId ? categoryById.get(te.categoryId) : undefined;
+    items.push({
+      type: "TIME_ENTRY", id: te.id, title: te.title ?? "فعالیت", timeOfDay: te.startAt,
+      isIncome: null, amount: null, minutes: te.durationMin, categoryIcon: cat?.icon ?? null, categoryColor: cat?.color ?? null,
+    });
+  }
+  for (const h of habitCheckIns) {
+    const cat = h.categoryId ? categoryById.get(h.categoryId) : undefined;
+    items.push({
+      type: "HABIT", id: h.id, title: h.title, timeOfDay: h.createdAt,
+      isIncome: null, amount: null, minutes: h.durationMin, categoryIcon: cat?.icon ?? null, categoryColor: cat?.color ?? null,
+    });
+  }
+  for (const tx of transactions) {
+    const cat = tx.categoryId ? categoryById.get(tx.categoryId) : undefined;
+    items.push({
+      type: "TRANSACTION", id: tx.id, title: tx.description || cat?.name || "تراکنش", timeOfDay: tx.date,
+      isIncome: tx.type === "INCOME", amount: tx.amount, minutes: null, categoryIcon: cat?.icon ?? null, categoryColor: cat?.color ?? null,
+    });
+  }
+
+  items.sort((a, b) => a.timeOfDay.localeCompare(b.timeOfDay));
+  return items;
 }
 
 // --- computeCalendarMonthOverview -------------------------------------------------------------
@@ -634,8 +715,16 @@ export function computeCalendarMonthOverview(
     );
     if (cat) {
       featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
-      const stat = computeCategoryCalendar(db, userId, from, to).find((c) => c.categoryId === featuredId);
-      if (stat) for (const [key, minutes] of Object.entries(stat.days)) ensure(key).featuredValue = minutes;
+      // Roll up the featured category's own days with any direct sub-categories' days — picking
+      // a parent (e.g. "سرمایه‌گذاری") should total everything logged under its children (طلا,
+      // دلار, ...) too, not just whatever (usually nothing) was logged directly on the parent
+      // itself. Only one level of nesting is possible (see Category.parentCategoryId's own
+      // schema comment), so a plain parentCategoryId === featuredId match is exhaustive.
+      const allStats = computeCategoryCalendar(db, userId, from, to);
+      const relevant = allStats.filter((s) => s.categoryId === featuredId || s.parentCategoryId === featuredId);
+      for (const stat of relevant) {
+        for (const [key, minutes] of Object.entries(stat.days)) ensure(key).featuredValue += minutes;
+      }
     }
   } else if (featuredType === "habit" && featuredId) {
     const habit = db.get<{ id: string; title: string; icon: string | null }>(
@@ -741,10 +830,14 @@ export function computeCalendarYearOverview(
     );
     if (cat) {
       featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
-      const stat = computeCategoryCalendar(db, userId, yearStart, yearEnd).find((c) => c.categoryId === featuredId);
+      // Same parent+children rollup as computeCalendarMonthOverview — see its comment.
+      const allStats = computeCategoryCalendar(db, userId, yearStart, yearEnd);
+      const relevant = allStats.filter((s) => s.categoryId === featuredId || s.parentCategoryId === featuredId);
       // stat.days is keyed by dayKeyIso (Gregorian) — re-bucket each day's minutes into its
       // Jalali month rather than trusting Gregorian month boundaries, which don't line up.
-      if (stat) for (const [dayKey, minutes] of Object.entries(stat.days)) ensure(toJalali(new Date(dayKey)).jm).featuredValue += minutes;
+      for (const stat of relevant) {
+        for (const [dayKey, minutes] of Object.entries(stat.days)) ensure(toJalali(new Date(dayKey)).jm).featuredValue += minutes;
+      }
     }
   } else if (featuredType === "habit" && featuredId) {
     const habit = db.get<{ id: string; title: string; icon: string | null }>(

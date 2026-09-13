@@ -88,24 +88,24 @@ describe("dayOfWeekCost", () => {
 
 describe("categoryDrift", () => {
   it("returns null when no category's share shifted more than 25 points", () => {
-    const report30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", kind: "PRODUCTIVE", minutes: 100 }] });
-    const reportPrevious30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", kind: "PRODUCTIVE", minutes: 105 }] });
+    const report30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 100 }] });
+    const reportPrevious30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 105 }] });
     expect(categoryDrift(baseContext({ report30d, reportPrevious30d }))).toBeNull();
   });
 
   it("finds a category whose share grew by more than 25 percentage points", () => {
     const report30d = emptyReport({
       timeByCategory: [
-        { categoryId: "c1", name: "کار", color: "#000", kind: "PRODUCTIVE", minutes: 300 },
-        { categoryId: "c2", name: "شبکه‌های اجتماعی", color: "#000", kind: "WASTE", minutes: 600 },
-        { categoryId: "c3", name: "خانه", color: "#000", kind: "NEUTRAL", minutes: 100 },
+        { categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 300 },
+        { categoryId: "c2", name: "شبکه‌های اجتماعی", color: "#000", parentCategoryId: null, parentName: null, kind: "WASTE", minutes: 600 },
+        { categoryId: "c3", name: "خانه", color: "#000", parentCategoryId: null, parentName: null, kind: "NEUTRAL", minutes: 100 },
       ],
     });
     const reportPrevious30d = emptyReport({
       timeByCategory: [
-        { categoryId: "c1", name: "کار", color: "#000", kind: "PRODUCTIVE", minutes: 500 },
-        { categoryId: "c2", name: "شبکه‌های اجتماعی", color: "#000", kind: "WASTE", minutes: 200 },
-        { categoryId: "c3", name: "خانه", color: "#000", kind: "NEUTRAL", minutes: 300 },
+        { categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 500 },
+        { categoryId: "c2", name: "شبکه‌های اجتماعی", color: "#000", parentCategoryId: null, parentName: null, kind: "WASTE", minutes: 200 },
+        { categoryId: "c3", name: "خانه", color: "#000", parentCategoryId: null, parentName: null, kind: "NEUTRAL", minutes: 300 },
       ],
     });
     const result = categoryDrift(baseContext({ report30d, reportPrevious30d }));
@@ -136,13 +136,13 @@ describe("hiddenCostTop", () => {
 
 describe("milestoneHours", () => {
   it("returns null when no category/project crossed a threshold this period", () => {
-    const report30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "زبان انگلیسی", color: "#000", kind: "PRODUCTIVE", minutes: 120 }] });
+    const report30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "زبان انگلیسی", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 120 }] });
     const ctx = baseContext({ report30d, categoryLifetimeMinutes: { c1: 400 } }); // already well past 6h before this period too
     expect(milestoneHours(ctx)).toBeNull();
   });
 
   it("detects a category crossing the 50-hour threshold within this period", () => {
-    const report30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "زبان انگلیسی", color: "#000", kind: "PRODUCTIVE", minutes: 300 }] }); // 5h this period
+    const report30d = emptyReport({ timeByCategory: [{ categoryId: "c1", name: "زبان انگلیسی", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 300 }] }); // 5h this period
     // lifetime 3005min (~50.08h); before this period: 3005-300=2705min (~45h) — crossed 50h now.
     const ctx = baseContext({ report30d, categoryLifetimeMinutes: { c1: 3005 } });
     const result = milestoneHours(ctx);
@@ -158,8 +158,8 @@ describe("onThisDay", () => {
 
   it("prefers the year-ago memory when both a year and a month ago have data", () => {
     const ctx = baseContext({
-      onThisDayLastMonth: emptyReport({ from: new Date("2026-05-10"), timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", kind: "PRODUCTIVE", minutes: 60 }], totalDurationMin: 60 }),
-      onThisDayLastYear: emptyReport({ from: new Date("2025-06-10"), timeByCategory: [{ categoryId: "c2", name: "سفر", color: "#000", kind: "NEUTRAL", minutes: 200 }], totalDurationMin: 200 }),
+      onThisDayLastMonth: emptyReport({ from: new Date("2026-05-10"), timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 60 }], totalDurationMin: 60 }),
+      onThisDayLastYear: emptyReport({ from: new Date("2025-06-10"), timeByCategory: [{ categoryId: "c2", name: "سفر", color: "#000", parentCategoryId: null, parentName: null, kind: "NEUTRAL", minutes: 200 }], totalDurationMin: 200 }),
     });
     const result = onThisDay(ctx);
     expect(result?.text).toContain("«سفر»");

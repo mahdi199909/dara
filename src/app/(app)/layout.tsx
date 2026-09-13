@@ -5,6 +5,7 @@ import BottomNav from "@/components/nav/BottomNav";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
 import GlobalCaptureFab from "@/components/GlobalCaptureFab";
 import UpgradeToast from "@/components/UpgradeToast";
+import SavedToast from "@/components/SavedToast";
 import SWRProvider from "@/components/SWRProvider";
 import ThemeSettingsSync from "@/components/ThemeSettingsSync";
 
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="min-h-screen bg-canvas" dir="rtl">
         <AppTopBar userName={user.name} />
         <UpgradeToast />
+        <SavedToast />
         <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
         <GlobalCaptureFab />
         <BottomNav userName={user.name} />

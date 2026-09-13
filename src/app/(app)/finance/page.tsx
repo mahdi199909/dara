@@ -11,6 +11,7 @@ import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type Accou
 import { computeLoanInterest, computeEffectiveAnnualRate } from "@/lib/installments";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
+import { notifySaved } from "@/lib/savedToast";
 
 const TABS = [
   { key: "transactions", label: "تراکنش‌ها" },
@@ -213,6 +214,7 @@ function EditTransactionForm({
         description: description || null,
         categoryId: categoryId || null,
       });
+      notifySaved();
       onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : "ذخیره تغییرات ناموفق بود.");
@@ -280,6 +282,7 @@ function NewTransactionForm({ categories, accounts, onDone }: { categories: any[
         transferToAccountId: type === "TRANSFER" ? transferToAccountId : undefined,
         categoryId: categoryId || undefined,
       });
+      notifySaved();
       onDone();
     } finally {
       setLoading(false);

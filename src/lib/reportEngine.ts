@@ -18,13 +18,13 @@ export interface TimeAndMoneyReport {
   wasteMin: number;
   productiveRatio: number; // 0-1
 
-  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number }[];
+  timeByCategory: { categoryId: string; name: string; color: string; kind: string; minutes: number; parentCategoryId: string | null; parentName: string | null }[];
   timeByProject: { projectId: string; name: string; minutes: number }[];
 
   income: number;
   expense: number;
   net: number;
-  expenseByCategory: { categoryId: string; name: string; color: string; amount: number }[];
+  expenseByCategory: { categoryId: string; name: string; color: string; amount: number; parentCategoryId: string | null; parentName: string | null }[];
 
   timeCost: number;
   opportunityCost: number;
@@ -76,7 +76,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
   let productiveMin = 0;
   let neutralMin = 0;
   let wasteMin = 0;
-  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number }>();
+  const byCategory = new Map<string, { name: string; color: string; kind: string; minutes: number; parentCategoryId: string | null }>();
   const byProject = new Map<string, { name: string; minutes: number }>();
 
   for (const te of timeEntries) {
@@ -90,7 +90,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
     if (te.activity.category) {
       const cat = te.activity.category;
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0, parentCategoryId: cat.parentCategoryId };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -113,7 +113,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     else neutralMin += minutes;
 
     if (task.category) {
-      const entry = byCategory.get(task.category.id) ?? { name: task.category.name, color: task.category.color, kind, minutes: 0 };
+      const entry = byCategory.get(task.category.id) ?? { name: task.category.name, color: task.category.color, kind, minutes: 0, parentCategoryId: task.category.parentCategoryId };
       entry.minutes += minutes;
       byCategory.set(task.category.id, entry);
     }
@@ -136,7 +136,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     else neutralMin += minutes;
 
     if (event.category) {
-      const entry = byCategory.get(event.category.id) ?? { name: event.category.name, color: event.category.color, kind, minutes: 0 };
+      const entry = byCategory.get(event.category.id) ?? { name: event.category.name, color: event.category.color, kind, minutes: 0, parentCategoryId: event.category.parentCategoryId };
       entry.minutes += minutes;
       byCategory.set(event.category.id, entry);
     }
@@ -159,7 +159,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
     if (checkIn.habit.category) {
       const cat = checkIn.habit.category;
-      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0 };
+      const entry = byCategory.get(cat.id) ?? { name: cat.name, color: cat.color, kind, minutes: 0, parentCategoryId: cat.parentCategoryId };
       entry.minutes += minutes;
       byCategory.set(cat.id, entry);
     }
@@ -167,7 +167,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
 
   let income = 0;
   let expense = 0;
-  const expenseByCategory = new Map<string, { name: string; color: string; amount: number }>();
+  const expenseByCategory = new Map<string, { name: string; color: string; amount: number; parentCategoryId: string | null }>();
 
   for (const tx of transactions) {
     if (tx.type === "INCOME") income += tx.amount;
@@ -178,6 +178,7 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
           name: tx.category.name,
           color: tx.category.color,
           amount: 0,
+          parentCategoryId: tx.category.parentCategoryId,
         };
         entry.amount += tx.amount;
         expenseByCategory.set(tx.category.id, entry);
@@ -189,6 +190,13 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
   const opportunityCost = computeTimeCost(wasteMin, hourlyValue);
   const virtualAssetValue = virtualAssetEntries.reduce((s, e) => s + e.totalValue, 0);
 
+  // A sub-category's parent might never appear as its own byCategory/expenseByCategory entry
+  // (everything logged under the child, none directly on the parent) — fetch any missing
+  // parents' names in one extra query so parentName always resolves for the Reports UI's legend.
+  const referencedParentIds = [...new Set([...byCategory.values(), ...expenseByCategory.values()].map((v) => v.parentCategoryId).filter((id): id is string => !!id))];
+  const parentCategories = referencedParentIds.length ? await prisma.category.findMany({ where: { id: { in: referencedParentIds } } }) : [];
+  const parentNameById = new Map(parentCategories.map((p) => [p.id, p.name]));
+
   return {
     from,
     to,
@@ -198,12 +206,20 @@ export async function computeTimeAndMoneyReport(userId: string, from: Date, to: 
     neutralMin,
     wasteMin,
     productiveRatio: totalDurationMin > 0 ? productiveMin / totalDurationMin : 0,
-    timeByCategory: Array.from(byCategory.entries()).map(([categoryId, v]) => ({ categoryId, ...v })),
+    timeByCategory: Array.from(byCategory.entries()).map(([categoryId, v]) => ({
+      categoryId,
+      ...v,
+      parentName: v.parentCategoryId ? parentNameById.get(v.parentCategoryId) ?? null : null,
+    })),
     timeByProject: Array.from(byProject.entries()).map(([projectId, v]) => ({ projectId, ...v })),
     income,
     expense,
     net: income - expense,
-    expenseByCategory: Array.from(expenseByCategory.entries()).map(([categoryId, v]) => ({ categoryId, ...v })),
+    expenseByCategory: Array.from(expenseByCategory.entries()).map(([categoryId, v]) => ({
+      categoryId,
+      ...v,
+      parentName: v.parentCategoryId ? parentNameById.get(v.parentCategoryId) ?? null : null,
+    })),
     timeCost,
     opportunityCost,
     realCost: expense + timeCost,
@@ -467,6 +483,7 @@ export interface CategoryCalendarStat {
   name: string;
   icon: string | null;
   color: string;
+  parentCategoryId: string | null;
   totalMinutes: number;
   totalDays: number;
   days: Record<string, number>; // dayKeyIso(date) -> minutes, only days with minutes > 0
@@ -581,12 +598,89 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
       name: cat.name,
       icon: cat.icon,
       color: cat.color,
+      parentCategoryId: cat.parentCategoryId,
       totalMinutes,
       totalDays: dayMap.size,
       days,
       dayItems,
     };
   });
+}
+
+// --- computeDayActivity ("Home: امروز") -----------------------------------------------------
+// Mirrors src/local/reportEngine.ts's copy of this function — see its doc comment.
+
+export interface DayActivityItem {
+  type: "HABIT" | "TRANSACTION" | "TIME_ENTRY";
+  id: string;
+  title: string;
+  timeOfDay: string;
+  isIncome: boolean | null;
+  amount: number | null;
+  minutes: number | null;
+  categoryIcon: string | null;
+  categoryColor: string | null;
+}
+
+export async function computeDayActivity(userId: string, from: Date, to: Date): Promise<DayActivityItem[]> {
+  const [timeEntries, habitCheckIns, transactions] = await Promise.all([
+    prisma.timeEntry.findMany({
+      where: { activity: { userId, deletedAt: null }, startAt: { gte: from, lte: to }, durationMin: { not: null } },
+      include: { activity: { select: { id: true, title: true, category: { select: { icon: true, color: true } } } } },
+    }),
+    prisma.habitCheckIn.findMany({
+      where: { habit: { userId, deletedAt: null }, date: { gte: from, lte: to } },
+      include: { habit: { select: { title: true, category: { select: { icon: true, color: true } } } } },
+    }),
+    prisma.transaction.findMany({
+      where: { userId, deletedAt: null, date: { gte: from, lte: to }, taskId: null, eventId: null },
+      include: { category: { select: { name: true, icon: true, color: true } } },
+    }),
+  ]);
+
+  const items: DayActivityItem[] = [];
+  for (const te of timeEntries) {
+    items.push({
+      type: "TIME_ENTRY",
+      id: te.id,
+      title: te.activity.title ?? "فعالیت",
+      timeOfDay: te.startAt.toISOString(),
+      isIncome: null,
+      amount: null,
+      minutes: te.durationMin,
+      categoryIcon: te.activity.category?.icon ?? null,
+      categoryColor: te.activity.category?.color ?? null,
+    });
+  }
+  for (const h of habitCheckIns) {
+    items.push({
+      type: "HABIT",
+      id: h.id,
+      title: h.habit.title,
+      timeOfDay: h.createdAt.toISOString(),
+      isIncome: null,
+      amount: null,
+      minutes: h.durationMin,
+      categoryIcon: h.habit.category?.icon ?? null,
+      categoryColor: h.habit.category?.color ?? null,
+    });
+  }
+  for (const tx of transactions) {
+    items.push({
+      type: "TRANSACTION",
+      id: tx.id,
+      title: tx.description || tx.category?.name || "تراکنش",
+      timeOfDay: tx.date.toISOString(),
+      isIncome: tx.type === "INCOME",
+      amount: tx.amount,
+      minutes: null,
+      categoryIcon: tx.category?.icon ?? null,
+      categoryColor: tx.category?.color ?? null,
+    });
+  }
+
+  items.sort((a, b) => a.timeOfDay.localeCompare(b.timeOfDay));
+  return items;
 }
 
 // --- computeCalendarMonthOverview -------------------------------------------------------------
@@ -657,9 +751,16 @@ export async function computeCalendarMonthOverview(
     const cat = await prisma.category.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, name: true, icon: true } });
     if (cat) {
       featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
+      // Roll up the featured category's own days with any direct sub-categories' days — picking
+      // a parent (e.g. "سرمایه‌گذاری") should total everything logged under its children (طلا,
+      // دلار, ...) too, not just whatever (usually nothing) was logged directly on the parent
+      // itself. Only one level of nesting is possible (see Category.parentCategoryId's own
+      // schema comment), so a plain parentCategoryId === featuredId match is exhaustive.
       const stats = await computeCategoryCalendar(userId, from, to);
-      const stat = stats.find((c) => c.categoryId === featuredId);
-      if (stat) for (const [key, minutes] of Object.entries(stat.days)) ensure(key).featuredValue = minutes;
+      const relevant = stats.filter((c) => c.categoryId === featuredId || c.parentCategoryId === featuredId);
+      for (const stat of relevant) {
+        for (const [key, minutes] of Object.entries(stat.days)) ensure(key).featuredValue += minutes;
+      }
     }
   } else if (featuredType === "habit" && featuredId) {
     const habit = await prisma.habit.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, title: true, icon: true } });
@@ -748,9 +849,12 @@ export async function computeCalendarYearOverview(
     const cat = await prisma.category.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, name: true, icon: true } });
     if (cat) {
       featured = { type: "category", id: cat.id, name: cat.name, icon: cat.icon };
+      // Same parent+children rollup as computeCalendarMonthOverview — see its comment.
       const stats = await computeCategoryCalendar(userId, yearStart, yearEnd);
-      const stat = stats.find((c) => c.categoryId === featuredId);
-      if (stat) for (const [dayKey, minutes] of Object.entries(stat.days)) ensure(toJalali(new Date(dayKey)).jm).featuredValue += minutes;
+      const relevant = stats.filter((c) => c.categoryId === featuredId || c.parentCategoryId === featuredId);
+      for (const stat of relevant) {
+        for (const [dayKey, minutes] of Object.entries(stat.days)) ensure(toJalali(new Date(dayKey)).jm).featuredValue += minutes;
+      }
     }
   } else if (featuredType === "habit" && featuredId) {
     const habit = await prisma.habit.findFirst({ where: { id: featuredId, userId, deletedAt: null }, select: { id: true, title: true, icon: true } });

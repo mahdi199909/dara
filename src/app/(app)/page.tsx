@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import useSWR, { mutate as mutateGlobal } from "swr";
 import Link from "next/link";
-import { fetcher, apiPost } from "@/lib/apiClient";
+import { fetcher, apiPost, apiPatch } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureFormModal from "@/components/CaptureFormModal";
 import type { CaptureSummary } from "@/components/CaptureForm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
+import DayBattery from "@/components/DayBattery";
 import { EmptyState } from "@/components/ui/Card";
 import { formatTime, formatJalali } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
@@ -19,6 +20,18 @@ import { useCompanion } from "@/components/companion/useCompanion";
 import { MOOD_FA_LABEL } from "@/components/companion/moodTokens";
 import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
+
+type TodayFeedItem = {
+  key: string;
+  time: string;
+  kind: "EVENT" | "TASK" | "HABIT" | "TRANSACTION" | "TIME_ENTRY";
+  title: string;
+  isDone?: boolean;
+  onToggleDone?: () => void;
+  amount?: number;
+  isIncome?: boolean;
+  minutes?: number;
+};
 
 type CaptureReaction = { kind: CaptureReactionKind; minutes?: number; amount?: number };
 
@@ -193,26 +206,64 @@ export default function HomePage() {
   const [captureRange, setCaptureRange] = useState<{ start: Date; end: Date } | null>(null);
   const [reaction, setReaction] = useState<CaptureReaction | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
+  const { format } = useCurrencyUnit();
   const { from, to } = todayRange();
 
-  const { data, mutate } = useSWR<{ occurrences: any[] }>(
+  const { data, mutate } = useSWR<{ occurrences: any[]; taskOccurrences: any[] }>(
     `/api/events?from=${from.toISOString()}&to=${to.toISOString()}`,
     fetcher
   );
+  const { data: dayActivity, mutate: mutateDayActivity } = useSWR<{ items: any[] }>(
+    `/api/day-activity?from=${from.toISOString()}&to=${to.toISOString()}`,
+    fetcher
+  );
   const { habits, series, currentStreak, mutate: mutateHabits } = useHabits();
-
-  // Only what's still ahead today — already-passed events would just be noise on Home.
-  const now = new Date();
-  const upcomingToday = (data?.occurrences ?? []).filter((occ: any) => new Date(occ.startAt) >= now);
 
   async function toggleEventDone(occ: any) {
     await apiPost(`/api/events/${occ.event.id}/complete`, { occurrenceDate: occ.startAt });
     mutate();
   }
 
+  async function toggleTaskDone(task: any) {
+    await apiPatch(`/api/tasks/${task.id}`, { status: task.status === "DONE" ? "TODO" : "DONE" });
+    mutate();
+  }
+
+  // Everything logged or scheduled for today, from every source the app has — events and tasks
+  // come from /api/events (already recurrence-expanded; see that route's own comment), the rest
+  // from /api/day-activity (habits, transactions, quick-capture time entries).
+  const todayFeed: TodayFeedItem[] = [
+    ...(data?.occurrences ?? []).map((occ: any) => ({
+      key: `event-${occ.occurrenceId}`,
+      time: occ.startAt,
+      kind: "EVENT" as const,
+      title: occ.event.title,
+      isDone: occ.isDone,
+      onToggleDone: () => toggleEventDone(occ),
+    })),
+    ...(data?.taskOccurrences ?? []).map((t: any) => ({
+      key: `task-${t.id}`,
+      time: t.startAt ?? t.dueDate,
+      kind: "TASK" as const,
+      title: t.title,
+      isDone: t.status === "DONE",
+      onToggleDone: () => toggleTaskDone(t),
+    })),
+    ...(dayActivity?.items ?? []).map((it: any) => ({
+      key: `${it.type}-${it.id}`,
+      time: it.timeOfDay,
+      kind: it.type as "HABIT" | "TRANSACTION" | "TIME_ENTRY",
+      title: it.title,
+      amount: it.amount ?? undefined,
+      isIncome: it.isIncome ?? undefined,
+      minutes: it.minutes ?? undefined,
+    })),
+  ].sort((a, b) => a.time.localeCompare(b.time));
+
   async function toggleHabitCheckIn(habitId: string) {
     await apiPost(`/api/habits/${habitId}/checkin`);
     mutateHabits();
+    mutateDayActivity();
     mutateGlobal("/api/virtual-assets/latest-effect");
   }
 
@@ -232,6 +283,7 @@ export default function HomePage() {
     setShowCapture(false);
     setCaptureRange(null);
     mutate();
+    mutateDayActivity();
     if (summary) {
       setReaction(summary);
       setTimeout(() => setReaction(null), 3000);
@@ -254,29 +306,44 @@ export default function HomePage() {
         <UpcomingInstallmentsCard />
       </div>
 
+      <DayBattery onLogGap={(start, end) => openCapture({ start, end })} />
+
       <div className="flex-1 min-h-0 flex flex-col bg-surface rounded-2xl border border-line shadow-card">
-        <h2 className="shrink-0 font-bold text-ink text-sm px-4 pt-3 pb-2">رویدادهای امروز</h2>
+        <h2 className="shrink-0 font-bold text-ink text-sm px-4 pt-3 pb-2">فعالیت‌های امروز</h2>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3">
-          {!data ? (
+          {!data || !dayActivity ? (
             <p className="text-sm text-muted">در حال بارگذاری...</p>
-          ) : upcomingToday.length === 0 ? (
-            <EmptyState message="رویداد پیش‌رویی برای امروز نمانده." />
+          ) : todayFeed.length === 0 ? (
+            <EmptyState message="هنوز چیزی برای امروز ثبت نشده." />
           ) : (
             <ul className="space-y-2">
-              {upcomingToday.map((occ: any) => (
-                <li key={occ.occurrenceId} className="flex items-center gap-3 text-sm">
-                  <button
-                    onClick={() => toggleEventDone(occ)}
-                    aria-label="تکمیل رویداد"
-                    className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition ${
-                      occ.isDone ? "bg-accent border-accent text-on-accent" : "border-line text-transparent"
-                    }`}
-                  >
-                    <CheckSquareIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </button>
+              {todayFeed.map((item) => (
+                <li key={item.key} className="flex items-center gap-3 text-sm">
+                  {item.kind === "EVENT" || item.kind === "TASK" ? (
+                    <button
+                      onClick={item.onToggleDone}
+                      aria-label="تکمیل"
+                      className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition ${
+                        item.isDone ? "bg-accent border-accent text-on-accent" : "border-line text-transparent"
+                      }`}
+                    >
+                      <CheckSquareIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    </button>
+                  ) : (
+                    <span className="shrink-0 w-5 h-5 flex items-center justify-center text-accent">
+                      {item.kind === "HABIT" ? "🔥" : item.kind === "TRANSACTION" ? (item.isIncome ? "+" : "-") : "⏱"}
+                    </span>
+                  )}
                   <ClockIcon className="w-4 h-4 text-muted shrink-0" />
-                  <span className="text-muted w-12 shrink-0">{formatTime(new Date(occ.startAt))}</span>
-                  <span className={`truncate ${occ.isDone ? "text-muted line-through" : "text-ink"}`}>{occ.event.title}</span>
+                  <span className="text-muted w-12 shrink-0">{formatTime(new Date(item.time))}</span>
+                  <span className={`flex-1 truncate ${item.isDone ? "text-muted line-through" : "text-ink"}`}>{item.title}</span>
+                  {item.amount !== undefined && (
+                    <span className={`shrink-0 text-xs font-bold ${item.isIncome ? "text-accent" : "text-waste"}`}>
+                      {item.isIncome ? "+" : "-"}
+                      {format(item.amount, { withSuffix: true })}
+                    </span>
+                  )}
+                  {item.minutes !== undefined && <span className="shrink-0 text-xs text-muted">{formatDuration(item.minutes)}</span>}
                 </li>
               ))}
             </ul>
