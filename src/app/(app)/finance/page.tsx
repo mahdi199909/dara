@@ -6,6 +6,7 @@ import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories, useAccounts } from "@/lib/hooks";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali, toJalali } from "@/lib/jalali";
+import { toPersianDigits } from "@/lib/money";
 import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type AccountType } from "@/lib/types";
 import { computeLoanInterest, computeEffectiveAnnualRate } from "@/lib/installments";
@@ -780,6 +781,7 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
   const [installmentAmount, setInstallmentAmount] = useState("");
   const [numberOfInstallments, setNumberOfInstallments] = useState("");
   const [simpleAmount, setSimpleAmount] = useState("");
+  const [simpleCount, setSimpleCount] = useState("1");
   const [dueDay, setDueDay] = useState("");
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([60 * 24]);
   const [loading, setLoading] = useState(false);
@@ -801,6 +803,11 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
           numberOfInstallments: Number(numberOfInstallments),
         })
       : null;
+  // بدهی ساده has no interest — splitting it across months just divides the same total, so the
+  // per-payment amount is rounded UP (never down) to make sure the sum collected across all
+  // payments never falls short of the actual debt by even a Toman.
+  const simplePerPaymentAmount =
+    mode === "SIMPLE" && simpleAmount && Number(simpleCount) > 1 ? Math.ceil(Number(simpleAmount) / Number(simpleCount)) : null;
 
   function toggleOffset(minutes: number) {
     setReminderOffsets((prev) => (prev.includes(minutes) ? prev.filter((m) => m !== minutes) : [...prev, minutes]));
@@ -810,18 +817,23 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
     e.preventDefault();
     setLoading(true);
     try {
-      // "بدهی ساده" is just a 1-installment plan — same backend, same pay/edit/delete UI, just
-      // without asking for a totalAmount separate from the single payment amount.
-      const amount = mode === "SIMPLE" ? Number(simpleAmount) : Number(installmentAmount);
-      const count = mode === "SIMPLE" ? 1 : Number(numberOfInstallments);
+      // "بدهی ساده" is just an N-installment plan with no interest — same backend, same
+      // pay/edit/delete UI as a real loan plan, just without asking for a totalAmount separate
+      // from the debt itself. count defaults to 1 (a single lump payment, the original behavior);
+      // choosing a bigger count splits the same debt into that many equal monthly payments.
+      const simpleTotal = Number(simpleAmount);
+      const simpleCountNum = Number(simpleCount);
+      const amount = mode === "SIMPLE" ? simplePerPaymentAmount ?? simpleTotal : Number(installmentAmount);
+      const count = mode === "SIMPLE" ? simpleCountNum : Number(numberOfInstallments);
       await apiPost("/api/installment-plans", {
         title,
-        totalAmount: mode === "SIMPLE" ? amount : Number(totalAmount),
+        totalAmount: mode === "SIMPLE" ? simpleTotal : Number(totalAmount),
         installmentAmount: amount,
         numberOfInstallments: count,
         dueDay: Number(dueDay),
         reminderOffsets,
       });
+      notifySaved();
       onDone();
     } finally {
       setLoading(false);
@@ -850,7 +862,27 @@ function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
         </div>
         <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "SIMPLE" ? "عنوان (مثلاً قرض از رضا)" : "عنوان (مثلاً وام خودرو)"} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
         {mode === "SIMPLE" ? (
-          <MoneyInput value={simpleAmount} onChange={setSimpleAmount} placeholder="مبلغ" required />
+          <>
+            <MoneyInput value={simpleAmount} onChange={setSimpleAmount} placeholder="مبلغ کل بدهی" required />
+            <div>
+              <input
+                type="number"
+                dir="ltr"
+                required
+                min={1}
+                max={360}
+                value={simpleCount}
+                onChange={(e) => setSimpleCount(e.target.value)}
+                placeholder="تعداد پرداخت ماهانه"
+                className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right"
+              />
+              <p className="text-xs text-muted mt-1">
+                {simplePerPaymentAmount
+                  ? `${toPersianDigits(Number(simpleCount))} پرداخت ماهانه، هرکدام ${format(simplePerPaymentAmount, { withSuffix: true })}`
+                  : "برای پرداخت یکجا ۱ بذار؛ برای تقسیم به چند قسط ماهانه مساوی، عدد بزرگ‌تر بذار."}
+              </p>
+            </div>
+          </>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2">
