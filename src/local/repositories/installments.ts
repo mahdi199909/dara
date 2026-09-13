@@ -18,6 +18,7 @@ import { generateInstallmentSchedule, recomputeInstallmentDueDate, summarizeInst
 import type { CreateInstallmentPlanInput, PayInstallmentInput, UpdateInstallmentPlanInput } from "@/lib/schemas/installments";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
+import { scheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
 
 export interface InstallmentPlanRow {
   id: string;
@@ -156,11 +157,19 @@ export function createInstallmentPlan(db: LocalDb, userId: string, input: Create
     for (const installment of installments) {
       for (const offsetMinutes of input.reminderOffsets) {
         const remindAt = new Date(new Date(installment.dueDate).getTime() - offsetMinutes * 60000);
+        const reminderId = crypto.randomUUID();
+        const title = `سررسید قسط: ${input.title}`;
         db.run(
           `INSERT INTO "Reminder" ("id","userId","targetType","eventId","installmentId","title","offsetMinutes","remindAt","notified","dismissed","createdAt")
            VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          [crypto.randomUUID(), userId, "INSTALLMENT", null, installment.id, `سررسید قسط: ${input.title}`, offsetMinutes, remindAt.toISOString(), 0, 0, ts]
+          [reminderId, userId, "INSTALLMENT", null, installment.id, title, offsetMinutes, remindAt.toISOString(), 0, 0, ts]
         );
+        scheduleReminderNotification({
+          id: reminderId,
+          title,
+          body: `قسط ${installment.amount.toLocaleString("en-US")} تومانی «${input.title}» به زودی سررسید می‌شود.`,
+          remindAt: remindAt.toISOString(),
+        });
       }
     }
   }
@@ -221,6 +230,17 @@ export function updateInstallmentPlan(
 export function deleteInstallmentPlan(db: LocalDb, userId: string, id: string, deleteTransactions = false): { ok: true } {
   const existing = getOwnedPlan(db, userId, id);
   const ts = now();
+
+  // Same reasoning as events.ts's deleteEvent: the plan's Reminder rows are left alone (a
+  // soft-delete), but Android's own alarm scheduler has no idea the plan is gone and would still
+  // fire on schedule unless explicitly cancelled here.
+  if (existing.installments.length > 0) {
+    const placeholders = existing.installments.map(() => "?").join(",");
+    const reminderIds = db
+      .all<{ id: string }>(`SELECT "id" FROM "Reminder" WHERE "installmentId" IN (${placeholders})`, existing.installments.map((i) => i.id))
+      .map((r) => r.id);
+    cancelReminderNotifications(reminderIds);
+  }
 
   if (deleteTransactions && existing.installments.length > 0) {
     const placeholders = existing.installments.map(() => "?").join(",");

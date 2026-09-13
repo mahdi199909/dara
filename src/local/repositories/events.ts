@@ -24,10 +24,12 @@
 //     web) writes a CREATE audit entry per reminder.
 import { ApiError } from "@/lib/apiErrorBase";
 import { expandOccurrences } from "@/lib/recurrence";
+import { formatReminderOffset } from "@/lib/reminderText";
 import type { CreateEventInput, UpdateEventInput, ToggleEventCompletionInput, CreateReminderInput } from "@/lib/schemas/events";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
+import { scheduleReminderNotification, rescheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
 
 interface EventRow {
   id: string;
@@ -166,7 +168,14 @@ function insertReminderRow(db: LocalDb, userId: string, event: { id: string; tit
     [id, userId, "EVENT", event.id, null, `یادآوری: ${event.title}`, offsetMinutes, remindAt, 0, 0, now()]
   );
 
-  return toReminder(db.get<ReminderRow>(`SELECT * FROM "Reminder" WHERE "id" = ?`, [id])!);
+  const reminder = toReminder(db.get<ReminderRow>(`SELECT * FROM "Reminder" WHERE "id" = ?`, [id])!);
+  scheduleReminderNotification({
+    id: reminder.id,
+    title: reminder.title,
+    body: `${event.title} - ${formatReminderOffset(offsetMinutes)} دیگر`,
+    remindAt: reminder.remindAt,
+  });
+  return reminder;
 }
 
 export function listEvents(db: LocalDb, userId: string, range: { from?: string | null; to?: string | null } = {}) {
@@ -324,6 +333,14 @@ export function updateEvent(db: LocalDb, userId: string, id: string, input: Upda
     for (const r of reminders) {
       const remindAt = new Date(newStartMs - r.offsetMinutes * 60000).toISOString();
       db.run(`UPDATE "Reminder" SET "remindAt" = ?, "notified" = 0 WHERE "id" = ?`, [remindAt, r.id]);
+      // The already-scheduled native notification is still sitting at the OLD time — Android's
+      // own alarm scheduler has no idea the row changed, so it must be explicitly moved too.
+      rescheduleReminderNotification({
+        id: r.id,
+        title: r.title,
+        body: `${row.title} - ${formatReminderOffset(r.offsetMinutes)} دیگر`,
+        remindAt,
+      });
     }
   }
 
@@ -334,6 +351,12 @@ export function updateEvent(db: LocalDb, userId: string, id: string, input: Upda
 
 export function deleteEvent(db: LocalDb, userId: string, id: string) {
   const existing = getOwnedEventRow(db, userId, id);
+  // A soft-deleted event's Reminder rows are left alone (same as before this file's notification
+  // wiring — the in-app lazy-fire path would just never surface them again since it's driven by
+  // still-active events), but the native OS alarm doesn't know any of that and would still fire
+  // on its own schedule unless explicitly cancelled here.
+  const reminderIds = db.all<{ id: string }>(`SELECT "id" FROM "Reminder" WHERE "eventId" = ?`, [id]).map((r) => r.id);
+  cancelReminderNotifications(reminderIds);
   db.run(`UPDATE "Event" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Event", entityId: id, oldValue: toEvent(existing) });
   return { ok: true };
@@ -374,6 +397,7 @@ export function deleteReminder(db: LocalDb, userId: string, id: string) {
   if (!reminder) throw new ApiError("یادآوری پیدا نشد.", 404);
 
   db.run(`DELETE FROM "Reminder" WHERE "id" = ?`, [id]);
+  cancelReminderNotifications([id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Reminder", entityId: id, oldValue: toReminder(reminder) });
   return { ok: true };
 }

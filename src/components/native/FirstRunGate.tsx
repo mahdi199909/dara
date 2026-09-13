@@ -114,6 +114,13 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         console.error("ensure default categories on boot failed", err);
       }
 
+      // Best-effort, fire-and-forget: ask for notification permission up front (Android 13+)
+      // so the OS prompt happens here on first boot rather than surprising the user the first
+      // time they add a task/event/installment reminder later.
+      import("@/local/nativeNotifications")
+        .then(({ requestNotificationPermission }) => requestNotificationPermission())
+        .catch((err) => console.error("notification permission request on boot failed", err));
+
       const license = await getCachedLicense();
       setReady(!!license);
 
