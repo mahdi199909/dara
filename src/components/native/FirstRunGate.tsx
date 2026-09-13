@@ -58,6 +58,12 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   const [networkError, setNetworkError] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Set when browserSqlJs.ts had to fall back to dara.sqlite3.bak because dara.sqlite3 itself was
+  // corrupt (see loadBrowserSqliteDriver's own doc comment) — surfaced as a dismissible notice
+  // once inside the app rather than blocking the gate, since the recovery already succeeded and
+  // the user just needs to know some very recent data may be missing.
+  const [recoveredFromBackup, setRecoveredFromBackup] = useState(false);
+  const [recoveryNoticeDismissed, setRecoveryNoticeDismissed] = useState(false);
 
   useEffect(() => {
     if (!isNativePlatform()) {
@@ -73,8 +79,9 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         import("@/local/drivers/browserSqlJs"),
         import("@/lib/localDispatcher"),
       ]);
-      const driver = await loadBrowserSqliteDriver();
+      const { driver, recoveredFromBackup: recovered } = await loadBrowserSqliteDriver();
       setLocalDbDriver(driver);
+      if (recovered) setRecoveredFromBackup(true);
 
       // Best-effort: a stuck/malformed widget queue should never block getting into the app.
       try {
@@ -161,7 +168,23 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   }
 
   if (checking) return null;
-  if (ready) return <>{children}</>;
+  if (ready) {
+    return (
+      <>
+        {recoveredFromBackup && !recoveryNoticeDismissed && (
+          <div className="bg-amber-50 text-amber-900 text-xs leading-relaxed px-4 py-2 flex items-center gap-2" dir="rtl">
+            <span className="flex-1">
+              به‌دلیل یک مشکل فنی، اطلاعات شما از آخرین نسخه پشتیبان بازیابی شد. ممکن است چند مورد آخری که ثبت کرده بودید از دست رفته باشد.
+            </span>
+            <button type="button" onClick={() => setRecoveryNoticeDismissed(true)} className="shrink-0 font-medium hover:opacity-70">
+              متوجه شدم
+            </button>
+          </div>
+        )}
+        {children}
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">

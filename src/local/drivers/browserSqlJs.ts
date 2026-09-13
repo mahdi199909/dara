@@ -18,6 +18,8 @@ import { Filesystem, Directory } from "@capacitor/filesystem";
 import type { LocalDb } from "../db";
 
 const DB_FILE = "dara.sqlite3";
+const DB_TMP_FILE = "dara.sqlite3.tmp";
+const DB_BAK_FILE = "dara.sqlite3.bak";
 const FLUSH_DEBOUNCE_MS = 300;
 
 function toParams(params: unknown[]): any[] {
@@ -42,33 +44,51 @@ function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-async function readPersistedBytes(): Promise<Uint8Array | null> {
+async function readBytesFrom(path: string): Promise<Uint8Array | null> {
   try {
-    const { data } = await Filesystem.readFile({ path: DB_FILE, directory: Directory.Data });
+    const { data } = await Filesystem.readFile({ path, directory: Directory.Data });
     return base64ToBytes(data as string);
   } catch (err) {
-    // Capacitor's Filesystem plugin reports a genuinely missing file (first launch) with a
-    // message that varies by platform/version — Android has been observed as both the bare
-    // "File does not exist" and the more verbose "'readFile' failed because file at '<path>'
-    // does not exist." (the latter is what a real device actually throws, confirmed from a user
-    // bootError report) — so match on the "does not exist" substring rather than a fixed string.
-    // Anything else (a read/decode failure against a file that does exist, e.g. left truncated by
-    // an interrupted flush) is a real problem, not a fresh install, and must not be silently
-    // treated as "no data yet": that would make loadBrowserSqliteDriver below construct a
-    // brand-new *empty* database instead of surfacing the failure, which looks to the user
-    // exactly like all their data vanished. Let it throw instead — FirstRunGate's own catch
-    // already turns this into a visible bootError.
+    // Capacitor's Filesystem plugin reports a genuinely missing file (first launch, or no
+    // backup exists yet) with a message that varies by platform/version — Android has been
+    // observed as both the bare "File does not exist" and the more verbose "'readFile' failed
+    // because file at '<path>' does not exist." (the latter is what a real device actually
+    // throws, confirmed from a user bootError report) — so match on the "does not exist"
+    // substring rather than a fixed string. Anything else (a read/decode failure against a file
+    // that does exist) is a real problem and must not be silently treated as "no data yet".
     if (err instanceof Error && /does not exist/i.test(err.message)) return null;
     throw err;
   }
 }
 
+/**
+ * Writes the new bytes atomically: to a throwaway .tmp file first, then swaps it into place via
+ * rename after moving the current file to .bak. A rename is a directory-entry update, not a
+ * byte-by-byte copy, so there is no meaningful window left where a kill/crash/out-of-storage
+ * mid-write could leave dara.sqlite3 itself half-written and unparseable — the OLD direct
+ * overwrite (`Filesystem.writeFile` straight onto dara.sqlite3) had exactly that window open for
+ * as long as the whole multi-KB/MB write took, and a device dying inside it is precisely what
+ * "database disk image is malformed" on next launch looks like. Keeping the previous version as
+ * .bak (see loadBrowserSqliteDriver's read-side recovery) is defense in depth on top of that, in
+ * case some other, not-yet-understood corruption path ever reappears.
+ */
 async function writePersistedBytes(bytes: Uint8Array): Promise<void> {
-  await Filesystem.writeFile({
-    path: DB_FILE,
-    directory: Directory.Data,
-    data: bytesToBase64(bytes),
-  });
+  await Filesystem.writeFile({ path: DB_TMP_FILE, directory: Directory.Data, data: bytesToBase64(bytes) });
+
+  try {
+    await Filesystem.deleteFile({ path: DB_BAK_FILE, directory: Directory.Data });
+  } catch {
+    // no previous backup yet — fine
+  }
+  try {
+    await Filesystem.rename({ from: DB_FILE, to: DB_BAK_FILE, directory: Directory.Data });
+  } catch {
+    // dara.sqlite3 doesn't exist yet (very first flush ever) — nothing to back up
+  }
+
+  // dara.sqlite3 is guaranteed gone at this point (just moved to .bak, or never existed), so
+  // this rename can't collide with an existing destination.
+  await Filesystem.rename({ from: DB_TMP_FILE, to: DB_FILE, directory: Directory.Data });
 }
 
 async function fetchWasmBinary(): Promise<ArrayBuffer> {
@@ -89,11 +109,42 @@ async function fetchWasmBinary(): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
-export async function loadBrowserSqliteDriver(): Promise<LocalDb> {
+export interface LoadedBrowserSqliteDriver {
+  driver: LocalDb;
+  /** True if dara.sqlite3 itself couldn't be parsed and dara.sqlite3.bak had to be used instead
+   * — see writePersistedBytes. The caller should tell the user, since anything written after the
+   * last successful flush before the backup was taken is gone even though this recovered. */
+  recoveredFromBackup: boolean;
+}
+
+export async function loadBrowserSqliteDriver(): Promise<LoadedBrowserSqliteDriver> {
   const wasmBinary = await fetchWasmBinary();
   const SQL: SqlJsStatic = await initSqlJs({ wasmBinary });
-  const existing = await readPersistedBytes();
-  const db: Database = existing ? new SQL.Database(existing) : new SQL.Database();
+
+  let db: Database;
+  let recoveredFromBackup = false;
+  const primary = await readBytesFrom(DB_FILE);
+  if (!primary) {
+    db = new SQL.Database();
+  } else {
+    try {
+      db = new SQL.Database(primary);
+    } catch (primaryErr) {
+      // dara.sqlite3 exists but sql.js can't parse it as a valid SQLite file — try the last
+      // known-good backup (see writePersistedBytes) before giving up entirely. This turns "the
+      // file somehow got corrupted" into "lose whatever changed since the last flush before
+      // that" instead of losing everything ever recorded on this device.
+      const backup = await readBytesFrom(DB_BAK_FILE).catch(() => null);
+      if (!backup) throw primaryErr;
+      try {
+        db = new SQL.Database(backup);
+        recoveredFromBackup = true;
+        console.error("dara.sqlite3 was corrupt; recovered from dara.sqlite3.bak instead", primaryErr);
+      } catch {
+        throw primaryErr; // the backup is ALSO unreadable — surface the original error, nothing left to try
+      }
+    }
+  }
 
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let dirty = false;
@@ -133,7 +184,7 @@ export async function loadBrowserSqliteDriver(): Promise<LocalDb> {
     window.addEventListener("pagehide", () => void flushNow());
   }
 
-  return {
+  const driver: LocalDb = {
     run(sql, params = []) {
       db.run(sql, toParams(params));
       scheduleFlush();
@@ -168,4 +219,13 @@ export async function loadBrowserSqliteDriver(): Promise<LocalDb> {
       return flushNow();
     },
   };
+
+  // Get the recovered content safely back onto dara.sqlite3 right away, rather than leaving it
+  // sitting corrupt on disk until whatever the next incidental write happens to be.
+  if (recoveredFromBackup) {
+    dirty = true;
+    await flushNow();
+  }
+
+  return { driver, recoveredFromBackup };
 }
