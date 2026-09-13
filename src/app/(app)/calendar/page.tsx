@@ -198,37 +198,39 @@ export default function CalendarPage() {
 
       {view === "year" && (
         <>
-          <Card className="p-4 space-y-2">
-            <p className="text-xs text-muted mb-1">جریان کل سال</p>
-            <div className="flex items-center gap-3 text-sm font-bold">
-              <span className="text-accent">+{format(yearOverview?.yearIncome ?? 0, { withSuffix: true })}</span>
-              <span className="text-waste">-{format(yearOverview?.yearExpense ?? 0, { withSuffix: true })}</span>
-            </div>
-            <p className="text-xs text-muted border-t border-line pt-2">
-              کار مفید: <span className="text-ink font-bold">{formatDuration(yearOverview?.yearProductiveMinutes ?? 0)}</span>
-            </p>
-          </Card>
-
-          <Card className="p-4 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">دسته‌بندی منتخب</p>
-              <button
-                onClick={() => setShowFeaturedPicker(true)}
-                className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
-              >
-                {yearOverview?.featured ? `${yearOverview.featured.icon ?? ""} ${yearOverview.featured.name}` : "دسته‌بندی ویژه +"}
-              </button>
-            </div>
-            {yearOverview?.featured && yearOverview.yearFeaturedTotal !== null ? (
-              <p className="text-sm font-bold text-ink">
-                {yearOverview.featured.type === "habit"
-                  ? `${toPersianDigits(yearOverview.yearFeaturedTotal)} روز`
-                  : formatDuration(yearOverview.yearFeaturedTotal)}
+          <div className="flex gap-2">
+            <Card className="flex-1 min-w-0 p-2.5 space-y-1">
+              <p className="text-[11px] text-muted">جریان کل سال</p>
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <span className="text-accent">+{format(yearOverview?.yearIncome ?? 0, { withSuffix: true })}</span>
+                <span className="text-waste">-{format(yearOverview?.yearExpense ?? 0, { withSuffix: true })}</span>
+              </div>
+              <p className="text-[11px] text-muted truncate">
+                کار مفید: <span className="text-ink font-bold">{formatDuration(yearOverview?.yearProductiveMinutes ?? 0)}</span>
               </p>
-            ) : (
-              <p className="text-xs text-muted">یک دسته‌بندی انتخاب کن تا مجموعش اینجا نشان داده شود.</p>
-            )}
-          </Card>
+            </Card>
+
+            <Card className="flex-1 min-w-0 p-2.5 space-y-1">
+              <div className="flex items-center justify-between gap-1.5">
+                <p className="text-[11px] text-muted shrink-0">دسته منتخب</p>
+                <button
+                  onClick={() => setShowFeaturedPicker(true)}
+                  className="min-w-0 truncate text-[11px] text-muted hover:text-ink bg-canvas rounded-full px-2 py-1"
+                >
+                  {yearOverview?.featured ? `${yearOverview.featured.icon ?? ""} ${yearOverview.featured.name}` : "انتخاب +"}
+                </button>
+              </div>
+              {yearOverview?.featured && yearOverview.yearFeaturedTotal !== null ? (
+                <p className="text-sm font-bold text-ink truncate">
+                  {yearOverview.featured.type === "habit"
+                    ? `${toPersianDigits(yearOverview.yearFeaturedTotal)} روز`
+                    : formatDuration(yearOverview.yearFeaturedTotal)}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted truncate">دسته‌ای انتخاب کن</p>
+              )}
+            </Card>
+          </div>
 
           <div className="grid grid-cols-3 gap-2">
             {(
@@ -261,35 +263,37 @@ export default function CalendarPage() {
 
       {view === "month" && (
         <>
-          <Card className="p-4 space-y-2">
-            <p className="text-xs text-muted mb-1">جریان کل ماه</p>
-            <div className="flex items-center gap-3 text-sm font-bold">
-              <span className="text-accent">+{format(overview?.monthIncome ?? 0, { withSuffix: true })}</span>
-              <span className="text-waste">-{format(overview?.monthExpense ?? 0, { withSuffix: true })}</span>
-            </div>
-            <p className="text-xs text-muted border-t border-line pt-2">
-              کار مفید: <span className="text-ink font-bold">{formatDuration(overview?.monthProductiveMinutes ?? 0)}</span>
-            </p>
-          </Card>
-
-          <Card className="p-4 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">دسته‌بندی منتخب</p>
-              <button
-                onClick={() => setShowFeaturedPicker(true)}
-                className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
-              >
-                {overview?.featured ? `${overview.featured.icon ?? ""} ${overview.featured.name}` : "دسته‌بندی ویژه +"}
-              </button>
-            </div>
-            {overview?.featured && overview.monthFeaturedTotal !== null ? (
-              <p className="text-sm font-bold text-ink">
-                {overview.featured.type === "habit" ? `${toPersianDigits(overview.monthFeaturedTotal)} روز` : formatDuration(overview.monthFeaturedTotal)}
+          <div className="flex gap-2">
+            <Card className="flex-1 min-w-0 p-2.5 space-y-1">
+              <p className="text-[11px] text-muted">جریان کل ماه</p>
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <span className="text-accent">+{format(overview?.monthIncome ?? 0, { withSuffix: true })}</span>
+                <span className="text-waste">-{format(overview?.monthExpense ?? 0, { withSuffix: true })}</span>
+              </div>
+              <p className="text-[11px] text-muted truncate">
+                کار مفید: <span className="text-ink font-bold">{formatDuration(overview?.monthProductiveMinutes ?? 0)}</span>
               </p>
-            ) : (
-              <p className="text-xs text-muted">یک دسته‌بندی انتخاب کن تا مجموعش اینجا نشان داده شود.</p>
-            )}
-          </Card>
+            </Card>
+
+            <Card className="flex-1 min-w-0 p-2.5 space-y-1">
+              <div className="flex items-center justify-between gap-1.5">
+                <p className="text-[11px] text-muted shrink-0">دسته منتخب</p>
+                <button
+                  onClick={() => setShowFeaturedPicker(true)}
+                  className="min-w-0 truncate text-[11px] text-muted hover:text-ink bg-canvas rounded-full px-2 py-1"
+                >
+                  {overview?.featured ? `${overview.featured.icon ?? ""} ${overview.featured.name}` : "انتخاب +"}
+                </button>
+              </div>
+              {overview?.featured && overview.monthFeaturedTotal !== null ? (
+                <p className="text-sm font-bold text-ink truncate">
+                  {overview.featured.type === "habit" ? `${toPersianDigits(overview.monthFeaturedTotal)} روز` : formatDuration(overview.monthFeaturedTotal)}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted truncate">دسته‌ای انتخاب کن</p>
+              )}
+            </Card>
+          </div>
 
           <Card className="p-3">
             <div className="grid grid-cols-7 text-center text-xs text-muted mb-2">
