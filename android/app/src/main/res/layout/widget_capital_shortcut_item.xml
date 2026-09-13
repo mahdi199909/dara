@@ -9,7 +9,7 @@
     android:textColor="#374151"
     android:textDirection="rtl"
     android:textSize="12sp"
-    android:fontFamily="@font/vazirmatn"
+    android:fontFamily="sans-serif"
     android:gravity="center"
     android:maxLines="1"
     android:ellipsize="end"

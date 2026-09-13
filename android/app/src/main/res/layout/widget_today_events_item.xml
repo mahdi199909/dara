@@ -17,7 +17,7 @@
         android:textAlignment="viewStart"
         android:textColor="#374151"
         android:textSize="12sp"
-        android:fontFamily="@font/vazirmatn"
+        android:fontFamily="sans-serif"
         android:maxLines="1"
         android:ellipsize="end" />
 
@@ -29,5 +29,5 @@
         android:textColor="#0E5F54"
         android:textSize="12sp"
         android:textStyle="bold"
-        android:fontFamily="@font/vazirmatn" />
+        android:fontFamily="sans-serif" />
 </LinearLayout>

@@ -7,4 +7,4 @@
     android:textAlignment="viewStart"
     android:textColor="#9CA3AF"
     android:textSize="12sp"
-    android:fontFamily="@font/vazirmatn" />
+    android:fontFamily="sans-serif" />

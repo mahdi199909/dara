@@ -39,7 +39,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:textStyle="bold"
-                android:fontFamily="@font/vazirmatn" />
+                android:fontFamily="sans-serif" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -47,7 +47,7 @@
                 android:text="@string/widget_capture_subtitle"
                 android:textColor="#D9DEFA"
                 android:textSize="11sp"
-                android:fontFamily="@font/vazirmatn" />
+                android:fontFamily="sans-serif" />
         </LinearLayout>
 
         <TextView
@@ -57,6 +57,6 @@
             android:textColor="#FFFFFF"
             android:textSize="26sp"
             android:textStyle="bold"
-            android:fontFamily="@font/vazirmatn" />
+            android:fontFamily="sans-serif" />
     </LinearLayout>
 </FrameLayout>
