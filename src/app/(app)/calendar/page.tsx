@@ -10,7 +10,7 @@ import { ChevronRightIcon, ChevronLeftIcon, PlusIcon, CheckSquareIcon } from "@/
 import EventFormModal from "@/components/calendar/EventFormModal";
 import DayDetailModal from "@/components/calendar/DayDetailModal";
 import FeaturedMetricPicker from "@/components/calendar/FeaturedMetricPicker";
-import { toPersianDigits } from "@/lib/money";
+import { toPersianDigits, compactDuration, formatDuration } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { dayKeyIso } from "@/lib/calendarGrid";
 
@@ -50,19 +50,18 @@ export default function CalendarPage() {
 
   const { jy, jm } = toJalali(cursor);
 
-  const { data: overviewData, mutate: mutateOverview } = useSWR<{ overview: { days: any[]; monthIncome: number; monthExpense: number; featured: any } }>(
-    view === "month" ? `/api/calendar/month-overview?jy=${jy}&jm=${jm}` : null,
-    fetcher
-  );
+  const { data: overviewData, mutate: mutateOverview } = useSWR<{
+    overview: { days: any[]; monthIncome: number; monthExpense: number; monthProductiveMinutes: number; monthFeaturedTotal: number | null; featured: any };
+  }>(view === "month" ? `/api/calendar/month-overview?jy=${jy}&jm=${jm}` : null, fetcher);
   const overview = overviewData?.overview;
   const overviewByDay = useMemo(() => {
-    const map = new Map<string, { income: number; expense: number; productiveValue: number; featuredValue: number | null }>();
+    const map = new Map<string, { income: number; expense: number; productiveMinutes: number; featuredValue: number | null }>();
     for (const d of overview?.days ?? []) map.set(d.date, d);
     return map;
   }, [overview]);
 
   const { data: yearOverviewData, mutate: mutateYearOverview } = useSWR<{
-    overview: { months: any[]; yearIncome: number; yearExpense: number; featured: any };
+    overview: { months: any[]; yearIncome: number; yearExpense: number; yearProductiveMinutes: number; yearFeaturedTotal: number | null; featured: any };
   }>(view === "year" ? `/api/calendar/year-overview?jy=${jy}` : null, fetcher);
   const yearOverview = yearOverviewData?.overview;
 
@@ -199,25 +198,43 @@ export default function CalendarPage() {
 
       {view === "year" && (
         <>
-          <Card className="p-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted mb-1">جریان این سال</p>
-              <div className="flex items-center gap-3 text-sm font-bold">
-                <span className="text-accent">+{format(yearOverview?.yearIncome ?? 0, { withSuffix: true })}</span>
-                <span className="text-waste">-{format(yearOverview?.yearExpense ?? 0, { withSuffix: true })}</span>
+          <Card className="p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted mb-1">جریان این سال</p>
+                <div className="flex items-center gap-3 text-sm font-bold">
+                  <span className="text-accent">+{format(yearOverview?.yearIncome ?? 0, { withSuffix: true })}</span>
+                  <span className="text-waste">-{format(yearOverview?.yearExpense ?? 0, { withSuffix: true })}</span>
+                </div>
               </div>
+              <button
+                onClick={() => setShowFeaturedPicker(true)}
+                className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
+              >
+                {yearOverview?.featured ? `${yearOverview.featured.icon ?? ""} ${yearOverview.featured.name}` : "دسته‌بندی ویژه +"}
+              </button>
             </div>
-            <button
-              onClick={() => setShowFeaturedPicker(true)}
-              className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
-            >
-              {yearOverview?.featured ? `${yearOverview.featured.icon ?? ""} ${yearOverview.featured.name}` : "دسته‌بندی ویژه +"}
-            </button>
+            <div className="flex items-center gap-4 text-xs text-muted border-t border-line pt-2">
+              <span>
+                کار مفید: <span className="text-ink font-bold">{formatDuration(yearOverview?.yearProductiveMinutes ?? 0)}</span>
+              </span>
+              {yearOverview?.featured && yearOverview.yearFeaturedTotal !== null && (
+                <span>
+                  {yearOverview.featured.name}:{" "}
+                  <span className="text-ink font-bold">
+                    {yearOverview.featured.type === "habit"
+                      ? `${toPersianDigits(yearOverview.yearFeaturedTotal)} روز`
+                      : formatDuration(yearOverview.yearFeaturedTotal)}
+                  </span>
+                </span>
+              )}
+            </div>
           </Card>
 
           <div className="grid grid-cols-3 gap-2">
-            {(yearOverview?.months ?? Array.from({ length: 12 }, (_, i) => ({ jm: i + 1, income: 0, expense: 0, productiveValue: 0, featuredValue: null }))).map(
-              (m) => (
+            {(
+              yearOverview?.months ?? Array.from({ length: 12 }, (_, i) => ({ jm: i + 1, income: 0, expense: 0, productiveMinutes: 0, featuredValue: null }))
+            ).map((m) => (
                 <button
                   key={m.jm}
                   onClick={() => openMonth(m.jm)}
@@ -229,10 +246,10 @@ export default function CalendarPage() {
                   <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[9px] leading-tight font-medium">
                     {m.income > 0 && <span className="text-accent">+{compactMoney(m.income)}</span>}
                     {m.expense > 0 && <span className="text-waste">-{compactMoney(m.expense)}</span>}
-                    {m.productiveValue > 0 && <span className="text-ink">⚡{compactMoney(m.productiveValue)}</span>}
+                    {m.productiveMinutes > 0 && <span className="text-ink">⚡{compactDuration(m.productiveMinutes)}</span>}
                     {m.featuredValue !== null && m.featuredValue > 0 && (
                       <span className="text-muted">
-                        ★{yearOverview?.featured?.type === "habit" ? toPersianDigits(m.featuredValue) + "روز" : compactMoney(m.featuredValue) + "د"}
+                        ★{yearOverview?.featured?.type === "habit" ? toPersianDigits(m.featuredValue) + "روز" : compactDuration(m.featuredValue)}
                       </span>
                     )}
                   </div>
@@ -245,20 +262,35 @@ export default function CalendarPage() {
 
       {view === "month" && (
         <>
-          <Card className="p-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted mb-1">جریان این ماه</p>
-              <div className="flex items-center gap-3 text-sm font-bold">
-                <span className="text-accent">+{format(overview?.monthIncome ?? 0, { withSuffix: true })}</span>
-                <span className="text-waste">-{format(overview?.monthExpense ?? 0, { withSuffix: true })}</span>
+          <Card className="p-4 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted mb-1">جریان این ماه</p>
+                <div className="flex items-center gap-3 text-sm font-bold">
+                  <span className="text-accent">+{format(overview?.monthIncome ?? 0, { withSuffix: true })}</span>
+                  <span className="text-waste">-{format(overview?.monthExpense ?? 0, { withSuffix: true })}</span>
+                </div>
               </div>
+              <button
+                onClick={() => setShowFeaturedPicker(true)}
+                className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
+              >
+                {overview?.featured ? `${overview.featured.icon ?? ""} ${overview.featured.name}` : "دسته‌بندی ویژه +"}
+              </button>
             </div>
-            <button
-              onClick={() => setShowFeaturedPicker(true)}
-              className="shrink-0 text-xs text-muted hover:text-ink bg-canvas rounded-full px-3 py-1.5"
-            >
-              {overview?.featured ? `${overview.featured.icon ?? ""} ${overview.featured.name}` : "دسته‌بندی ویژه +"}
-            </button>
+            <div className="flex items-center gap-4 text-xs text-muted border-t border-line pt-2">
+              <span>
+                کار مفید: <span className="text-ink font-bold">{formatDuration(overview?.monthProductiveMinutes ?? 0)}</span>
+              </span>
+              {overview?.featured && overview.monthFeaturedTotal !== null && (
+                <span>
+                  {overview.featured.name}:{" "}
+                  <span className="text-ink font-bold">
+                    {overview.featured.type === "habit" ? `${toPersianDigits(overview.monthFeaturedTotal)} روز` : formatDuration(overview.monthFeaturedTotal)}
+                  </span>
+                </span>
+              )}
+            </div>
           </Card>
 
           <Card className="p-3">
@@ -284,11 +316,9 @@ export default function CalendarPage() {
                       <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[8px] leading-tight font-medium">
                         {summary.income > 0 && <span className="text-accent">+{compactMoney(summary.income)}</span>}
                         {summary.expense > 0 && <span className="text-waste">-{compactMoney(summary.expense)}</span>}
-                        {summary.productiveValue > 0 && <span className="text-ink">⚡{compactMoney(summary.productiveValue)}</span>}
+                        {summary.productiveMinutes > 0 && <span className="text-ink">⚡{compactDuration(summary.productiveMinutes)}</span>}
                         {summary.featuredValue !== null && summary.featuredValue > 0 && (
-                          <span className="text-muted">
-                            ★{overview?.featured?.type === "habit" ? "" : compactMoney(summary.featuredValue) + "د"}
-                          </span>
+                          <span className="text-muted">★{overview?.featured?.type === "habit" ? "" : compactDuration(summary.featuredValue)}</span>
                         )}
                       </div>
                     )}

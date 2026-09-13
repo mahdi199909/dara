@@ -209,16 +209,37 @@ export function updateInstallmentPlan(
   return fresh;
 }
 
-export function deleteInstallmentPlan(db: LocalDb, userId: string, id: string): { ok: true } {
+/**
+ * deleteTransactions decides what happens to the EXPENSE transactions a plan's paid
+ * installments already created: true removes them too (a clean, full undo of the whole plan);
+ * false (the default) leaves them exactly as they are — soft-deleting the plan never touched
+ * them anyway, this is just about whether the caller explicitly wants them gone as well. The
+ * old hard 409 block forced every plan with any payment history to keep existing forever; the
+ * real safety concern (silently losing financial records) is handled by making transaction
+ * removal an explicit, separate choice instead.
+ */
+export function deleteInstallmentPlan(db: LocalDb, userId: string, id: string, deleteTransactions = false): { ok: true } {
   const existing = getOwnedPlan(db, userId, id);
+  const ts = now();
 
-  const paidCount = existing.installments.filter((i) => i.status === "PAID").length;
-  if (paidCount > 0) {
-    throw new ApiError("طرحی که پرداخت انجام‌شده دارد قابل حذف نیست تا صحت گزارش‌ها حفظ شود.", 409);
+  if (deleteTransactions && existing.installments.length > 0) {
+    const placeholders = existing.installments.map(() => "?").join(",");
+    db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "installmentId" IN (${placeholders})`, [
+      ts,
+      ts,
+      ...existing.installments.map((i) => i.id),
+    ]);
   }
 
-  db.run(`UPDATE "InstallmentPlan" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
-  writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "InstallmentPlan", entityId: id, oldValue: existing });
+  db.run(`UPDATE "InstallmentPlan" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [ts, ts, id]);
+  writeLocalAuditLog(db, {
+    userId,
+    action: "DELETE",
+    entityType: "InstallmentPlan",
+    entityId: id,
+    oldValue: existing,
+    metadata: { deleteTransactions },
+  });
   return { ok: true };
 }
 

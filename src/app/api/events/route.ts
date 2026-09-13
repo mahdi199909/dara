@@ -56,7 +56,14 @@ export async function GET(req: NextRequest) {
         include: { category: true, project: true, reminders: true },
       }),
       prisma.task.findMany({
-        where: { userId, deletedAt: null, dueDate: { gte: rangeStart, lte: rangeEnd } },
+        // A task can be "for" this range either by its dueDate OR by having been time-logged
+        // (startAt) in it — matching dueDate alone missed a task Quick-Captured with a specific
+        // time but no separate due date, so it never showed up in that day's detail view.
+        where: {
+          userId,
+          deletedAt: null,
+          OR: [{ dueDate: { gte: rangeStart, lte: rangeEnd } }, { startAt: { gte: rangeStart, lte: rangeEnd } }],
+        },
         include: { category: true, project: true },
         orderBy: { dueDate: "asc" },
       }),

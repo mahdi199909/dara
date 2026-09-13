@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
-import { formatDuration, truncateLabel, toPersianDigits } from "@/lib/money";
+import { formatDuration, truncateLabel, toPersianDigits, compactDuration } from "@/lib/money";
 import { formatJalali, formatJalaliMonthYear, toJalali, formatTime } from "@/lib/jalali";
 import { getJalaliMonthGrid, addJalaliMonths, dayKeyIso } from "@/lib/calendarGrid";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
@@ -568,13 +568,6 @@ function HiddenCostTab({ hiddenCost }: { hiddenCost: any }) {
 }
 
 const WEEKDAY_HEADERS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
-
-/** Compact duration for a small calendar cell — "۴۵د" or "۲.۵س", not the full "X ساعت و Y دقیقه". */
-function compactDuration(minutes: number): string {
-  if (minutes < 60) return `${toPersianDigits(minutes)}د`;
-  const hours = Math.round((minutes / 60) * 10) / 10;
-  return `${toPersianDigits(hours)}س`;
-}
 
 function CategoryCalendarTab() {
   const [cursor, setCursor] = useState(new Date());

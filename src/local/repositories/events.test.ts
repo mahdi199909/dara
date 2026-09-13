@@ -201,6 +201,20 @@ describe("local events repository", () => {
     expect(result.taskOccurrences[0].category?.name).toBe("کاری");
   });
 
+  it("also matches a task by startAt, even when its dueDate falls outside the range", async () => {
+    const db = await freshDb();
+    const now = new Date().toISOString();
+    // dueDate is a month before the queried range, but the task was actually time-logged
+    // (startAt/endAt) inside it — this must still surface as that day's task.
+    db.run(
+      `INSERT INTO "Task" ("id","userId","title","dueDate","startAt","endAt","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
+      ["task_2", USER_ID, "زمان‌دار بدون سررسید نزدیک", "2026-05-01T00:00:00.000Z", "2026-06-15T08:00:00.000Z", "2026-06-15T09:00:00.000Z", now, now]
+    );
+
+    const result = listEvents(db, USER_ID, { from: "2026-06-01T00:00:00.000Z", to: "2026-06-30T23:59:59.000Z" }) as any;
+    expect(result.taskOccurrences.map((t: any) => t.title)).toContain("زمان‌دار بدون سررسید نزدیک");
+  });
+
   it("throws a 404 ApiError for an event or reminder belonging to another user", async () => {
     const db = await freshDb();
     addOtherUser(db);

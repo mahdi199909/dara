@@ -89,6 +89,14 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
 
   const valid = entries.filter(isQueuedCapture);
   let applied = 0;
+  // Entries that fail stay queued for the next drain instead of being wiped along with the
+  // ones that succeeded — this used to unconditionally clear the whole queue after the loop, so
+  // a single throwing entry (the native widget already shows "ثبت شد" before this ever runs, so
+  // the user has no other signal anything went wrong) silently and PERMANENTLY lost that capture,
+  // with no log line anywhere. Retrying forever on every app open/resume is the safer failure
+  // mode here — a capture that never manages to apply just sits harmlessly in the queue instead
+  // of vanishing.
+  const failed: unknown[] = [];
   for (const entry of valid) {
     try {
       const activity = createActivity(db, userId, {
@@ -100,14 +108,17 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
         durationMin: entry.durationMinutes,
       });
       applied++;
-    } catch {
-      // A stale categoryId (e.g. deleted while the app was closed) throws a foreign-key error —
-      // skip this one entry rather than leave the whole queue stuck un-cleared, same
-      // fault-isolation as drainHabitCheckInQueue below already had.
+    } catch (err) {
+      console.error("drainCaptureQueue: failed to apply a queued widget capture, will retry next drain", entry, err);
+      failed.push(entry);
     }
   }
 
-  await Preferences.remove({ key: QUEUE_KEY });
+  if (failed.length > 0) {
+    await Preferences.set({ key: QUEUE_KEY, value: JSON.stringify(failed) });
+  } else {
+    await Preferences.remove({ key: QUEUE_KEY });
+  }
   return applied;
 }
 
@@ -132,17 +143,24 @@ async function drainHabitCheckInQueue(db: LocalDb, userId: string): Promise<numb
 
   const valid = entries.filter(isQueuedHabitCheckIn);
   let applied = 0;
+  // Same fix as drainCaptureQueue above — keep failed entries queued for retry instead of
+  // wiping them along with the ones that succeeded.
+  const failed: unknown[] = [];
   for (const entry of valid) {
     try {
       toggleHabitCheckIn(db, userId, entry.habitId, { date: entry.date });
       applied++;
-    } catch {
-      // Habit no longer exists (or some other read/write issue) — skip rather than let one bad
-      // queued entry block the rest of the drain.
+    } catch (err) {
+      console.error("drainHabitCheckInQueue: failed to apply a queued habit toggle, will retry next drain", entry, err);
+      failed.push(entry);
     }
   }
 
-  await Preferences.remove({ key: HABIT_CHECKIN_QUEUE_KEY });
+  if (failed.length > 0) {
+    await Preferences.set({ key: HABIT_CHECKIN_QUEUE_KEY, value: JSON.stringify(failed) });
+  } else {
+    await Preferences.remove({ key: HABIT_CHECKIN_QUEUE_KEY });
+  }
   return applied;
 }
 

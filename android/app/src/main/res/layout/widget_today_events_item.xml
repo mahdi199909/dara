@@ -17,6 +17,7 @@
         android:textAlignment="viewStart"
         android:textColor="#374151"
         android:textSize="12sp"
+        android:fontFamily="@font/vazirmatn"
         android:maxLines="1"
         android:ellipsize="end" />
 
@@ -27,5 +28,6 @@
         android:layout_marginStart="8dp"
         android:textColor="#0E5F54"
         android:textSize="12sp"
-        android:textStyle="bold" />
+        android:textStyle="bold"
+        android:fontFamily="@font/vazirmatn" />
 </LinearLayout>

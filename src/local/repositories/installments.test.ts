@@ -70,7 +70,7 @@ describe("local installments", () => {
     expect(() => payInstallment(db, USER_ID, installment.id, { accountId: "acc_1" })).toThrow("این قسط قبلاً پرداخت شده است.");
   });
 
-  it("refuses to delete a plan that has at least one paid installment", async () => {
+  it("deleting a plan with a paid installment leaves its transaction untouched by default", async () => {
     const db = await freshDb();
     db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
     const plan = createInstallmentPlan(db, USER_ID, {
@@ -80,9 +80,31 @@ describe("local installments", () => {
       numberOfInstallments: 1,
       dueDay: 1,
     });
-    payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
+    const { transaction } = payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
 
-    expect(() => deleteInstallmentPlan(db, USER_ID, plan.id)).toThrow("طرحی که پرداخت انجام‌شده دارد قابل حذف نیست تا صحت گزارش‌ها حفظ شود.");
+    deleteInstallmentPlan(db, USER_ID, plan.id);
+
+    expect(() => getInstallmentPlan(db, USER_ID, plan.id)).toThrow("طرح قسط پیدا نشد.");
+    const txRow = db.get<{ deletedAt: string | null }>(`SELECT "deletedAt" FROM "Transaction" WHERE "id" = ?`, [transaction.id]);
+    expect(txRow?.deletedAt).toBeNull();
+  });
+
+  it("deleting a plan with deleteTransactions=true also soft-deletes its paid installments' transactions", async () => {
+    const db = await freshDb();
+    db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
+    const plan = createInstallmentPlan(db, USER_ID, {
+      title: "وام",
+      totalAmount: 1000000,
+      installmentAmount: 1000000,
+      numberOfInstallments: 1,
+      dueDay: 1,
+    });
+    const { transaction } = payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
+
+    deleteInstallmentPlan(db, USER_ID, plan.id, true);
+
+    const txRow = db.get<{ deletedAt: string | null }>(`SELECT "deletedAt" FROM "Transaction" WHERE "id" = ?`, [transaction.id]);
+    expect(txRow?.deletedAt).not.toBeNull();
   });
 
   it("updates title/notes without touching the schedule", async () => {

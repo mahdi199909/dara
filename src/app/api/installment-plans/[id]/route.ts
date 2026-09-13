@@ -75,13 +75,19 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
+    // Explicit, caller-chosen cascade instead of an old hard 409 block that kept every plan
+    // with any payment history around forever — see local repo's deleteInstallmentPlan for why.
+    const deleteTransactions = new URL(req.url).searchParams.get("deleteTransactions") === "true";
+    const ts = new Date();
 
-    const paidCount = existing.installments.filter((i) => i.status === "PAID").length;
-    if (paidCount > 0) {
-      throw new ApiError("طرحی که پرداخت انجام‌شده دارد قابل حذف نیست تا صحت گزارش‌ها حفظ شود.", 409);
+    if (deleteTransactions && existing.installments.length > 0) {
+      await prisma.transaction.updateMany({
+        where: { installmentId: { in: existing.installments.map((i) => i.id) } },
+        data: { deletedAt: ts },
+      });
     }
 
-    await prisma.installmentPlan.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+    await prisma.installmentPlan.update({ where: { id: params.id }, data: { deletedAt: ts } });
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({
@@ -90,6 +96,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       entityType: "InstallmentPlan",
       entityId: params.id,
       oldValue: existing,
+      metadata: { deleteTransactions },
       ipAddress,
       userAgent,
     });

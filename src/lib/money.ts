@@ -80,6 +80,13 @@ export function formatDuration(minutes: number, opts?: { persianDigits?: boolean
   return `${p(h)} ساعت و ${p(m)} دقیقه`;
 }
 
+/** Compact duration for a small calendar cell — "۴۵د" or "۲.۵س", not the full "X ساعت و Y دقیقه". */
+export function compactDuration(minutes: number): string {
+  if (minutes < 60) return `${toPersianDigits(minutes)}د`;
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `${toPersianDigits(hours)}س`;
+}
+
 /** Parses a free-form amount string (supports Persian digits, thousand separators, و "هزار"/"میلیون"/"میلیارد" suffixes) into an integer Toman value. Returns null if nothing parseable. */
 export function parseAmount(raw: string): number | null {
   let s = toAsciiDigits(raw).trim();

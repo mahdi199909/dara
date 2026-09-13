@@ -111,9 +111,9 @@ export default function DayDetailModal({ date, onClose, onChanged }: DayDetailMo
                     {tasks.map((t: any) => (
                       <div key={t.id} className="flex items-center gap-2 py-2 px-1">
                         <span className="w-5 h-5 shrink-0 flex items-center justify-center">
-                          <CheckSquareIcon className="w-4 h-4 text-amber-500" />
+                          <CheckSquareIcon className={`w-4 h-4 ${t.status === "DONE" ? "text-accent" : "text-amber-500"}`} />
                         </span>
-                        <p className="text-sm text-ink flex-1">{t.title}</p>
+                        <p className={`text-sm flex-1 ${t.status === "DONE" ? "text-muted line-through" : "text-ink"}`}>{t.title}</p>
                       </div>
                     ))}
                   </Card>

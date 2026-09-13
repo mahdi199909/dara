@@ -189,9 +189,14 @@ export function listEvents(db: LocalDb, userId: string, range: { from?: string |
   );
   const events = withReminders(db, withProject(db, withCategory(db, eventRows.map(toEvent))));
 
+  // A task can be "for" this range either by its dueDate OR by having been time-logged (startAt)
+  // in it — matching dueDate alone missed a task Quick-Captured with a specific time but no
+  // separate due date, so it never showed up in that day's detail view. Mirrors the web route.
   const taskRows = db.all<TaskRow>(
-    `SELECT * FROM "Task" WHERE "userId" = ? AND "deletedAt" IS NULL AND "dueDate" >= ? AND "dueDate" <= ? ORDER BY "dueDate" ASC`,
-    [userId, fromIso, toIso]
+    `SELECT * FROM "Task" WHERE "userId" = ? AND "deletedAt" IS NULL
+     AND (("dueDate" >= ? AND "dueDate" <= ?) OR ("startAt" >= ? AND "startAt" <= ?))
+     ORDER BY "dueDate" ASC`,
+    [userId, fromIso, toIso, fromIso, toIso]
   );
   const taskOccurrences = withProject(db, withCategory(db, taskRows));
 

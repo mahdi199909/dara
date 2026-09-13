@@ -69,6 +69,9 @@ export default function CaptureForm({
   const [valueType, setValueType] = useState<ValueType>("EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
+  // Which parent category's sub-categories are currently shown as a second chip row — a
+  // sub-category is only ever reachable by first picking its parent (see pickCategory).
+  const [expandedParentId, setExpandedParentId] = useState<string | null>(null);
   const [day, setDay] = useState(initialStart ?? new Date());
   const [startTime, setStartTime] = useState(initialStart ? hhmm(initialStart) : "");
   const [endTime, setEndTime] = useState(initialEnd ? hhmm(initialEnd) : "");
@@ -90,6 +93,8 @@ export default function CaptureForm({
       seenCategoryNames.add(c.name);
       return true;
     });
+  const topLevelCategories = visibleCategories.filter((c: any) => !c.parentCategoryId);
+  const expandedSubCategories = expandedParentId ? visibleCategories.filter((c: any) => c.parentCategoryId === expandedParentId) : [];
 
   useEffect(() => {
     // Selected category no longer matches the visible (filtered) list — clear it rather
@@ -97,6 +102,10 @@ export default function CaptureForm({
     if (categoryId && !visibleCategories.some((c: any) => c.id === categoryId)) {
       setCategoryId(null);
       setProjectId(null);
+    }
+    // Same idea for an expanded sub-category row left over from before the tab switch.
+    if (expandedParentId && !visibleCategories.some((c: any) => c.id === expandedParentId)) {
+      setExpandedParentId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valueType, categories]);
@@ -111,6 +120,16 @@ export default function CaptureForm({
     // the entry to that project, so it shows up in the project's own cash flow / cost view
     // without a second "which project" step.
     setProjectId(cat.projectId ?? null);
+  }
+
+  // A parent category (e.g. "سرمایه‌گذاری") is itself a usable choice — tapping it selects it
+  // AND reveals its sub-categories (e.g. طلا/دلار/رمزارز) as a second row; tapping one of those
+  // then overrides the selection to that sub-category. If the user never picks a sub-category,
+  // the parent itself is what gets submitted — no forced second step.
+  function pickTopLevelCategory(cat: any) {
+    pickCategory(cat);
+    const hasSubCategories = visibleCategories.some((c: any) => c.parentCategoryId === cat.id);
+    setExpandedParentId(hasSubCategories ? cat.id : null);
   }
 
   async function createCategoryInline() {
@@ -150,6 +169,10 @@ export default function CaptureForm({
         const dueDate = new Date(`${day10}T00:00:00`);
         const startAt = startTime ? new Date(`${day10}T${startTime}:00`) : undefined;
         const endAt = endTime ? new Date(`${day10}T${endTime}:00`) : undefined;
+        // Only when a time was actually entered — a bare day with no time isn't a strong enough
+        // signal either way, and would wrongly mark every same-day task "done" once midnight passes.
+        const referenceTime = endAt ?? startAt;
+        const status = referenceTime ? (referenceTime < new Date() ? "DONE" : "TODO") : undefined;
 
         await apiPost("/api/tasks", {
           title,
@@ -157,6 +180,7 @@ export default function CaptureForm({
           projectId: projectId ?? undefined,
           dueDate: dueDate.toISOString(),
           valueType,
+          status,
           directCost: flowType === "COST" ? amountNum : undefined,
           incomeAmount: flowType === "INCOME" ? amountNum : undefined,
           startAt: startAt?.toISOString(),
@@ -177,7 +201,7 @@ export default function CaptureForm({
           allDay = true;
         }
 
-        await apiPost("/api/events", {
+        const { event } = await apiPost<{ event: { id: string } }>("/api/events", {
           title,
           startAt: startAt.toISOString(),
           endAt: endAt.toISOString(),
@@ -188,6 +212,11 @@ export default function CaptureForm({
           directCost: flowType === "COST" ? amountNum : undefined,
           incomeAmount: flowType === "INCOME" ? amountNum : undefined,
         });
+        // Same "already happened" default as a Task, expressed the way events track
+        // completion — a fresh EventCompletion row rather than a status field.
+        if (startTime && endAt < new Date()) {
+          await apiPost(`/api/events/${event.id}/complete`, { occurrenceDate: startAt.toISOString() });
+        }
       }
 
       refreshAllCaches();
@@ -215,7 +244,6 @@ export default function CaptureForm({
     <form onSubmit={submit} className="space-y-4">
       <div>
         <input
-          autoFocus
           required
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -282,13 +310,13 @@ export default function CaptureForm({
       <div>
         <p className="text-xs text-muted mb-1.5">دسته‌بندی</p>
         <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-          {visibleCategories.map((c: any) => (
+          {topLevelCategories.map((c: any) => (
             <button
               type="button"
               key={c.id}
-              onClick={() => pickCategory(c)}
+              onClick={() => pickTopLevelCategory(c)}
               className={`shrink-0 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition ${
-                categoryId === c.id ? "bg-accent text-on-accent border-accent" : "bg-surface text-ink border-line"
+                categoryId === c.id || expandedParentId === c.id ? "bg-accent text-on-accent border-accent" : "bg-surface text-ink border-line"
               }`}
             >
               <span>{c.icon}</span>
@@ -304,6 +332,23 @@ export default function CaptureForm({
             دسته‌بندی جدید
           </button>
         </div>
+        {expandedSubCategories.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 mt-1.5 pr-3 border-r-2 border-line">
+            {expandedSubCategories.map((c: any) => (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => pickCategory(c)}
+                className={`shrink-0 flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition ${
+                  categoryId === c.id ? "bg-accent-soft text-accent border-accent" : "bg-canvas text-muted border-line"
+                }`}
+              >
+                <span>{c.icon}</span>
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
         {visibleCategories.length === 0 && !addingCategory && (
           <p className="text-xs text-muted mt-1">دسته‌بندی‌ای برای «{VALUE_TYPE_LABELS[valueType]}» فعال نیست.</p>
         )}

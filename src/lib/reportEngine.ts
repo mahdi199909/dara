@@ -596,7 +596,7 @@ export interface CalendarDaySummary {
   date: string;
   income: number;
   expense: number;
-  productiveValue: number;
+  productiveMinutes: number;
   featuredValue: number | null;
 }
 export interface CalendarFeaturedMetric {
@@ -609,6 +609,8 @@ export interface CalendarMonthOverview {
   days: CalendarDaySummary[];
   monthIncome: number;
   monthExpense: number;
+  monthProductiveMinutes: number;
+  monthFeaturedTotal: number | null;
   featured: CalendarFeaturedMetric | null;
 }
 
@@ -619,15 +621,15 @@ export async function computeCalendarMonthOverview(
   featuredType: string | null,
   featuredId: string | null
 ): Promise<CalendarMonthOverview> {
-  const byDay = new Map<string, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  const byDay = new Map<string, { income: number; expense: number; productiveMinutes: number; featuredValue: number }>();
   function ensure(key: string) {
-    if (!byDay.has(key)) byDay.set(key, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    if (!byDay.has(key)) byDay.set(key, { income: 0, expense: 0, productiveMinutes: 0, featuredValue: 0 });
     return byDay.get(key)!;
   }
 
   const [transactions, vaEntries] = await Promise.all([
     prisma.transaction.findMany({ where: { userId, deletedAt: null, date: { gte: from, lte: to } }, select: { date: true, type: true, amount: true } }),
-    prisma.virtualAssetEntry.findMany({ where: { userId, date: { gte: from, lte: to } }, select: { date: true, totalValue: true } }),
+    prisma.virtualAssetEntry.findMany({ where: { userId, date: { gte: from, lte: to } }, select: { date: true, durationMin: true } }),
   ]);
 
   let monthIncome = 0;
@@ -642,7 +644,13 @@ export async function computeCalendarMonthOverview(
       monthExpense += t.amount;
     }
   }
-  for (const v of vaEntries) ensure(dayKeyIso(v.date)).productiveValue += v.totalValue;
+  // "useful work as an asset" is shown as time spent, not its Toman equivalent — durationMin,
+  // not totalValue (see VirtualAssetEntry).
+  let monthProductiveMinutes = 0;
+  for (const v of vaEntries) {
+    ensure(dayKeyIso(v.date)).productiveMinutes += v.durationMin;
+    monthProductiveMinutes += v.durationMin;
+  }
 
   let featured: CalendarFeaturedMetric | null = null;
   if (featuredType === "category" && featuredId) {
@@ -666,11 +674,12 @@ export async function computeCalendarMonthOverview(
     date,
     income: v.income,
     expense: v.expense,
-    productiveValue: v.productiveValue,
+    productiveMinutes: v.productiveMinutes,
     featuredValue: featured ? v.featuredValue : null,
   }));
+  const monthFeaturedTotal = featured ? days.reduce((s, d) => s + (d.featuredValue ?? 0), 0) : null;
 
-  return { days, monthIncome, monthExpense, featured };
+  return { days, monthIncome, monthExpense, monthProductiveMinutes, monthFeaturedTotal, featured };
 }
 
 // --- computeCalendarYearOverview ---------------------------------------------------------------
@@ -680,13 +689,15 @@ export interface CalendarMonthSummary {
   jm: number;
   income: number;
   expense: number;
-  productiveValue: number;
+  productiveMinutes: number;
   featuredValue: number | null;
 }
 export interface CalendarYearOverview {
   months: CalendarMonthSummary[];
   yearIncome: number;
   yearExpense: number;
+  yearProductiveMinutes: number;
+  yearFeaturedTotal: number | null;
   featured: CalendarFeaturedMetric | null;
 }
 
@@ -699,9 +710,9 @@ export async function computeCalendarYearOverview(
   const { start: yearStart } = jalaliMonthRange(jy, 1);
   const { end: yearEnd } = jalaliMonthRange(jy, 12);
 
-  const byMonth = new Map<number, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  const byMonth = new Map<number, { income: number; expense: number; productiveMinutes: number; featuredValue: number }>();
   function ensure(jm: number) {
-    if (!byMonth.has(jm)) byMonth.set(jm, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    if (!byMonth.has(jm)) byMonth.set(jm, { income: 0, expense: 0, productiveMinutes: 0, featuredValue: 0 });
     return byMonth.get(jm)!;
   }
   for (let jm = 1; jm <= 12; jm++) ensure(jm);
@@ -711,7 +722,7 @@ export async function computeCalendarYearOverview(
       where: { userId, deletedAt: null, date: { gte: yearStart, lte: yearEnd } },
       select: { date: true, type: true, amount: true },
     }),
-    prisma.virtualAssetEntry.findMany({ where: { userId, date: { gte: yearStart, lte: yearEnd } }, select: { date: true, totalValue: true } }),
+    prisma.virtualAssetEntry.findMany({ where: { userId, date: { gte: yearStart, lte: yearEnd } }, select: { date: true, durationMin: true } }),
   ]);
 
   let yearIncome = 0;
@@ -726,7 +737,11 @@ export async function computeCalendarYearOverview(
       yearExpense += t.amount;
     }
   }
-  for (const v of vaEntries) ensure(toJalali(v.date).jm).productiveValue += v.totalValue;
+  let yearProductiveMinutes = 0;
+  for (const v of vaEntries) {
+    ensure(toJalali(v.date).jm).productiveMinutes += v.durationMin;
+    yearProductiveMinutes += v.durationMin;
+  }
 
   let featured: CalendarFeaturedMetric | null = null;
   if (featuredType === "category" && featuredId) {
@@ -752,11 +767,12 @@ export async function computeCalendarYearOverview(
       jm,
       income: v.income,
       expense: v.expense,
-      productiveValue: v.productiveValue,
+      productiveMinutes: v.productiveMinutes,
       featuredValue: featured ? v.featuredValue : null,
     }));
+  const yearFeaturedTotal = featured ? months.reduce((s, m) => s + (m.featuredValue ?? 0), 0) : null;
 
-  return { months, yearIncome, yearExpense, featured };
+  return { months, yearIncome, yearExpense, yearProductiveMinutes, yearFeaturedTotal, featured };
 }
 
 // --- computeFounderCapital ("سرمایه من") ----------------------------------------------------

@@ -26,6 +26,7 @@
         android:textAlignment="viewStart"
         android:textColor="#374151"
         android:textSize="12sp"
+        android:fontFamily="@font/vazirmatn"
         android:maxLines="1"
         android:ellipsize="end" />
 </LinearLayout>

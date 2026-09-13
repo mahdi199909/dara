@@ -280,7 +280,7 @@ describe("local reportEngine", () => {
       expect(day.featuredValue).toBeNull();
     });
 
-    it("sums VirtualAssetEntry.totalValue per day as productiveValue", async () => {
+    it("sums VirtualAssetEntry.durationMin per day as productiveMinutes (time, not its Toman value)", async () => {
       const db = await freshDb();
       db.run(
         `INSERT INTO "VirtualAssetEntry" ("id","userId","durationMin","valuePerHour","totalValue","date","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`,
@@ -288,7 +288,8 @@ describe("local reportEngine", () => {
       );
       const overview = computeCalendarMonthOverview(db, USER_ID, FROM, TO, null, null);
       const day = overview.days.find((d) => d.date === "2026-02-12")!;
-      expect(day.productiveValue).toBe(200_000);
+      expect(day.productiveMinutes).toBe(60);
+      expect(overview.monthProductiveMinutes).toBe(60);
     });
 
     it("fills featuredValue with per-day minutes for a featured category", async () => {
@@ -347,10 +348,10 @@ describe("local reportEngine", () => {
       const overview = computeCalendarYearOverview(db, USER_ID, JY, null, null);
       expect(overview.months).toHaveLength(12);
       expect(overview.months.map((m) => m.jm)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-      expect(overview.months.every((m) => m.income === 0 && m.expense === 0 && m.productiveValue === 0)).toBe(true);
+      expect(overview.months.every((m) => m.income === 0 && m.expense === 0 && m.productiveMinutes === 0)).toBe(true);
     });
 
-    it("buckets income/expense/productive value into the right Jalali month and sums year totals", async () => {
+    it("buckets income/expense/productive minutes into the right Jalali month and sums year totals", async () => {
       const db = await freshDb();
       db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
       db.run(
@@ -364,11 +365,12 @@ describe("local reportEngine", () => {
 
       const overview = computeCalendarYearOverview(db, USER_ID, JY, null, null);
       expect(overview.yearIncome).toBe(500_000);
+      expect(overview.yearProductiveMinutes).toBe(60);
       const month = overview.months.find((m) => m.jm === JM)!;
       expect(month.income).toBe(500_000);
-      expect(month.productiveValue).toBe(200_000);
+      expect(month.productiveMinutes).toBe(60);
       // every other month stays untouched
-      expect(overview.months.filter((m) => m.jm !== JM).every((m) => m.income === 0 && m.productiveValue === 0)).toBe(true);
+      expect(overview.months.filter((m) => m.jm !== JM).every((m) => m.income === 0 && m.productiveMinutes === 0)).toBe(true);
     });
 
     it("sums a featured category's minutes across the whole month, re-bucketed from its Gregorian day keys", async () => {

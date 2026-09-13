@@ -111,7 +111,7 @@ describe("drainWidgetQueue", () => {
     expect(activities.map((a) => a.title).sort()).toEqual(["اول", "دوم"]);
   });
 
-  it("skips a capture with a stale categoryId instead of failing the whole drain", async () => {
+  it("skips a capture with a stale categoryId instead of failing the whole drain, and keeps it queued for retry", async () => {
     const db = await freshDb();
     store.set(
       "widget_pending_captures",
@@ -123,9 +123,14 @@ describe("drainWidgetQueue", () => {
 
     const count = await drainWidgetQueue(db, USER_ID);
     expect(count).toBe(1);
-    expect(store.has("widget_pending_captures")).toBe(false);
     const activities = listActivities(db, USER_ID);
     expect(activities.map((a) => a.title)).toEqual(["معتبر"]);
+
+    // The failed entry must survive the drain instead of being wiped along with the succeeded
+    // one — silently discarding it here is the exact bug this test now guards against.
+    const remaining = JSON.parse(store.get("widget_pending_captures")!);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].title).toBe("دسته حذف‌شده");
   });
 
   it("accepts entries with an optional source field ('widget' or 'notification'), old entries without it, and rejects an invalid value", async () => {
@@ -199,6 +204,9 @@ describe("drainWidgetQueue — habit check-in toggles", () => {
     expect(count).toBe(1);
     const { habits } = listHabits(db, USER_ID);
     expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
+
+    const remaining = JSON.parse(store.get("widget_pending_habit_checkins")!);
+    expect(remaining).toEqual([{ habitId: "does-not-exist", date: todayIso }]);
   });
 
   it("ignores malformed entries and clears the queue regardless", async () => {

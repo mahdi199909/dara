@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories, useAccounts } from "@/lib/hooks";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
-import { formatJalali } from "@/lib/jalali";
+import { formatJalali, toJalali } from "@/lib/jalali";
 import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type AccountType } from "@/lib/types";
 import { computeLoanInterest, computeEffectiveAnnualRate } from "@/lib/installments";
@@ -514,9 +514,34 @@ function InstallmentsTab() {
   const { data, mutate } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
   const { accounts } = useAccounts();
   const [showForm, setShowForm] = useState(false);
+  const { format } = useCurrencyUnit();
+
+  // This Jalali month's installments across every plan — a planning overview independent of
+  // any single plan's own card, which only shows that one plan's totals.
+  const { jy: curJy, jm: curJm } = toJalali(new Date());
+  const thisMonthInstallments = (data?.plans ?? []).flatMap((plan: any) =>
+    plan.installments.filter((i: any) => {
+      const { jy, jm } = toJalali(new Date(i.dueDate));
+      return jy === curJy && jm === curJm;
+    })
+  );
+  const thisMonthTotal = thisMonthInstallments.reduce((s: number, i: any) => s + i.amount, 0);
+  const thisMonthPaid = thisMonthInstallments.filter((i: any) => i.status === "PAID").reduce((s: number, i: any) => s + i.amount, 0);
+  const thisMonthRemaining = thisMonthTotal - thisMonthPaid;
 
   return (
     <div className="space-y-3">
+      {thisMonthInstallments.length > 0 && (
+        <Card className="p-4">
+          <p className="text-xs text-muted mb-2">اقساط این ماه</p>
+          <div className="grid grid-cols-3 gap-2">
+            <StatItem label="مجموع" value={format(thisMonthTotal, { withSuffix: true })} />
+            <StatItem label="پرداخت‌شده" value={format(thisMonthPaid, { withSuffix: true })} tone="positive" />
+            <StatItem label="باقی‌مانده" value={format(thisMonthRemaining, { withSuffix: true })} tone="negative" />
+          </div>
+        </Card>
+      )}
+
       <button
         onClick={() => setShowForm((v) => !v)}
         className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
@@ -579,8 +604,20 @@ function InstallmentPlanCard({ plan, accounts, onChanged }: { plan: any; account
 
   async function remove() {
     if (!confirm("این طرح قسط حذف شود؟")) return;
+
+    // A plan with real payment history gets one more, explicit choice: cascade-delete the
+    // EXPENSE transactions those payments created too, or leave them exactly as they are (the
+    // plan itself is removed from اقساط either way — this used to hard-block deletion entirely
+    // whenever any installment was paid, which was more restrictive than what's actually needed).
+    let deleteTransactions = false;
+    if (plan.summary.paidCount > 0) {
+      deleteTransactions = confirm(
+        "این طرح پرداخت‌های ثبت‌شده دارد. تراکنش‌های مرتبط با آن‌ها هم حذف شوند؟\n(در غیر این صورت فقط طرح از این بخش حذف می‌شود و تراکنش‌ها در گزارش‌ها باقی می‌مانند.)"
+      );
+    }
+
     try {
-      await apiDelete(`/api/installment-plans/${plan.id}`);
+      await apiDelete(`/api/installment-plans/${plan.id}?deleteTransactions=${deleteTransactions}`);
       onChanged();
     } catch (err) {
       alert(err instanceof Error ? err.message : "حذف طرح ناموفق بود.");

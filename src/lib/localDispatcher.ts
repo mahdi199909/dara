@@ -170,7 +170,9 @@ register("GET", "/api/installment-plans/:id", ({ db, userId, params }) => ({ pla
 register("PATCH", "/api/installment-plans/:id", ({ db, userId, params, body }) => ({
   plan: installmentsRepo.updateInstallmentPlan(db, userId, params.id, updateInstallmentPlanSchema.parse(body)),
 }));
-register("DELETE", "/api/installment-plans/:id", ({ db, userId, params }) => installmentsRepo.deleteInstallmentPlan(db, userId, params.id));
+register("DELETE", "/api/installment-plans/:id", ({ db, userId, params, query }) =>
+  installmentsRepo.deleteInstallmentPlan(db, userId, params.id, query.get("deleteTransactions") === "true")
+);
 register("POST", "/api/installments/:id/pay", ({ db, userId, params, body }) =>
   installmentsRepo.payInstallment(db, userId, params.id, payInstallmentSchema.parse(body))
 );

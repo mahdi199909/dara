@@ -560,7 +560,7 @@ export interface CalendarDaySummary {
   date: string; // dayKeyIso
   income: number;
   expense: number;
-  productiveValue: number; // sum of that day's VirtualAssetEntry.totalValue — "useful work as an asset"
+  productiveMinutes: number; // sum of that day's VirtualAssetEntry.durationMin — "useful work as an asset", shown as time, not its Toman equivalent
   featuredValue: number | null; // minutes for a featured category, 1/0 check-in for a featured habit; null if nothing configured
 }
 export interface CalendarFeaturedMetric {
@@ -573,6 +573,8 @@ export interface CalendarMonthOverview {
   days: CalendarDaySummary[]; // only days with at least one non-zero figure — see the client's own zero-fill lookup
   monthIncome: number;
   monthExpense: number;
+  monthProductiveMinutes: number;
+  monthFeaturedTotal: number | null;
   featured: CalendarFeaturedMetric | null;
 }
 
@@ -591,9 +593,9 @@ export function computeCalendarMonthOverview(
   const fromIso = iso(from);
   const toIso = iso(to);
 
-  const byDay = new Map<string, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  const byDay = new Map<string, { income: number; expense: number; productiveMinutes: number; featuredValue: number }>();
   function ensure(key: string) {
-    if (!byDay.has(key)) byDay.set(key, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    if (!byDay.has(key)) byDay.set(key, { income: 0, expense: 0, productiveMinutes: 0, featuredValue: 0 });
     return byDay.get(key)!;
   }
 
@@ -614,11 +616,15 @@ export function computeCalendarMonthOverview(
     }
   }
 
-  const vaEntries = db.all<{ date: string; totalValue: number }>(
-    `SELECT "date","totalValue" FROM "VirtualAssetEntry" WHERE "userId" = ? AND "date" >= ? AND "date" <= ?`,
+  const vaEntries = db.all<{ date: string; durationMin: number }>(
+    `SELECT "date","durationMin" FROM "VirtualAssetEntry" WHERE "userId" = ? AND "date" >= ? AND "date" <= ?`,
     [userId, fromIso, toIso]
   );
-  for (const v of vaEntries) ensure(dayKeyIso(parseDate(v.date))).productiveValue += v.totalValue;
+  let monthProductiveMinutes = 0;
+  for (const v of vaEntries) {
+    ensure(dayKeyIso(parseDate(v.date))).productiveMinutes += v.durationMin;
+    monthProductiveMinutes += v.durationMin;
+  }
 
   let featured: CalendarFeaturedMetric | null = null;
   if (featuredType === "category" && featuredId) {
@@ -651,11 +657,12 @@ export function computeCalendarMonthOverview(
     date,
     income: v.income,
     expense: v.expense,
-    productiveValue: v.productiveValue,
+    productiveMinutes: v.productiveMinutes,
     featuredValue: featured ? v.featuredValue : null,
   }));
+  const monthFeaturedTotal = featured ? days.reduce((s, d) => s + (d.featuredValue ?? 0), 0) : null;
 
-  return { days, monthIncome, monthExpense, featured };
+  return { days, monthIncome, monthExpense, monthProductiveMinutes, monthFeaturedTotal, featured };
 }
 
 // --- computeCalendarYearOverview ---------------------------------------------------------------
@@ -664,13 +671,15 @@ export interface CalendarMonthSummary {
   jm: number; // 1-12
   income: number;
   expense: number;
-  productiveValue: number;
+  productiveMinutes: number;
   featuredValue: number | null; // sum of minutes for a featured category; count of check-in DAYS for a featured habit
 }
 export interface CalendarYearOverview {
   months: CalendarMonthSummary[]; // always all 12, unlike CalendarMonthOverview.days which skips empty ones
   yearIncome: number;
   yearExpense: number;
+  yearProductiveMinutes: number;
+  yearFeaturedTotal: number | null;
   featured: CalendarFeaturedMetric | null;
 }
 
@@ -690,9 +699,9 @@ export function computeCalendarYearOverview(
   const fromIso = iso(yearStart);
   const toIso = iso(yearEnd);
 
-  const byMonth = new Map<number, { income: number; expense: number; productiveValue: number; featuredValue: number }>();
+  const byMonth = new Map<number, { income: number; expense: number; productiveMinutes: number; featuredValue: number }>();
   function ensure(jm: number) {
-    if (!byMonth.has(jm)) byMonth.set(jm, { income: 0, expense: 0, productiveValue: 0, featuredValue: 0 });
+    if (!byMonth.has(jm)) byMonth.set(jm, { income: 0, expense: 0, productiveMinutes: 0, featuredValue: 0 });
     return byMonth.get(jm)!;
   }
   for (let jm = 1; jm <= 12; jm++) ensure(jm);
@@ -714,11 +723,15 @@ export function computeCalendarYearOverview(
     }
   }
 
-  const vaEntries = db.all<{ date: string; totalValue: number }>(
-    `SELECT "date","totalValue" FROM "VirtualAssetEntry" WHERE "userId" = ? AND "date" >= ? AND "date" <= ?`,
+  const vaEntries = db.all<{ date: string; durationMin: number }>(
+    `SELECT "date","durationMin" FROM "VirtualAssetEntry" WHERE "userId" = ? AND "date" >= ? AND "date" <= ?`,
     [userId, fromIso, toIso]
   );
-  for (const v of vaEntries) ensure(toJalali(parseDate(v.date)).jm).productiveValue += v.totalValue;
+  let yearProductiveMinutes = 0;
+  for (const v of vaEntries) {
+    ensure(toJalali(parseDate(v.date)).jm).productiveMinutes += v.durationMin;
+    yearProductiveMinutes += v.durationMin;
+  }
 
   let featured: CalendarFeaturedMetric | null = null;
   if (featuredType === "category" && featuredId) {
@@ -758,11 +771,12 @@ export function computeCalendarYearOverview(
       jm,
       income: v.income,
       expense: v.expense,
-      productiveValue: v.productiveValue,
+      productiveMinutes: v.productiveMinutes,
       featuredValue: featured ? v.featuredValue : null,
     }));
+  const yearFeaturedTotal = featured ? months.reduce((s, m) => s + (m.featuredValue ?? 0), 0) : null;
 
-  return { months, yearIncome, yearExpense, featured };
+  return { months, yearIncome, yearExpense, yearProductiveMinutes, yearFeaturedTotal, featured };
 }
 
 // --- computeFounderCapital ("سرمایه من") ----------------------------------------------------
