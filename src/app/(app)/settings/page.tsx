@@ -13,6 +13,7 @@ import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
+import type { ParsedIcsEvent } from "@/lib/icsParser";
 import { Preferences } from "@capacitor/preferences";
 import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
 
@@ -808,6 +809,11 @@ function BackupTab() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
+  const [icsPreview, setIcsPreview] = useState<ParsedIcsEvent[] | null>(null);
+  const [icsError, setIcsError] = useState<string | null>(null);
+  const [icsImporting, setIcsImporting] = useState(false);
+  const [icsResult, setIcsResult] = useState<{ added: number; skipped: number } | null>(null);
+
   async function handleExport() {
     setExporting(true);
     setExportError(null);
@@ -898,6 +904,76 @@ function BackupTab() {
       setImportError(err instanceof Error ? err.message : "وارد کردن اطلاعات با خطا مواجه شد.");
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleIcsFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setIcsError(null);
+    setIcsResult(null);
+    setIcsPreview(null);
+
+    try {
+      const text = await file.text();
+      const { parseIcs } = await import("@/lib/icsParser");
+      const events = parseIcs(text);
+      if (events.length === 0) {
+        setIcsError("هیچ رویدادی توی این فایل پیدا نشد — فایل .ics معتبری از گوگل‌کلندر انتخاب کنید.");
+        return;
+      }
+      setIcsPreview(events);
+    } catch (err) {
+      setIcsError(err instanceof Error ? err.message : "خواندن فایل با خطا مواجه شد.");
+    }
+  }
+
+  async function confirmIcsImport() {
+    if (!icsPreview) return;
+    setIcsImporting(true);
+    setIcsError(null);
+    try {
+      const db = getLocalDbInstance();
+      if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
+      const [{ createEvent }, { getLocalUserId }] = await Promise.all([import("@/local/repositories/events"), import("@/local/localUser")]);
+      const userId = getLocalUserId(db);
+
+      let added = 0;
+      let skipped = 0;
+      for (const ev of icsPreview) {
+        // Same title + same start time already exists — treat this exact event as already
+        // imported rather than creating a visible duplicate. Not a perfect UID-based dedup (an
+        // .ics has no persisted record of "already imported this" the way this app's own JSON
+        // backup import does by row id), but good enough to make re-importing the same file safe.
+        const existing = db.get<{ id: string }>(
+          `SELECT "id" FROM "Event" WHERE "userId" = ? AND "title" = ? AND "startAt" = ? AND "deletedAt" IS NULL`,
+          [userId, ev.title, ev.startAt.toISOString()]
+        );
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        createEvent(db, userId, {
+          title: ev.title,
+          description: ev.description ?? undefined,
+          startAt: ev.startAt.toISOString(),
+          endAt: ev.endAt.toISOString(),
+          allDay: ev.allDay,
+          recurrenceFreq: ev.recurrenceFreq !== "NONE" ? ev.recurrenceFreq : undefined,
+          recurrenceInterval: ev.recurrenceFreq !== "NONE" ? ev.recurrenceInterval : undefined,
+          recurrenceUntil: ev.recurrenceUntil ? ev.recurrenceUntil.toISOString() : undefined,
+          recurrenceCount: ev.recurrenceCount ?? undefined,
+        });
+        added++;
+      }
+      setIcsResult({ added, skipped });
+      setIcsPreview(null);
+    } catch (err) {
+      setIcsError(err instanceof Error ? err.message : "وارد کردن رویدادها با خطا مواجه شد.");
+    } finally {
+      setIcsImporting(false);
     }
   }
 
@@ -995,6 +1071,65 @@ function BackupTab() {
                 })}
               </ul>
             )}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5 space-y-3">
+        <h2 className="font-bold text-ink text-sm">وارد کردن رویدادها از گوگل‌کلندر</h2>
+        <p className="text-xs text-muted leading-relaxed">
+          از گوگل‌کلندر (تنظیمات ← Import &amp; export ← Export) یک فایل با پسوند .ics بگیرید و اینجا انتخاب کنید. رویدادهای تکرارشونده ساده
+          (روزانه، هفتگی، ماهانه، سالانه) هم پشتیبانی می‌شوند. این کار فقط رویداد اضافه می‌کند — چیزی را جایگزین یا حذف نمی‌کند.
+        </p>
+        <label className="inline-block rounded-xl bg-canvas text-ink px-4 py-2 text-sm font-medium cursor-pointer hover:bg-line">
+          انتخاب فایل .ics
+          <input type="file" accept=".ics,text/calendar" onChange={handleIcsFileSelected} className="hidden" />
+        </label>
+        {icsError && <p className="text-xs text-waste">{icsError}</p>}
+
+        {icsPreview && (
+          <div className="rounded-xl bg-accent-soft border border-accent p-4 space-y-3">
+            <p className="text-sm text-accent">
+              {toPersianDigits(icsPreview.length)} رویداد توی این فایل پیدا شد. مواردی که از قبل با همین عنوان و زمان روی این گوشی وجود داشته باشند
+              نادیده گرفته می‌شوند.
+            </p>
+            <ul className="text-xs text-ink space-y-1 max-h-40 overflow-y-auto">
+              {icsPreview.slice(0, 8).map((ev, i) => (
+                <li key={i} className="truncate">
+                  {ev.title} — {formatJalali(ev.startAt)}
+                </li>
+              ))}
+              {icsPreview.length > 8 && <li className="text-muted">و {toPersianDigits(icsPreview.length - 8)} مورد دیگر...</li>}
+            </ul>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={confirmIcsImport}
+                disabled={icsImporting}
+                className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40"
+              >
+                {icsImporting ? "در حال وارد کردن..." : "تأیید و وارد کردن"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIcsPreview(null)}
+                disabled={icsImporting}
+                className="flex-1 rounded-xl bg-canvas text-ink py-2 text-sm"
+              >
+                انصراف
+              </button>
+            </div>
+          </div>
+        )}
+
+        {icsResult && (
+          <div className="rounded-xl bg-canvas border border-line p-4">
+            <p className="text-xs text-ink">
+              {icsResult.added > 0 && <span className="text-accent">{toPersianDigits(icsResult.added)} رویداد اضافه شد</span>}
+              {icsResult.added > 0 && icsResult.skipped > 0 && "، "}
+              {icsResult.skipped > 0 && <span>{toPersianDigits(icsResult.skipped)} مورد از قبل موجود بود</span>}
+              {icsResult.added === 0 && icsResult.skipped === 0 && "هیچ رویدادی اضافه نشد."}
+            </p>
           </div>
         )}
       </Card>
