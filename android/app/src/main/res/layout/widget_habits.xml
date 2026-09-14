@@ -30,10 +30,37 @@
             android:fontFamily="sans-serif"
             android:layout_marginBottom="6dp" />
 
-        <LinearLayout
-            android:id="@+id/habits_container"
+        <!-- ListView (not the plain LinearLayout this used to be) is what actually gets
+             touch-scrolling inside a widget — see HabitsWidgetService for the RemoteViewsFactory
+             backing it. setEmptyView (HabitsWidgetProvider) needs its target to be a sibling of
+             the ListView within this same inflated tree, hence the wrapping FrameLayout instead
+             of a second addView()'d layout the way the old empty state worked. -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <ListView
+                android:id="@+id/habits_list"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layoutDirection="rtl"
+                android:divider="@null"
+                android:dividerHeight="0dp"
+                android:scrollbars="none" />
+
+            <TextView
+                android:id="@+id/habits_empty_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_habits_empty"
+                android:textDirection="rtl"
+                android:textAlignment="viewStart"
+                android:textColor="#9CA3AF"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif"
+                android:paddingTop="4dp" />
+
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>

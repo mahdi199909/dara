@@ -59,6 +59,14 @@
                 android:resource="@xml/widget_today_events_info" />
         </receiver>
 
+        <!-- Backs widget_today_events.xml's ListView (see TodayEventsWidgetService). Every
+             RemoteViewsService a widget's ListView/GridView points at must declare this exact
+             permission — it's what stops any other app from binding to it directly. -->
+        <service
+            android:name=".TodayEventsWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
         <receiver
             android:name=".HabitsWidgetProvider"
             android:exported="false">
@@ -69,6 +77,13 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_habits_info" />
         </receiver>
+
+        <!-- Backs widget_habits.xml's ListView (see HabitsWidgetService). Same
+             BIND_REMOTEVIEWS requirement as TodayEventsWidgetService above. -->
+        <service
+            android:name=".HabitsWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
 
         <receiver
             android:name=".CapitalWidgetProvider"
