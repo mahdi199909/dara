@@ -25,6 +25,12 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
+// Mirrors src/local/sync.ts's own pull-side retry cap, same reason: a same-table self-reference
+// (Category.parentCategoryId, Event.recurrenceParentId) can arrive child-before-parent within one
+// table's array. The pull side has always retried this; the push side never did, so a row shaped
+// like that from any device would previously be rejected once and never tried again.
+const MAX_APPLY_PASSES = 25;
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId(req);
@@ -40,54 +46,73 @@ export async function POST(req: NextRequest) {
       const result: TableResult = { upserted: 0, skipped: 0, rejected: 0 };
       const model = modelFor(config.model);
 
+      // Ownership is checked once per row up front — a bad id or a parent that isn't the
+      // caller's own never becomes valid on a later pass, so there's no reason to retry it.
+      // Only the actual write below (which can genuinely fail on self-reference ordering) is
+      // retried.
+      let pending: Record<string, unknown>[] = [];
       for (const row of rows) {
-        try {
-          if (typeof row.id !== "string" || !row.id) {
+        if (typeof row.id !== "string" || !row.id) {
+          result.rejected++;
+          continue;
+        }
+
+        // Never trust a client-supplied userId — always force it to the authenticated caller,
+        // whether directly (most tables) or by verifying the parent row's owner (the 5 tables
+        // with no userId column of their own).
+        const data: Record<string, unknown> = { ...row };
+        if (config.ownership.type === "direct") {
+          data.userId = userId;
+        } else {
+          const parentId = row[config.ownership.fkColumn];
+          const parent = await modelFor(config.ownership.parentModel).findUnique({
+            where: { id: parentId },
+            select: { userId: true },
+          });
+          if (!parent || parent.userId !== userId) {
             result.rejected++;
             continue;
           }
-
-          // Never trust a client-supplied userId — always force it to the authenticated caller,
-          // whether directly (most tables) or by verifying the parent row's owner (the 5 tables
-          // with no userId column of their own).
-          const data: Record<string, unknown> = { ...row };
-          if (config.ownership.type === "direct") {
-            data.userId = userId;
-          } else {
-            const parentId = row[config.ownership.fkColumn];
-            const parent = await modelFor(config.ownership.parentModel).findUnique({
-              where: { id: parentId },
-              select: { userId: true },
-            });
-            if (!parent || parent.userId !== userId) {
-              result.rejected++;
-              continue;
-            }
-          }
-
-          if (config.hasUpdatedAt) {
-            const incomingUpdatedAt = new Date(data.updatedAt as string);
-            const existing = await model.findUnique({ where: { id: row.id }, select: { updatedAt: true } });
-            if (existing && existing.updatedAt >= incomingUpdatedAt) {
-              result.skipped++;
-              continue;
-            }
-            // Calling upsert at all re-bumps updatedAt via Prisma's @updatedAt — that's fine
-            // here since we already confirmed the incoming row is strictly newer.
-            await model.upsert({ where: { id: row.id }, create: data, update: data });
-          } else {
-            const existing = await model.findUnique({ where: { id: row.id }, select: { id: true } });
-            if (existing) {
-              result.skipped++;
-              continue;
-            }
-            await model.create({ data });
-          }
-          result.upserted++;
-        } catch {
-          result.rejected++;
         }
+        pending.push(data);
       }
+
+      for (let pass = 0; pass < MAX_APPLY_PASSES && pending.length > 0; pass++) {
+        const stillPending: Record<string, unknown>[] = [];
+        let progressed = false;
+
+        for (const data of pending) {
+          try {
+            if (config.hasUpdatedAt) {
+              const incomingUpdatedAt = new Date(data.updatedAt as string);
+              const existing = await model.findUnique({ where: { id: data.id }, select: { updatedAt: true } });
+              if (existing && existing.updatedAt >= incomingUpdatedAt) {
+                result.skipped++;
+              } else {
+                // Calling upsert at all re-bumps updatedAt via Prisma's @updatedAt — that's fine
+                // here since we already confirmed the incoming row is strictly newer.
+                await model.upsert({ where: { id: data.id }, create: data, update: data });
+                result.upserted++;
+              }
+            } else {
+              const existing = await model.findUnique({ where: { id: data.id }, select: { id: true } });
+              if (existing) {
+                result.skipped++;
+              } else {
+                await model.create({ data });
+                result.upserted++;
+              }
+            }
+            progressed = true; // resolved either way — not stuck on an FK ordering issue
+          } catch {
+            stillPending.push(data);
+          }
+        }
+
+        pending = stillPending;
+        if (!progressed) break;
+      }
+      result.rejected += pending.length; // still failing after every retry pass — a genuine problem, not an ordering fluke
 
       results[config.table] = result;
     }

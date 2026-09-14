@@ -10,6 +10,10 @@
 //    constraint on every user's first sync. See the plan's own "دو نکته‌ی حیاتی" warning.
 //  - "License": server-only, has no on-device counterpart to sync.
 //  - "AuditLog"/"Notification": local instrumentation, not user content.
+//  - "ShownInsight": has neither updatedAt nor createdAt (only a semantic `shownAt`), which this
+//    cursor scheme has no column for — and the cost of not syncing it is trivial (a daily insight
+//    quote can resurface on a second device inside its 30-day suppression window; no real data is
+//    at stake), so it isn't worth generalizing the cursor logic just for this one table.
 //
 // Order matches DATA_EXPORT_TABLES (src/local/dataExport.ts) minus the four tables above — that
 // array is already a verified topological sort over every FK in prisma/schema.prisma, so a
@@ -56,4 +60,11 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: "VirtualAssetEntry", model: "virtualAssetEntry", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
   { table: "Transaction", model: "transaction", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Reminder", model: "reminder", hasUpdatedAt: false, hasDeletedAt: false, ownership: { type: "direct" } },
+  // No updatedAt column — recordDailyCapitalSnapshot upserts *today's* row in place
+  // (ON CONFLICT("userId","date") DO UPDATE) as more time gets logged through the day, so a
+  // same-day edit after this row's first sync won't be picked up again until a fresh row is
+  // created tomorrow (a new createdAt). Historical (already-finished) days are unaffected by
+  // this — they're written once and never touched again — which is what actually matters here:
+  // without this table, the "سرمایه من" growth history is invisible on any second device/platform.
+  { table: "CapitalSnapshot", model: "capitalSnapshot", hasUpdatedAt: false, hasDeletedAt: false, ownership: { type: "direct" } },
 ];

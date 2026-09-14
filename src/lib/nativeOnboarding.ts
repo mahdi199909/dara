@@ -99,25 +99,33 @@ export async function refreshLicenseStatus(): Promise<void> {
   }
 }
 
+export interface SyncOutcome {
+  ok: boolean;
+  pushedCount: number;
+  pulledCount: number;
+}
+
 /**
  * Pushes this device's local changes to the server, then pulls whatever changed remotely since
  * the last sync — see src/local/sync.ts for the actual push/pull logic. Called on first-run
  * completion, on every app boot, and on every resume (see FirstRunGate.tsx and
  * WidgetQueueDrainer.tsx), so "as soon as online and the app is open" from the product ask is
- * covered from every angle rather than relying on exactly one trigger firing.
+ * covered from every angle rather than relying on exactly one trigger firing. Also callable
+ * directly from a manual "sync now" action (see Settings' BackupTab) — the returned SyncOutcome
+ * is what that UI shows; every fire-and-forget/best-effort caller just discards it.
  *
  * Silently no-ops (same posture as refreshLicenseStatus) if there's no cached token, or if the
  * network call fails — a device offline must never see this as an error, and the unmoved cursors
  * mean the next successful sync just picks up wherever this one left off.
  */
-export async function syncWithServer(): Promise<void> {
+export async function syncWithServer(): Promise<SyncOutcome> {
   // The whole body is one try/catch, deliberately including the cache read itself: this must
-  // never throw, on a offline device or otherwise, since every caller (completeFirstRun,
-  // FirstRunGate's boot effect, WidgetQueueDrainer's resume handler) treats it as fire-and-forget
-  // or best-effort.
+  // never throw, on a offline device or otherwise, since every fire-and-forget/best-effort caller
+  // (completeFirstRun awaits it but still only for its side effects, FirstRunGate's boot effect,
+  // WidgetQueueDrainer's resume handler) needs this to resolve, never reject.
   try {
     const cached = await getCachedLicense();
-    if (!cached?.token) return;
+    if (!cached?.token) return { ok: false, pushedCount: 0, pulledCount: 0 };
 
     const [{ getLocalDbInstance }, { pushLocalChanges, pullRemoteChanges }, { setLastPushedAt, setLastPulledAt }] = await Promise.all([
       import("@/local/db"),
@@ -125,14 +133,18 @@ export async function syncWithServer(): Promise<void> {
       import("@/local/repositories/licenseCache"),
     ]);
     const db = getLocalDbInstance();
-    if (!db) return; // FirstRunGate's driver bootstrap hasn't run yet
+    if (!db) return { ok: false, pushedCount: 0, pulledCount: 0 }; // FirstRunGate's driver bootstrap hasn't run yet
 
-    const { pushedAt } = await pushLocalChanges(db, cached.token, cached.remoteUserId, cached.lastPushedAt);
+    const { pushed, pushedAt } = await pushLocalChanges(db, cached.token, cached.remoteUserId, cached.lastPushedAt);
     setLastPushedAt(db, pushedAt);
 
-    const { syncedAt } = await pullRemoteChanges(db, cached.token, cached.lastPulledAt);
+    const { pulled, syncedAt } = await pullRemoteChanges(db, cached.token, cached.lastPulledAt);
     setLastPulledAt(db, syncedAt);
+
+    const sum = (counts: Record<string, number>) => Object.values(counts).reduce((s, n) => s + n, 0);
+    return { ok: true, pushedCount: sum(pushed), pulledCount: sum(pulled) };
   } catch {
     // offline, server hiccup, expired token, or no local DB yet — next trigger retries from the same cursors
+    return { ok: false, pushedCount: 0, pulledCount: 0 };
   }
 }

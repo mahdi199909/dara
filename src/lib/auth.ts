@@ -7,7 +7,16 @@ const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "hesabkon_session";
 const SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "dev-only-secret-change-me-in-production"
 );
-const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 30; // 30 days
+// Deliberately very long-lived, not a typical web session — FirstRunGate.tsx's on-device login
+// makes an explicit promise to the user ("این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره
+// نیست", i.e. "only needed once, never again"), and there is no refresh-token mechanism to renew
+// it silently. A short-lived token would otherwise expire invisibly in the background — every
+// sync/license call after that starts failing 401 and is swallowed by nativeOnboarding.ts's own
+// catch-alls, so the user would see nothing wrong locally while cross-device sync silently and
+// permanently stopped. 10 years comfortably outlasts any realistic single app-install/device
+// lifetime, which keeps the "log in once" promise true in practice without a real "never expires"
+// token (still bounded, still revocable by rotating JWT_SECRET if it's ever needed).
+const SESSION_DURATION_SECONDS = 60 * 60 * 24 * 365 * 10; // 10 years
 
 export interface SessionPayload {
   userId: string;

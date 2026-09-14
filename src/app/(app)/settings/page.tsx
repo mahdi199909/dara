@@ -792,6 +792,80 @@ const TABLE_LABELS_FA: Partial<Record<DataExportTable, string>> = {
 };
 
 /**
+ * Native-only — surfaces the automatic local<->server sync (src/local/sync.ts,
+ * src/lib/nativeOnboarding.ts's syncWithServer) that already runs on its own on boot/resume/
+ * first-run, so a manual export/import file isn't the only way to trust data reached the server.
+ * Same isNativePlatform()-inside-an-effect convention as LicenseStatusCard above. Renders nothing
+ * until the cache read resolves, and nothing at all if this device was never linked to a real
+ * account (continueOffline's trial path has no token, so there's genuinely nothing to sync yet).
+ */
+function SyncStatusCard() {
+  const [license, setLicense] = useState<import("@/local/repositories/licenseCache").LicenseCache | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; pushedCount: number; pulledCount: number } | null>(null);
+
+  function loadLicense() {
+    return import("@/lib/nativeOnboarding")
+      .then(({ getCachedLicense }) => getCachedLicense())
+      .then((l) => setLicense(l))
+      .catch(() => setLicense(null));
+  }
+
+  useEffect(() => {
+    const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    if (!native) {
+      setLoaded(true);
+      return;
+    }
+    loadLicense().finally(() => setLoaded(true));
+  }, []);
+
+  async function handleSyncNow() {
+    setSyncing(true);
+    setResult(null);
+    try {
+      const { syncWithServer } = await import("@/lib/nativeOnboarding");
+      const r = await syncWithServer();
+      setResult(r);
+      await loadLicense();
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  if (!loaded || !license?.token) return null;
+
+  return (
+    <Card className="p-5 space-y-3">
+      <h2 className="font-bold text-ink text-sm">همگام‌سازی با سرور</h2>
+      <p className="text-xs text-muted leading-relaxed">
+        اطلاعات شما همیشه روی همین گوشی ذخیره می‌شود. وقتی اینترنت وصل باشد، همان اطلاعات با حساب «{license.remoteEmail}» روی سرور همگام می‌شود — یعنی می‌توانید از نسخه وب یا هر گوشی دیگری هم با همین حساب واردش شوید، بدون نگرانی از دست رفتن چیزی.
+      </p>
+      <div className="text-xs text-muted space-y-1">
+        <p>آخرین ارسال به سرور: {license.lastPushedAt ? formatJalali(new Date(license.lastPushedAt), { withTime: true }) : "هنوز انجام نشده"}</p>
+        <p>آخرین دریافت از سرور: {license.lastPulledAt ? formatJalali(new Date(license.lastPulledAt), { withTime: true }) : "هنوز انجام نشده"}</p>
+      </div>
+      <button
+        type="button"
+        onClick={handleSyncNow}
+        disabled={syncing}
+        className="rounded-xl bg-canvas text-ink px-4 py-2 text-sm font-medium hover:bg-line disabled:opacity-40"
+      >
+        {syncing ? "در حال همگام‌سازی..." : "همگام‌سازی الان"}
+      </button>
+      {result && (
+        <p className={`text-xs ${result.ok ? "text-accent" : "text-waste"}`}>
+          {result.ok
+            ? `همگام‌سازی موفق — ${toPersianDigits(result.pushedCount)} مورد ارسال و ${toPersianDigits(result.pulledCount)} مورد دریافت شد.`
+            : "همگام‌سازی ناموفق بود — اتصال اینترنت را بررسی کنید."}
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/**
  * Native-only cross-device data migration — see src/local/dataExport.ts for the actual export/
  * import logic (this component only wires it to the filesystem/share plugins and a confirmation
  * step). Gated to native the same way LicenseStatusCard/MembershipUpgradeCard above are: the tab
@@ -983,6 +1057,8 @@ function BackupTab() {
 
   return (
     <div className="space-y-4">
+      <SyncStatusCard />
+
       <Card className="p-5 space-y-3">
         <h2 className="font-bold text-ink text-sm">خروجی گرفتن از همه اطلاعات</h2>
         <p className="text-xs text-muted leading-relaxed">
