@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import useSWR, { mutate as mutateGlobal } from "swr";
 import { fetcher, apiPatch, apiPost, apiDelete } from "@/lib/apiClient";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -508,6 +508,14 @@ function CategoriesTab() {
   const [creating, setCreating] = useState(false);
   const { format } = useCurrencyUnit();
 
+  // Press-and-hold drag to re-parent an existing category (see isDraggable/isValidDropTarget
+  // below for the rules). dragStartRef/dragTimerRef are refs, not state, because they track a
+  // press that hasn't become a real drag yet and must never trigger a re-render on their own.
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragTimerRef = useRef<number | null>(null);
+  const [activeDrag, setActiveDrag] = useState<{ id: string; name: string; icon: string; x: number; y: number; hoverId: string | null } | null>(null);
+  const [confirmMove, setConfirmMove] = useState<{ sourceId: string; sourceName: string; targetId: string; targetName: string } | null>(null);
+
   const categories: any[] = data?.categories ?? [];
   // One level of nesting only (see prisma/schema.prisma's own comment on Category.parentCategoryId)
   // — every category is either top-level or a child of a top-level one, never both.
@@ -546,6 +554,91 @@ function CategoriesTab() {
     [reordered[index], reordered[otherIndex]] = [reordered[otherIndex], reordered[index]];
     const orderedIds = reordered.flatMap((top) => [top.id, ...(childrenByParent.get(top.id) ?? []).map((c) => c.id)]);
     await apiPatch("/api/categories/reorder", { orderedIds });
+    mutate();
+  }
+
+  // Only a childless category can be picked up — one that already has sub-categories can't
+  // itself become another one's child without the hierarchy going two levels deep (see the
+  // matching check in PATCH /api/categories/[id]). Reordering top-level groups still works via
+  // the ▲/▼ buttons regardless of this.
+  function isDraggable(c: any) {
+    return (childrenByParent.get(c.id) ?? []).length === 0;
+  }
+
+  function isValidDropTarget(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return false;
+    const target = categories.find((c) => c.id === targetId);
+    if (!target || target.parentCategoryId) return false; // parent must itself be top-level
+    const source = categories.find((c) => c.id === sourceId);
+    if (source?.parentCategoryId === targetId) return false; // already there
+    return true;
+  }
+
+  function clearPendingPress() {
+    if (dragTimerRef.current) {
+      window.clearTimeout(dragTimerRef.current);
+      dragTimerRef.current = null;
+    }
+    dragStartRef.current = null;
+    window.removeEventListener("pointermove", onPendingMove);
+    window.removeEventListener("pointerup", clearPendingPress);
+  }
+
+  function onPendingMove(e: PointerEvent) {
+    const start = dragStartRef.current;
+    // A real long-press should stay put; movement before the hold timer fires means the user is
+    // scrolling or just tapping, not trying to drag — bail out instead of hijacking the gesture.
+    if (start && (Math.abs(e.clientX - start.x) > 10 || Math.abs(e.clientY - start.y) > 10)) clearPendingPress();
+  }
+
+  function startPress(e: React.PointerEvent, c: any) {
+    if (!isDraggable(c)) return;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    const { id, name, icon } = c;
+    const x = e.clientX;
+    const y = e.clientY;
+    window.addEventListener("pointermove", onPendingMove);
+    window.addEventListener("pointerup", clearPendingPress, { once: true });
+    dragTimerRef.current = window.setTimeout(() => {
+      window.removeEventListener("pointermove", onPendingMove);
+      window.removeEventListener("pointerup", clearPendingPress);
+      setActiveDrag({ id, name, icon, x, y, hoverId: null });
+    }, 350);
+  }
+
+  // Attached only while a drag is actually active (not during the pending long-press window) —
+  // re-runs solely when a *new* drag starts, since activeDrag.x/y/hoverId update via the setter
+  // below rather than through this effect re-running on every pointer move.
+  useEffect(() => {
+    if (!activeDrag) return;
+    function onMove(e: PointerEvent) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const rowEl = el instanceof Element ? el.closest("[data-category-id]") : null;
+      const hoverId = rowEl?.getAttribute("data-category-id") ?? null;
+      setActiveDrag((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY, hoverId } : prev));
+    }
+    function onUp() {
+      setActiveDrag((prev) => {
+        if (prev?.hoverId && isValidDropTarget(prev.id, prev.hoverId)) {
+          const target = categories.find((c) => c.id === prev.hoverId);
+          if (target) setConfirmMove({ sourceId: prev.id, sourceName: prev.name, targetId: target.id, targetName: target.name });
+        }
+        return null;
+      });
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDrag?.id]);
+
+  async function confirmMoveCategory() {
+    if (!confirmMove) return;
+    await apiPatch(`/api/categories/${confirmMove.sourceId}`, { parentCategoryId: confirmMove.targetId });
+    setConfirmMove(null);
     mutate();
   }
 
@@ -639,8 +732,15 @@ function CategoriesTab() {
           <ul className="divide-y divide-line">
             {topLevelCategories.map((top, index) => {
               function row(c: any, isChild: boolean) {
+                const isDropTarget = Boolean(activeDrag && activeDrag.hoverId === c.id && isValidDropTarget(activeDrag.id, c.id));
                 return (
-                  <li key={c.id} className={`px-4 py-3 space-y-2 ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-canvas/60" : ""}`}>
+                  <li
+                    key={c.id}
+                    data-category-id={c.id}
+                    className={`px-4 py-3 space-y-2 transition-colors ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-canvas/60" : ""} ${
+                      isDropTarget ? "bg-accent-soft ring-2 ring-accent ring-inset" : ""
+                    }`}
+                  >
                     <div className="flex items-center gap-3">
                       {isChild && <span className="text-muted shrink-0">└</span>}
                       {!isChild && (
@@ -663,10 +763,18 @@ function CategoriesTab() {
                           </button>
                         </div>
                       )}
-                      <span className="text-lg">{c.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-ink">{c.name}</p>
-                        <p className="text-xs text-muted">{CATEGORY_KIND_LABELS[c.kind as CategoryKind]}</p>
+                      <div
+                        className={`flex items-center gap-3 flex-1 min-w-0 ${isDraggable(c) ? "cursor-grab active:cursor-grabbing" : ""} ${
+                          activeDrag?.id === c.id ? "opacity-30" : ""
+                        }`}
+                        style={{ touchAction: isDraggable(c) ? "none" : undefined }}
+                        onPointerDown={(e) => startPress(e, c)}
+                      >
+                        <span className="text-lg">{c.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-ink">{c.name}</p>
+                          <p className="text-xs text-muted">{CATEGORY_KIND_LABELS[c.kind as CategoryKind]}</p>
+                        </div>
                       </div>
                       <button
                         onClick={() => toggleActive(c)}
@@ -734,6 +842,34 @@ function CategoriesTab() {
           </ul>
         )}
       </Card>
+
+      {activeDrag && (
+        <div
+          className="fixed z-50 flex items-center gap-2 bg-surface border border-accent rounded-xl px-3 py-2 shadow-lg pointer-events-none"
+          style={{ left: activeDrag.x + 12, top: activeDrag.y + 12 }}
+        >
+          <span className="text-lg">{activeDrag.icon}</span>
+          <span className="text-sm text-ink">{activeDrag.name}</span>
+        </div>
+      )}
+
+      {confirmMove && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-4" onClick={() => setConfirmMove(null)}>
+          <div className="bg-surface rounded-2xl p-5 max-w-xs w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-ink text-center leading-6">
+              آیا می‌خواهید دسته «{confirmMove.sourceName}» به دسته «{confirmMove.targetName}» افزوده شود؟
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmMove(null)} className="flex-1 py-2 rounded-xl bg-canvas text-muted text-sm">
+                انصراف
+              </button>
+              <button onClick={confirmMoveCategory} className="flex-1 py-2 rounded-xl bg-accent text-on-accent text-sm font-medium">
+                بله، اضافه شود
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -35,6 +35,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const parent = await prisma.category.findFirst({ where: { id: body.parentCategoryId, userId, deletedAt: null } });
       if (!parent) throw new ApiError("دسته‌بندی والد پیدا نشد.", 404);
       if (parent.parentCategoryId) throw new ApiError("یک زیردسته نمی‌تواند خودش والدِ دسته‌ی دیگری باشد.", 422);
+      // One level only (see prisma/schema.prisma) — a category that already has its own
+      // sub-categories can't itself become someone else's child, or the hierarchy would end up
+      // two levels deep. Not just a drag-and-drop UI concern: without this check here, any PATCH
+      // caller could create that invalid state.
+      const existingChild = await prisma.category.findFirst({ where: { parentCategoryId: params.id, userId, deletedAt: null } });
+      if (existingChild) throw new ApiError("این دسته‌بندی خودش زیردسته دارد و نمی‌تواند زیرِ دسته‌ی دیگری قرار بگیرد.", 422);
     }
 
     const category = await prisma.category.update({ where: { id: params.id }, data: body });
