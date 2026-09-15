@@ -16,8 +16,8 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("demo@hesabkon.app");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -76,9 +76,6 @@ function LoginForm() {
         <Link href="/register" className="text-accent font-medium">
           ثبت‌نام
         </Link>
-      </p>
-      <p className="text-center text-xs text-muted mt-3">
-        حساب دمو از پیش پر شده — فقط دکمه ورود را بزنید.
       </p>
     </div>
   );
