@@ -696,6 +696,19 @@ model License {
   updatedAt DateTime @updatedAt
 }
 
+// Single global row (fixed id "singleton") the Android app checks alongside its license status
+// (see /api/license/status) to decide whether to nag about an update or block entry entirely.
+// Managed from /admin, not migrated per-release — see requireAdmin() in src/lib/admin.ts.
+model AppRelease {
+  id String @id @default("singleton")
+
+  latestVersionCode       Int // matches android/app/build.gradle's ANDROID_VERSION_CODE (CI run number)
+  minSupportedVersionCode Int // any installed build below this is hard-blocked, not just nagged
+  downloadUrl             String
+
+  updatedAt DateTime @updatedAt
+}
+
 // ---------------------------------------------------------------------------
 // "سرمایه من" (Founder Capital) — see src/lib/reportEngine.ts's computeFounderCapital
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@
 // two calls through dispatchLocal on native, same as every other resource).
 import { fetcher, apiPost } from "./apiClient";
 import { remoteLogin, remoteRegister, fetchRemoteLicenseStatus } from "./remoteAuth";
+import { cacheVersionGate } from "./versionGate";
 import type { LicenseCache } from "@/local/repositories/licenseCache";
 
 export async function getCachedLicense(): Promise<LicenseCache | null> {
@@ -24,6 +25,7 @@ export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCac
     input.mode === "register" ? await remoteRegister(input.name ?? "", input.email, input.password) : await remoteLogin(input.email, input.password);
 
   const status = await fetchRemoteLicenseStatus(token);
+  await cacheVersionGate(status);
 
   const { license } = await apiPost<{ license: LicenseCache }>("/api/local/license-cache", {
     status: status.status,
@@ -85,6 +87,7 @@ export async function refreshLicenseStatus(): Promise<void> {
   if (!cached?.token) return;
   try {
     const status = await fetchRemoteLicenseStatus(cached.token);
+    await cacheVersionGate(status);
     await apiPost("/api/local/license-cache", {
       status: status.status,
       trialDaysRemaining: status.trialDaysRemaining,

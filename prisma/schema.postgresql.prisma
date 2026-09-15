@@ -690,6 +690,18 @@ model License {
   updatedAt DateTime @updatedAt
 }
 
+// See schema.prisma's copy of this comment — single global row the Android app checks alongside
+// license status to decide whether to nag about an update or block entry entirely.
+model AppRelease {
+  id String @id @default("singleton")
+
+  latestVersionCode       Int
+  minSupportedVersionCode Int
+  downloadUrl             String
+
+  updatedAt DateTime @updatedAt
+}
+
 // ---------------------------------------------------------------------------
 // "سرمایه من" (Founder Capital) — see src/lib/reportEngine.ts's computeFounderCapital
 // ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer } from "@/lib/nativeOnboarding";
+import { checkVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { ApiClientError } from "@/lib/apiClient";
 
 function isNativePlatform(): boolean {
@@ -64,6 +65,23 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   // the user just needs to know some very recent data may be missing.
   const [recoveredFromBackup, setRecoveredFromBackup] = useState(false);
   const [recoveryNoticeDismissed, setRecoveryNoticeDismissed] = useState(false);
+  // A hard block (see AppRelease/requireAdmin) takes priority over `ready` below regardless of
+  // how it's populated — cached-only on the very first check of a boot (instant, no network
+  // wait, matching this gate's existing "never delay showing the already-cached app" posture),
+  // then re-derived for real once the background refresh below actually completes.
+  const [versionBlock, setVersionBlock] = useState<VersionGateResult | null>(null);
+
+  async function recheckVersionGate() {
+    try {
+      const { App } = await import("@capacitor/app");
+      const info = await App.getInfo();
+      const currentBuild = parseInt(info.build, 10) || 0;
+      const result = await checkVersionGate(currentBuild);
+      setVersionBlock(result.blocked ? result : null);
+    } catch (err) {
+      console.error("version gate check failed", err);
+    }
+  }
 
   useEffect(() => {
     if (!isNativePlatform()) {
@@ -124,12 +142,16 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       const license = await getCachedLicense();
       setReady(!!license);
 
+      // Cache-only first (no network wait — same instant-boot posture as the rest of this
+      // effect), then re-derive for real once the background refresh actually lands.
+      await recheckVersionGate();
+
       // Fire-and-forget, deliberately not awaited: re-checking with the server shouldn't delay
       // showing the (already-cached) app by a network round trip. See refreshLicenseStatus's own
       // doc comment for why a failure here is silent rather than surfaced. Same reasoning for
       // syncWithServer — WidgetQueueDrainer's resume handler is the trigger that awaits sync
       // before revalidating visible data; this boot-time one just gets the cursors moving.
-      void refreshLicenseStatus();
+      void refreshLicenseStatus().then(recheckVersionGate);
       void syncWithServer();
     })()
       .catch((err) => {
@@ -137,6 +159,25 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         setBootError(describeError(err));
       })
       .finally(() => setChecking(false));
+  }, []);
+
+  // A block flipped on while this device was merely backgrounded (not relaunched) must still
+  // catch the user on next resume, not wait for a fresh process start — Capacitor keeps the
+  // WebView alive across background/foreground, so nothing above re-runs on its own. Independent
+  // of WidgetQueueDrainer's own resume listener (which refreshes everything else): duplicating
+  // one lightweight GET on resume is a fine trade for not depending on listener-ordering between
+  // two separate components for something this gate needs to enforce itself.
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    let remove: (() => void) | undefined;
+    import("@capacitor/app").then(({ App }) => {
+      App.addListener("resume", () => {
+        void refreshLicenseStatus().then(recheckVersionGate);
+      }).then((handle) => {
+        remove = () => handle.remove();
+      });
+    });
+    return () => remove?.();
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -175,6 +216,32 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   }
 
   if (checking) return null;
+
+  if (versionBlock?.blocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">
+        <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.png" alt="پروا" className="h-14 w-14 rounded-2xl mx-auto" />
+          <h1 className="text-lg font-bold text-ink">به‌روزرسانی لازم است</h1>
+          <p className="text-sm text-muted leading-relaxed">
+            این نسخه از پروا دیگر پشتیبانی نمی‌شود و شامل یک تغییر مهم بوده. برای ادامه، نسخه جدید را نصب کنید.
+          </p>
+          {versionBlock.downloadUrl && (
+            <a
+              href={versionBlock.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90"
+            >
+              دانلود نسخه جدید
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (ready) {
     return (
       <>

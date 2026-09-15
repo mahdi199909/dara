@@ -9,6 +9,12 @@ vi.mock("./remoteAuth", () => ({
   remoteRegister: vi.fn(),
   fetchRemoteLicenseStatus: vi.fn(),
 }));
+// The real implementation calls @capacitor/preferences, which has no native/web bridge to fall
+// back on in this suite's plain "node" vitest environment (no window/localStorage) — irrelevant
+// to what these tests actually assert, so it's stubbed out like every other network/native edge.
+vi.mock("./versionGate", () => ({
+  cacheVersionGate: vi.fn(),
+}));
 
 import { fetcher, apiPost } from "./apiClient";
 import { remoteLogin, remoteRegister, fetchRemoteLicenseStatus } from "./remoteAuth";
@@ -34,7 +40,15 @@ describe("nativeOnboarding", () => {
     });
     vi.mocked(fetchRemoteLicenseStatus).mockImplementation(async () => {
       calls.push("status");
-      return { status: "TRIAL", trialDaysRemaining: 30, trialEndsAt: "2026-09-24T00:00:00.000Z", currentPeriodEnd: null };
+      return {
+        status: "TRIAL",
+        trialDaysRemaining: 30,
+        trialEndsAt: "2026-09-24T00:00:00.000Z",
+        currentPeriodEnd: null,
+        latestVersionCode: null,
+        minSupportedVersionCode: null,
+        downloadUrl: null,
+      };
     });
     vi.mocked(apiPost).mockImplementation(async (..._args: any[]) => {
       calls.push("cache");
@@ -61,7 +75,15 @@ describe("nativeOnboarding", () => {
 
   it("completeFirstRun calls remoteRegister instead of remoteLogin when mode is 'register'", async () => {
     vi.mocked(remoteRegister).mockResolvedValue({ user: { id: "user_2", name: "Sara", email: "s@example.com" }, token: "jwt-2" });
-    vi.mocked(fetchRemoteLicenseStatus).mockResolvedValue({ status: "TRIAL", trialDaysRemaining: 30, trialEndsAt: null, currentPeriodEnd: null });
+    vi.mocked(fetchRemoteLicenseStatus).mockResolvedValue({
+      status: "TRIAL",
+      trialDaysRemaining: 30,
+      trialEndsAt: null,
+      currentPeriodEnd: null,
+      latestVersionCode: null,
+      minSupportedVersionCode: null,
+      downloadUrl: null,
+    });
     vi.mocked(apiPost).mockResolvedValue({ license: { status: "TRIAL" } });
 
     await completeFirstRun({ mode: "register", name: "Sara", email: "s@example.com", password: "secret123" });
@@ -102,6 +124,9 @@ describe("nativeOnboarding", () => {
         trialDaysRemaining: 4,
         trialEndsAt: "2026-09-24T00:00:00.000Z",
         currentPeriodEnd: null,
+        latestVersionCode: null,
+        minSupportedVersionCode: null,
+        downloadUrl: null,
       });
 
       await refreshLicenseStatus();

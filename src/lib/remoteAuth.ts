@@ -66,6 +66,11 @@ export interface RemoteLicenseStatus {
   trialDaysRemaining: number | null;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  // Null until an admin configures a release via /admin — see src/lib/versionGate.ts, the only
+  // consumer of these three fields.
+  latestVersionCode: number | null;
+  minSupportedVersionCode: number | null;
+  downloadUrl: string | null;
 }
 
 export function fetchRemoteLicenseStatus(token: string): Promise<RemoteLicenseStatus> {

@@ -27,11 +27,17 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
+const RELEASE_SINGLETON_ID = "singleton";
+
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId(req);
 
     let license = await prisma.license.findUnique({ where: { userId } });
+    // Absent until an admin configures one via /admin (see requireAdmin()) — every installed
+    // build reads back as both "latest" and "always allowed" until then, so this check is a
+    // no-op by default rather than blocking everyone before a release has ever been set.
+    const release = await prisma.appRelease.findUnique({ where: { id: RELEASE_SINGLETON_ID } });
     if (!license) {
       const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86_400_000);
       license = await prisma.license.create({ data: { userId, status: "TRIAL", trialEndsAt } });
@@ -69,6 +75,9 @@ export async function GET(req: NextRequest) {
         trialDaysRemaining,
         trialEndsAt: license.trialEndsAt,
         currentPeriodEnd: license.currentPeriodEnd,
+        latestVersionCode: release?.latestVersionCode ?? null,
+        minSupportedVersionCode: release?.minSupportedVersionCode ?? null,
+        downloadUrl: release?.downloadUrl ?? null,
       })
     );
   } catch (err) {
