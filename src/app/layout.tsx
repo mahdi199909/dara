@@ -26,8 +26,8 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "پروا",
-  description: "سیستم‌عامل شخصی برای مدیریت زمان، وظایف و مالی",
+  title: "پروا | سیستم‌عامل شخصی",
+  description: "پروا | سیستم‌عامل شخصی",
   manifest: "/manifest.json",
   icons: { icon: "/icon.png", apple: "/icon.png" },
 };

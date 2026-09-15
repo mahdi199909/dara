@@ -17,5 +17,6 @@
     <string name="widget_capital_title">سرمایه من</string>
     <string name="widget_capital_description">نمایش ساعت سرمایه‌گذاری‌شده و ثبت سریع سه دسته پرکاربرد، بدون باز کردن اپ پروا</string>
     <string name="widget_capital_shortcuts_empty">دسته‌بندی‌ای پیدا نشد — یک‌بار اپ رو باز کنید</string>
-    <string name="splash_slogan">پروا یعنی حواست باشد چه خرج می‌کنی و چه می‌سازی. دارایی‌های پنهانت اینجا جمع می‌شوند.</string>
+    <string name="splash_title">پروا | سیستم‌عامل شخصی</string>
+    <string name="splash_slogan">زمان، پول، کار و دارایی‌هایت در یک دفتر واحد.</string>
 </resources>
