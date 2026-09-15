@@ -8,10 +8,9 @@
 import { ApiClientError } from "./apiClient";
 
 // Overridable at build time (e.g. for a staging backend) via NEXT_PUBLIC_REMOTE_API_BASE.
-// Temporarily pointed at Railway's own domain instead of dara.mganic.ir — that custom domain's
-// DNS has stopped resolving entirely (unrelated to any app code; confirmed 2026-08-26 against
-// public resolvers). Switch back to https://dara.mganic.ir once that's fixed.
-export const REMOTE_API_BASE = process.env.NEXT_PUBLIC_REMOTE_API_BASE ?? "https://hesabkon-app-production.up.railway.app";
+// Production backend moved off Railway to a dedicated VPS on 2026-09-15 (dara.mganic.ir's DNS
+// issue from the Railway era is moot now — this is a different domain entirely).
+export const REMOTE_API_BASE = process.env.NEXT_PUBLIC_REMOTE_API_BASE ?? "https://my.parvaapp.ir";
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {

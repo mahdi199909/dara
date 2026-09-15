@@ -8,7 +8,7 @@ function isNativePlatform(): boolean {
   return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
 }
 
-const REMOTE_API_BASE = process.env.NEXT_PUBLIC_REMOTE_API_BASE ?? "https://hesabkon-app-production.up.railway.app";
+const REMOTE_API_BASE = process.env.NEXT_PUBLIC_REMOTE_API_BASE ?? "https://my.parvaapp.ir";
 
 export async function fetchDailyQuote(): Promise<string | null> {
   const url = isNativePlatform() ? `${REMOTE_API_BASE}/api/quotes/today` : "/api/quotes/today";
