@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/icon.png" alt="پروا" className="h-14 w-14 rounded-2xl mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-accent">پروا</h1>
-          <p className="text-sm text-muted mt-1">سیستم‌عامل شخصی زمان، وظایف و مالی</p>
+          <p className="text-sm text-muted mt-1">سیستم عامل منابع شخصی</p>
         </div>
         {children}
       </div>
