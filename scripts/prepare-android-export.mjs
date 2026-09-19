@@ -23,6 +23,10 @@ if (process.env.ANDROID_EXPORT_BUILD !== "1") {
 
 const root = process.cwd();
 const apiDir = join(root, "src/app/api");
+// The sync test rig (src/testing) drives the real API route handlers, so with src/app/api gone it
+// can no longer type-check — and `next build` type-checks every .ts file under the project root,
+// tests included. It's only ever useful next to the routes, so it goes with them.
+const testingDir = join(root, "src/testing");
 const middlewareFile = join(root, "src/middleware.ts");
 const androidLayout = join(root, "src/app/(app)/layout.android.tsx");
 const webLayout = join(root, "src/app/(app)/layout.tsx");
@@ -30,6 +34,10 @@ const webLayout = join(root, "src/app/(app)/layout.tsx");
 if (existsSync(apiDir)) {
   rmSync(apiDir, { recursive: true, force: true });
   console.log("Removed src/app/api (Android never calls it — see src/lib/localDispatcher.ts).");
+}
+if (existsSync(testingDir)) {
+  rmSync(testingDir, { recursive: true, force: true });
+  console.log("Removed src/testing (test rig for the API routes that were just removed).");
 }
 if (existsSync(middlewareFile)) {
   rmSync(middlewareFile, { force: true });
