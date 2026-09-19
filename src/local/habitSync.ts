@@ -5,6 +5,7 @@
 import { ApiError } from "@/lib/apiErrorBase";
 import { computeVirtualAssetValue } from "@/lib/timeCost";
 import type { LocalDb } from "./db";
+import { deleteRowsWithTombstones } from "./tombstones";
 
 interface HabitCheckInRow {
   id: string;
@@ -51,7 +52,7 @@ export function syncHabitCheckInVirtualAsset(db: LocalDb, checkInId: string): vo
   const totalValue = habit.virtualAssetValuePerCheckIn + timeValue;
 
   if (totalValue <= 0) {
-    db.run(`DELETE FROM "VirtualAssetEntry" WHERE "habitCheckInId" = ?`, [checkInId]);
+    deleteRowsWithTombstones(db, "VirtualAssetEntry", '"habitCheckInId" = ?', [checkInId]);
     return;
   }
 

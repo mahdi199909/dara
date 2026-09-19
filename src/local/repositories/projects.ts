@@ -6,7 +6,7 @@ import { ApiError } from "@/lib/apiErrorBase";
 import type { CreateProjectInput, UpdateProjectInput } from "@/lib/schemas/projects";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
-import { createProjectCategory, renameProjectCategory, deactivateProjectCategory } from "../projectSync";
+import { createProjectCategory, renameProjectCategory, deactivateProjectCategory, syncProjectCompletionAsset } from "../projectSync";
 import { computeHourlyValue } from "@/lib/hourlyValue";
 import { computeRealCost } from "@/lib/timeCost";
 
@@ -158,9 +158,8 @@ export function updateProject(db: LocalDb, userId: string, id: string, input: Up
 
   if (input.name && input.name !== existing.name) renameProjectCategory(db, id, input.name);
 
-  // syncProjectCompletionAsset (src/lib/projectSync.ts) is deliberately NOT ported here — it
-  // needs Activity/Task/Transaction data aggregated together, and Activity/Transaction don't
-  // have local repositories yet. See src/local/projectSync.ts for the full note.
+  // Same as the web route: completing (or un-completing) a project (re)computes its own virtual asset.
+  if (input.status !== undefined) syncProjectCompletionAsset(db, id);
 
   const fresh = getOwnedRow(db, userId, id);
   writeLocalAuditLog(db, {

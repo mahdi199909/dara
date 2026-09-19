@@ -40,6 +40,12 @@ async function handleLocal<T>(method: string, url: string, body?: unknown): Prom
     const err = json as { error?: string; details?: unknown };
     throw new ApiClientError(err.error ?? "خطایی رخ داد. دوباره تلاش کنید.", status, err.details);
   }
+  // A successful local write should reach the server (and so the web app) within seconds, not
+  // only the next time the app is reopened — see syncScheduler.ts. /api/local/* is device
+  // bookkeeping (license cache, logout), not user data, so it never triggers a sync.
+  if (method !== "GET" && !url.startsWith("/api/local/")) {
+    void import("./syncScheduler").then((m) => m.noteLocalWrite());
+  }
   return json as T;
 }
 

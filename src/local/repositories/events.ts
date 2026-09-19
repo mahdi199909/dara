@@ -29,6 +29,7 @@ import type { CreateEventInput, UpdateEventInput, ToggleEventCompletionInput, Cr
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
+import { deleteRowsWithTombstones } from "../tombstones";
 import { scheduleReminderNotification, rescheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
 
 interface EventRow {
@@ -373,7 +374,7 @@ export function toggleEventCompletion(db: LocalDb, userId: string, eventId: stri
   const existing = db.get<EventCompletionRow>(`SELECT * FROM "EventCompletion" WHERE "eventId" = ? AND "occurrenceDate" = ?`, [event.id, occurrenceDate]);
 
   if (existing) {
-    db.run(`DELETE FROM "EventCompletion" WHERE "id" = ?`, [existing.id]);
+    deleteRowsWithTombstones(db, "EventCompletion", '"id" = ?', [existing.id]);
     writeLocalAuditLog(db, { userId, action: "EVENT_UNCOMPLETE", entityType: "EventCompletion", entityId: existing.id, oldValue: existing });
     return { isDone: false };
   }
@@ -396,7 +397,7 @@ export function deleteReminder(db: LocalDb, userId: string, id: string) {
   const reminder = db.get<ReminderRow>(`SELECT * FROM "Reminder" WHERE "id" = ? AND "userId" = ?`, [id, userId]);
   if (!reminder) throw new ApiError("یادآوری پیدا نشد.", 404);
 
-  db.run(`DELETE FROM "Reminder" WHERE "id" = ?`, [id]);
+  deleteRowsWithTombstones(db, "Reminder", '"id" = ?', [id]);
   cancelReminderNotifications([id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Reminder", entityId: id, oldValue: toReminder(reminder) });
   return { ok: true };

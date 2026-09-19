@@ -84,6 +84,28 @@ function bootstrap(db: LocalDb) {
   } catch {
     // column already exists
   }
+
+  // Sync bookkeeping that must survive a logout (which clears _local_license_cache above), so it
+  // lives in its own local-only tables — see src/local/syncMeta.ts. _local_sync_meta remembers
+  // which server account this device's data belongs to (so logging into a *different* account
+  // can be detected instead of silently merging two people's data) and how far deletions have
+  // been acknowledged; _local_sync_issues remembers rows the server refused, to retry them.
+  db.execute(
+    `CREATE TABLE IF NOT EXISTS "_local_sync_meta" (
+       "key" TEXT NOT NULL PRIMARY KEY,
+       "value" TEXT
+     );`
+  );
+  db.execute(
+    `CREATE TABLE IF NOT EXISTS "_local_sync_issues" (
+       "tbl" TEXT NOT NULL,
+       "rowId" TEXT NOT NULL,
+       "reason" TEXT NOT NULL,
+       "attempts" INTEGER NOT NULL DEFAULT 1,
+       "at" TEXT NOT NULL,
+       PRIMARY KEY ("tbl", "rowId")
+     );`
+  );
 }
 
 let instance: LocalDb | null = null;

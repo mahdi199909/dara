@@ -4,6 +4,7 @@
 import { ApiError } from "@/lib/apiErrorBase";
 import type { LocalDb } from "../db";
 import { fetchByIds } from "../relations";
+import { deleteRowsWithTombstones } from "../tombstones";
 import { writeLocalAuditLog } from "../audit";
 import { computeUpgradeEffect, type UpgradeEffect } from "../reportEngine";
 
@@ -107,7 +108,7 @@ export function listVirtualAssets(db: LocalDb, userId: string) {
 export function deleteVirtualAssetEntry(db: LocalDb, userId: string, id: string): { ok: true } {
   const existing = db.get<VirtualAssetEntryRow>(`SELECT * FROM "VirtualAssetEntry" WHERE "id" = ? AND "userId" = ?`, [id, userId]);
   if (!existing) throw new ApiError("دارایی مجازی پیدا نشد.", 404);
-  db.run(`DELETE FROM "VirtualAssetEntry" WHERE "id" = ?`, [id]);
+  deleteRowsWithTombstones(db, "VirtualAssetEntry", '"id" = ?', [id]);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "VirtualAssetEntry", entityId: id, oldValue: existing });
   return { ok: true };
 }

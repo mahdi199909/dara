@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
+import { deleteVirtualAssetEntriesWithTombstones } from "@/lib/tombstones";
 
 // No edit here, deliberately: a VirtualAssetEntry's value is derived from a real
 // activity/task/project/habit check-in (see prisma/schema.prisma's own comment on this model) —
@@ -18,7 +19,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const existing = await prisma.virtualAssetEntry.findFirst({ where: { id: params.id, userId } });
     if (!existing) throw new ApiError("دارایی مجازی پیدا نشد.", 404);
 
-    await prisma.virtualAssetEntry.delete({ where: { id: params.id } });
+    await deleteVirtualAssetEntriesWithTombstones({ id: params.id });
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

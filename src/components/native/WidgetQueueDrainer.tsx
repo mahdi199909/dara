@@ -61,7 +61,7 @@ export default function WidgetQueueDrainer() {
         // Unconditional, and outside the try/catch above: a failed drain shouldn't also
         // suppress refreshing the data that WAS already there before this resume.
         void refreshLicenseStatus();
-        await syncWithServer();
+        await syncWithServer({ deep: true });
         mutate(() => true, undefined, { revalidate: true });
       });
       remove = () => handle.remove();

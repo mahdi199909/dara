@@ -27,6 +27,12 @@ RUN npm run build
 
 EXPOSE 3000
 ENV NODE_ENV=production
+# The app's notion of "today" (habit check-in days, reports, calendar, the Jalali date) comes from
+# the server process's local time. Left at the container default (UTC) it rolls over at 03:30
+# Tehran time, and — worse for sync — a habit checked in on the web is stored under a different
+# instant than the same day checked on the phone (Tehran midnight), so the two never agree they
+# are the same day. Node resolves named zones through its bundled ICU data, so this needs no tzdata.
+ENV TZ=Asia/Tehran
 
 # Explicit `-p 3000` (not just `npm run start` / an ENV PORT default) because the host
 # platform (e.g. Railway) injects its own PORT env var at container runtime — which

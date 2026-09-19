@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { computeVirtualAssetValue } from "./timeCost";
 import { syncActivityDirectCostTransaction } from "./directCostSync";
+import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
 
 export { syncActivityDirectCostTransaction as syncDirectCostTransaction };
 
@@ -37,7 +38,7 @@ export async function recalcActivityDuration(activityId: string) {
       },
     });
   } else {
-    await prisma.virtualAssetEntry.deleteMany({ where: { activityId } });
+    await deleteVirtualAssetEntriesWithTombstones({ activityId });
   }
 
   return totalDurationMin;

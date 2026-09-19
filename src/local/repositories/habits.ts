@@ -18,6 +18,7 @@ import {
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
+import { deleteRowsWithTombstones } from "../tombstones";
 import { syncHabitCheckInVirtualAsset } from "../habitSync";
 
 interface HabitRow {
@@ -242,8 +243,8 @@ export function toggleHabitCheckIn(db: LocalDb, userId: string, habitId: string,
   const existing = db.get<HabitCheckInRow>(`SELECT * FROM "HabitCheckIn" WHERE "habitId" = ? AND "date" = ?`, [habitId, dateIso]);
 
   if (existing) {
-    db.run(`DELETE FROM "VirtualAssetEntry" WHERE "habitCheckInId" = ?`, [existing.id]);
-    db.run(`DELETE FROM "HabitCheckIn" WHERE "id" = ?`, [existing.id]);
+    deleteRowsWithTombstones(db, "VirtualAssetEntry", '"habitCheckInId" = ?', [existing.id]);
+    deleteRowsWithTombstones(db, "HabitCheckIn", '"id" = ?', [existing.id]);
     writeLocalAuditLog(db, { userId, action: "HABIT_UNCHECK", entityType: "HabitCheckIn", entityId: existing.id, oldValue: existing });
     return { checkedIn: false };
   }

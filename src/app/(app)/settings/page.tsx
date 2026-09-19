@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore, Fragment } from "react";
 import useSWR, { mutate as mutateGlobal } from "swr";
 import { fetcher, apiPatch, apiPost, apiDelete } from "@/lib/apiClient";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -12,6 +12,8 @@ import { PlusIcon, TrashIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
+import { getSyncStatus, subscribeSyncStatus } from "@/lib/syncStatus";
+import { REMOTE_API_BASE } from "@/lib/remoteAuth";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
 import type { ParsedIcsEvent } from "@/lib/icsParser";
 import { Preferences } from "@capacitor/preferences";
@@ -246,6 +248,39 @@ function MembershipUpgradeCard() {
 
 const HOURS_0_23 = Array.from({ length: 24 }, (_, h) => h);
 
+/**
+ * Which account is this? Shown at the top of the personal tab on both platforms so it's always
+ * clear which email the data belongs to (and therefore which login shows the same data on the
+ * other platform). On the web that's the logged-in user; on the phone it's the account this
+ * device syncs with — the phone's own local user row is only a placeholder.
+ */
+function AccountEmailRow({ webEmail }: { webEmail?: string | null }) {
+  const [state, setState] = useState<{ email: string | null; native: boolean; linked: boolean }>({ email: webEmail ?? null, native: false, linked: true });
+
+  useEffect(() => {
+    const native = Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+    if (!native) {
+      setState({ email: webEmail ?? null, native: false, linked: true });
+      return;
+    }
+    import("@/lib/nativeOnboarding")
+      .then(({ getCachedLicense }) => getCachedLicense())
+      .then((l) => setState({ email: l?.remoteEmail || null, native: true, linked: !!l?.token }))
+      .catch(() => setState({ email: null, native: true, linked: false }));
+  }, [webEmail]);
+
+  if (!state.email) return null;
+  return (
+    <div className="rounded-xl bg-canvas px-3 py-2.5 text-sm">
+      <p className="text-xs text-muted mb-0.5">ایمیل حساب</p>
+      <p className="text-ink" dir="ltr">{state.email}</p>
+      {state.native && !state.linked && (
+        <p className="text-xs text-waste mt-1 leading-relaxed">هنوز به سرور وصل نشده — اطلاعات فقط روی همین گوشی است. برای همگام‌شدن با وب از «بیشتر ← خروج از حساب» خارج و دوباره وارد شوید.</p>
+      )}
+    </div>
+  );
+}
+
 function PersonalTab() {
   const { data, mutate } = useSWR<any>("/api/settings", fetcher);
   const [name, setName] = useState("");
@@ -302,6 +337,7 @@ function PersonalTab() {
       <LicenseStatusCard />
       <MembershipUpgradeCard />
       <Card className="p-5 space-y-4">
+      <AccountEmailRow webEmail={data?.user?.email} />
       <div>
         <label className="block text-sm text-ink mb-1">نام</label>
         <input value={name} onChange={(e) => setName(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
@@ -928,9 +964,12 @@ const TABLE_LABELS_FA: Partial<Record<DataExportTable, string>> = {
 };
 
 /**
- * Native-only — surfaces the automatic local<->server sync (src/local/sync.ts,
- * src/lib/nativeOnboarding.ts's syncWithServer) that already runs on its own on boot/resume/
- * first-run, so a manual export/import file isn't the only way to trust data reached the server.
+ * Native-only — the live view of the local<->server sync (src/local/syncRunner.ts): which account
+ * this phone is linked to, when data last went up and came down, whether a sync is running right
+ * now, and — the part that used to be missing — exactly why a sync failed or which rows the server
+ * refused, instead of a generic "check your internet". The sync itself runs on its own (a few
+ * seconds after each edit, every ~45 s while the app is open, on open/resume — see
+ * src/lib/syncScheduler.ts); this card is for trusting it, and for forcing one on demand.
  * Same isNativePlatform()-inside-an-effect convention as LicenseStatusCard above. Renders nothing
  * until the cache read resolves, and nothing at all if this device was never linked to a real
  * account (continueOffline's trial path has no token, so there's genuinely nothing to sync yet).
@@ -938,13 +977,20 @@ const TABLE_LABELS_FA: Partial<Record<DataExportTable, string>> = {
 function SyncStatusCard() {
   const [license, setLicense] = useState<import("@/local/repositories/licenseCache").LicenseCache | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; pushedCount: number; pulledCount: number } | null>(null);
+  const [issues, setIssues] = useState<Array<{ tbl: string; reason: string }>>([]);
+  const status = useSyncExternalStore(subscribeSyncStatus, getSyncStatus, getSyncStatus);
 
-  function loadLicense() {
+  function loadState() {
     return import("@/lib/nativeOnboarding")
       .then(({ getCachedLicense }) => getCachedLicense())
-      .then((l) => setLicense(l))
+      .then(async (l) => {
+        setLicense(l);
+        const db = getLocalDbInstance();
+        if (db) {
+          const { listSyncIssues } = await import("@/local/syncMeta");
+          setIssues(listSyncIssues(db).slice(0, 5));
+        }
+      })
       .catch(() => setLicense(null));
   }
 
@@ -954,29 +1000,41 @@ function SyncStatusCard() {
       setLoaded(true);
       return;
     }
-    loadLicense().finally(() => setLoaded(true));
+    loadState().finally(() => setLoaded(true));
   }, []);
 
+  // Cursors and issue rows change whenever any sync (manual, background, boot) finishes.
+  const lastFinishedAt = status.last?.finishedAt;
+  useEffect(() => {
+    if (lastFinishedAt) void loadState();
+  }, [lastFinishedAt]);
+
   async function handleSyncNow() {
-    setSyncing(true);
-    setResult(null);
-    try {
-      const { syncWithServer } = await import("@/lib/nativeOnboarding");
-      const r = await syncWithServer();
-      setResult(r);
-      await loadLicense();
-    } finally {
-      setSyncing(false);
-    }
+    const { syncWithServer } = await import("@/lib/nativeOnboarding");
+    await syncWithServer({ deep: true });
   }
 
   if (!loaded || !license?.token) return null;
 
+  const last = status.last && !status.last.notLinked ? status.last : null;
+  const webHost = (() => {
+    try {
+      return new URL(REMOTE_API_BASE).host;
+    } catch {
+      return null;
+    }
+  })();
+
   return (
     <Card className="p-5 space-y-3">
       <h2 className="font-bold text-ink text-sm">همگام‌سازی با سرور</h2>
+      <div className="rounded-xl bg-canvas px-3 py-2.5 text-sm">
+        <p className="text-xs text-muted mb-0.5">حساب متصل</p>
+        <p className="text-ink" dir="ltr">{license.remoteEmail}</p>
+      </div>
       <p className="text-xs text-muted leading-relaxed">
-        اطلاعات شما همیشه روی همین گوشی ذخیره می‌شود. وقتی اینترنت وصل باشد، همان اطلاعات با حساب «{license.remoteEmail}» روی سرور همگام می‌شود — یعنی می‌توانید از نسخه وب یا هر گوشی دیگری هم با همین حساب واردش شوید، بدون نگرانی از دست رفتن چیزی.
+        اطلاعات همیشه روی همین گوشی ذخیره می‌شود و با همین حساب روی سرور همگام می‌ماند — چند ثانیه بعد از هر تغییر، و هر ~۴۵ ثانیه وقتی برنامه باز است.
+        {webHost ? ` نسخه وب: ${webHost} (با همین ایمیل وارد شوید).` : ""}
       </p>
       <div className="text-xs text-muted space-y-1">
         <p>آخرین ارسال به سرور: {license.lastPushedAt ? formatJalali(new Date(license.lastPushedAt), { withTime: true }) : "هنوز انجام نشده"}</p>
@@ -985,17 +1043,34 @@ function SyncStatusCard() {
       <button
         type="button"
         onClick={handleSyncNow}
-        disabled={syncing}
+        disabled={status.syncing}
         className="rounded-xl bg-canvas text-ink px-4 py-2 text-sm font-medium hover:bg-line disabled:opacity-40"
       >
-        {syncing ? "در حال همگام‌سازی..." : "همگام‌سازی الان"}
+        {status.syncing ? "در حال همگام‌سازی..." : "همگام‌سازی الان"}
       </button>
-      {result && (
-        <p className={`text-xs ${result.ok ? "text-accent" : "text-waste"}`}>
-          {result.ok
-            ? `همگام‌سازی موفق — ${toPersianDigits(result.pushedCount)} مورد ارسال و ${toPersianDigits(result.pulledCount)} مورد دریافت شد.`
-            : "همگام‌سازی ناموفق بود — اتصال اینترنت را بررسی کنید."}
+
+      {last?.ok && (
+        <p className="text-xs text-accent">
+          {`همگام‌سازی موفق — ${toPersianDigits(last.pushedCount)} مورد ارسال و ${toPersianDigits(last.pulledCount)} مورد دریافت شد`}
+          {last.deletionsPushed + last.deletionsPulled > 0 ? `؛ ${toPersianDigits(last.deletionsPushed + last.deletionsPulled)} حذف هم منتقل شد` : ""}
+          {"."}
         </p>
+      )}
+      {last && !last.ok && last.error && <p className="text-xs text-waste leading-relaxed">{last.error.message}</p>}
+      {last && last.rejectedCount > 0 && (
+        <p className="text-xs text-waste leading-relaxed">{toPersianDigits(last.rejectedCount)} مورد را سرور نپذیرفت — پایین‌تر دلیلش آمده و دوباره تلاش می‌شود.</p>
+      )}
+      {last && last.pullFailures > 0 && (
+        <p className="text-xs text-waste leading-relaxed">{toPersianDigits(last.pullFailures)} مورد از سرور روی این گوشی جا نشد.</p>
+      )}
+      {issues.length > 0 && (
+        <ul className="text-[11px] text-muted space-y-0.5 list-disc pr-4" dir="ltr">
+          {issues.map((i, idx) => (
+            <li key={idx}>
+              {i.tbl}: {i.reason}
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   );

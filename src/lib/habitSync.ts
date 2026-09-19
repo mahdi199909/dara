@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
 import { computeVirtualAssetValue } from "./timeCost";
 
 /**
@@ -24,7 +25,7 @@ export async function syncHabitCheckInVirtualAsset(checkInId: string) {
   const totalValue = habit.virtualAssetValuePerCheckIn + timeValue;
 
   if (totalValue <= 0) {
-    await prisma.virtualAssetEntry.deleteMany({ where: { habitCheckInId: checkInId } });
+    await deleteVirtualAssetEntriesWithTombstones({ habitCheckInId: checkInId });
     return;
   }
 

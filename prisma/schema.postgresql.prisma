@@ -51,6 +51,7 @@ model User {
   license             License?
   capitalSnapshots    CapitalSnapshot[]
   shownInsights       ShownInsight[]
+  syncTombstones      SyncTombstone[]
 }
 
 model Settings {
@@ -740,4 +741,26 @@ model ShownInsight {
 
   @@unique([userId, insightId])
   @@index([userId, shownAt])
+}
+
+// ---------------------------------------------------------------------------
+// Sync tombstones
+// ---------------------------------------------------------------------------
+
+// A record that a row in one of the hard-deleted tables (see TOMBSTONE_TABLES in
+// src/lib/syncTables.ts: HabitCheckIn, EventCompletion, Reminder, VirtualAssetEntry) was deleted,
+// so every other device learns about it on its next pull instead of keeping its copy forever.
+// Written by the server itself when a web action deletes such a row, and by /api/sync/push when
+// a device reports its own deletion. One row per (user, table, row id).
+model SyncTombstone {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  table     String
+  rowId     String
+  deletedAt DateTime @default(now())
+
+  @@unique([userId, table, rowId])
+  @@index([userId, deletedAt])
 }

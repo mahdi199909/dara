@@ -5,6 +5,7 @@
 import { computeVirtualAssetValue } from "@/lib/timeCost";
 import type { LocalDb } from "./db";
 import { resolveDefaultAccountId } from "./accounts";
+import { deleteRowsWithTombstones } from "./tombstones";
 
 function now() {
   return new Date().toISOString();
@@ -16,7 +17,7 @@ export function syncActivityDirectCostTransaction(db: LocalDb, activityId: strin
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "activityId" = ? AND "type" = 'EXPENSE' AND "deletedAt" IS NULL`, [activityId]);
 
   if (activity.directCost <= 0) {
-    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ? WHERE "id" = ?`, [now(), existingTx.id]);
+    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), existingTx.id]);
     return;
   }
 
@@ -47,7 +48,7 @@ export function syncTaskDirectCostTransaction(db: LocalDb, taskId: string) {
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "taskId" = ? AND "activityId" IS NULL AND "type" = 'EXPENSE' AND "deletedAt" IS NULL`, [taskId]);
 
   if (task.directCost <= 0) {
-    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ? WHERE "id" = ?`, [now(), existingTx.id]);
+    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), existingTx.id]);
     return;
   }
 
@@ -77,7 +78,7 @@ export function syncTaskIncomeTransaction(db: LocalDb, taskId: string) {
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "taskId" = ? AND "activityId" IS NULL AND "type" = 'INCOME' AND "deletedAt" IS NULL`, [taskId]);
 
   if (task.incomeAmount <= 0) {
-    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ? WHERE "id" = ?`, [now(), existingTx.id]);
+    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), existingTx.id]);
     return;
   }
 
@@ -127,7 +128,7 @@ export function syncTaskVirtualAsset(db: LocalDb, taskId: string) {
       );
     }
   } else {
-    db.run(`DELETE FROM "VirtualAssetEntry" WHERE "taskId" = ?`, [taskId]);
+    deleteRowsWithTombstones(db, "VirtualAssetEntry", '"taskId" = ?', [taskId]);
   }
 }
 
@@ -137,7 +138,7 @@ export function syncEventDirectCostTransaction(db: LocalDb, eventId: string) {
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "eventId" = ? AND "type" = 'EXPENSE' AND "deletedAt" IS NULL`, [eventId]);
 
   if (event.directCost <= 0) {
-    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ? WHERE "id" = ?`, [now(), existingTx.id]);
+    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), existingTx.id]);
     return;
   }
 
@@ -167,7 +168,7 @@ export function syncEventIncomeTransaction(db: LocalDb, eventId: string) {
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "eventId" = ? AND "type" = 'INCOME' AND "deletedAt" IS NULL`, [eventId]);
 
   if (event.incomeAmount <= 0) {
-    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ? WHERE "id" = ?`, [now(), existingTx.id]);
+    if (existingTx) db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), existingTx.id]);
     return;
   }
 

@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { computeHourlyValue } from "./hourlyValue";
 import { computeTimeCost } from "./timeCost";
+import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
 
 /**
  * Every Project gets a matching Category (same name, defaults to "دارایی") so project work
@@ -40,7 +41,7 @@ export async function syncProjectCompletionAsset(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
 
   if (project.status !== "COMPLETED") {
-    await prisma.virtualAssetEntry.deleteMany({ where: { projectId } });
+    await deleteVirtualAssetEntriesWithTombstones({ projectId });
     return;
   }
 
@@ -69,7 +70,7 @@ export async function syncProjectCompletionAsset(projectId: string) {
   const totalValue = directCost + timeCost;
 
   if (totalValue <= 0) {
-    await prisma.virtualAssetEntry.deleteMany({ where: { projectId } });
+    await deleteVirtualAssetEntriesWithTombstones({ projectId });
     return;
   }
 

@@ -14,7 +14,7 @@
 // Wiring this in is part of restructuring that layout in Phase 6, once there's a real Capacitor
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
-import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer } from "@/lib/nativeOnboarding";
+import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
 import { checkVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { ApiClientError } from "@/lib/apiClient";
 
@@ -59,6 +59,9 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   const [networkError, setNetworkError] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Set when the account just signed into differs from the one this phone's data belongs to —
+  // the person must confirm before that data is replaced (see completeFirstRun / accountSwitch.ts).
+  const [switchPrompt, setSwitchPrompt] = useState<{ previousEmail: string | null } | null>(null);
   // Set when browserSqlJs.ts had to fall back to dara.sqlite3.bak because dara.sqlite3 itself was
   // corrupt (see loadBrowserSqliteDriver's own doc comment) — surfaced as a dismissible notice
   // once inside the app rather than blocking the gate, since the recovery already succeeded and
@@ -152,7 +155,13 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       // syncWithServer — WidgetQueueDrainer's resume handler is the trigger that awaits sync
       // before revalidating visible data; this boot-time one just gets the cursors moving.
       void refreshLicenseStatus().then(recheckVersionGate);
-      void syncWithServer();
+      void syncWithServer({ deep: true }).then(async (outcome) => {
+        // The UI may already be showing the previous state by the time this lands.
+        if (outcome.pulledCount > 0 || outcome.deletionsPulled > 0) {
+          const { mutate } = await import("swr");
+          mutate(() => true, undefined, { revalidate: true });
+        }
+      });
     })()
       .catch((err) => {
         setReady(false);
@@ -180,15 +189,19 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     return () => remove?.();
   }, []);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit(confirmSwitch: boolean) {
     setError(null);
     setNetworkError(false);
     setLoading(true);
     try {
-      await completeFirstRun({ mode, name, email, password });
+      await completeFirstRun({ mode, name, email, password, confirmSwitch });
+      setSwitchPrompt(null);
       setReady(true);
     } catch (err) {
+      if (err instanceof AccountSwitchRequired) {
+        setSwitchPrompt({ previousEmail: err.previousEmail });
+        return;
+      }
       setError(describeError(err));
       // ApiClientError means the server actually answered (with a real 4xx/5xx — wrong password,
       // duplicate email, validation, etc.) — that's a genuine problem with the submitted info, not
@@ -200,6 +213,11 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     } finally {
       setLoading(false);
     }
+  }
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    void submit(false);
   }
 
   async function onContinueOffline() {
@@ -273,6 +291,33 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
           <p className="text-xs text-red-500 bg-red-50 rounded-lg p-2 leading-relaxed break-words" dir="ltr">
             {bootError}
           </p>
+        )}
+        {switchPrompt && (
+          <div className="space-y-3 rounded-xl border border-line bg-canvas p-3 text-xs leading-relaxed text-ink">
+            <p className="font-bold">این گوشی با حساب دیگری استفاده شده است</p>
+            <p className="text-muted">
+              اطلاعات فعلی گوشی متعلق به حساب «{switchPrompt.previousEmail ?? "قبلی"}» است. اگر با «{email}» وارد شوید، این اطلاعات از روی گوشی پاک می‌شود و اطلاعات حساب جدید جایگزینش می‌شود.
+              هرچه از حساب قبلی همگام شده باشد روی سرور همان حساب می‌ماند.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void submit(true)}
+                disabled={loading}
+                className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40"
+              >
+                {loading ? "در حال انجام..." : "بله، جایگزین کن"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSwitchPrompt(null)}
+                disabled={loading}
+                className="flex-1 rounded-xl border border-line py-2 text-sm text-muted hover:bg-surface disabled:opacity-40"
+              >
+                انصراف
+              </button>
+            </div>
+          </div>
         )}
         <form onSubmit={onSubmit} className="space-y-3">
           {mode === "register" && (

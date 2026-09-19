@@ -49,22 +49,15 @@ function insertDefaultSettings(db: LocalDb, userId: string): SettingsRow {
 }
 
 /**
- * Faithful-port note: the web route's GET calls `prisma.settings.upsert({ update: {} , ... })`
- * unconditionally. Because Prisma auto-manages `@updatedAt` on every `update()` call — even a
- * no-op one — this bumps Settings.updatedAt on *every* GET request, not just the first one
- * that creates the row. That's reproduced here (rather than silently "fixed") so behavior
- * stays byte-identical; flagging it in case it's an unintended Prisma-upsert side effect worth
- * reviewing rather than a deliberate feature.
+ * Reading settings must not touch Settings.updatedAt. The web route's GET used to upsert with an
+ * empty update — which Prisma turns into an updatedAt bump — and this port copied that. Once
+ * settings sync between devices (src/lib/profileSync.ts), updatedAt has to mean "a person last
+ * changed these", or merely opening the app on one device would make its (older) values beat a
+ * real edit made on the other.
  */
 export function getSettings(db: LocalDb, userId: string) {
   const existing = db.get<SettingsRow>(`SELECT * FROM "Settings" WHERE "userId" = ?`, [userId]);
-  let settings: SettingsRow;
-  if (existing) {
-    db.run(`UPDATE "Settings" SET "updatedAt" = ? WHERE "userId" = ?`, [now(), userId]);
-    settings = db.get<SettingsRow>(`SELECT * FROM "Settings" WHERE "userId" = ?`, [userId])!;
-  } else {
-    settings = insertDefaultSettings(db, userId);
-  }
+  const settings = existing ?? insertDefaultSettings(db, userId);
 
   const user = db.get<{ id: string; name: string; email: string }>(`SELECT "id","name","email" FROM "User" WHERE "id" = ?`, [userId]);
 

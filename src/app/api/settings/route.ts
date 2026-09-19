@@ -30,10 +30,14 @@ const updateSchema = z.object({
 export async function GET() {
   try {
     const userId = await requireUserId();
-    const [settings, user] = await Promise.all([
-      prisma.settings.upsert({ where: { userId }, update: {}, create: { userId } }),
+    // Deliberately not an unconditional upsert: Prisma bumps @updatedAt even for an empty update,
+    // which made every page load look like an edit (see src/lib/profileSync.ts — settings sync
+    // depends on updatedAt meaning "a person last changed these").
+    const [existing, user] = await Promise.all([
+      prisma.settings.findUnique({ where: { userId } }),
       prisma.user.findUnique({ where: { id: userId } }),
     ]);
+    const settings = existing ?? (await prisma.settings.upsert({ where: { userId }, update: {}, create: { userId } }));
 
     return NextResponse.json({
       settings,

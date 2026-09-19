@@ -3,15 +3,19 @@
 // actions, same 404 message, so the local dispatcher (Phase 3) can return byte-identical
 // shapes regardless of whether it's backed by this repository or the real HTTP routes.
 //
-// Deliberately NOT ported yet: syncTaskDirectCostTransaction / syncTaskIncomeTransaction /
-// syncTaskVirtualAsset (see @/lib/directCostSync). Those need local Transaction and
-// VirtualAssetEntry repositories, which are Phase 4's job — porting them here would mean
-// half-building two other resources before this vertical slice is even done.
+// Like the web routes, creating/updating a task also keeps its derived rows in step:
+// syncTaskDirectCostTransaction / syncTaskIncomeTransaction (the linked expense/income
+// Transaction) and syncTaskVirtualAsset (the "سرمایه من" entry for a task with a start and end
+// time) — see ../directCostSync. These were left out when this file was written (the
+// Transaction/VirtualAssetEntry repositories didn't exist yet), which meant a task logged on the
+// phone silently produced no expense and no virtual asset while the same task logged on the web
+// did: the same data, different totals depending on where it was entered.
 import { ApiError } from "@/lib/apiErrorBase";
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/schemas/tasks";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
+import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "../directCostSync";
 
 interface TaskRow {
   id: string;
@@ -103,6 +107,10 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
     ]
   );
 
+  if ((input.directCost ?? 0) > 0) syncTaskDirectCostTransaction(db, id);
+  if ((input.incomeAmount ?? 0) > 0) syncTaskIncomeTransaction(db, id);
+  if (input.startAt && input.endAt) syncTaskVirtualAsset(db, id);
+
   const fresh = getTaskById(db, userId, id)!;
   writeLocalAuditLog(db, { userId, action: "CREATE", entityType: "Task", entityId: id, newValue: fresh });
   return fresh;
@@ -139,6 +147,10 @@ export function updateTask(db: LocalDb, userId: string, id: string, input: Updat
   set("updatedAt", now());
 
   db.run(`UPDATE "Task" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, id]);
+
+  if (input.directCost !== undefined) syncTaskDirectCostTransaction(db, id);
+  if (input.incomeAmount !== undefined) syncTaskIncomeTransaction(db, id);
+  if (input.startAt !== undefined || input.endAt !== undefined || input.categoryId !== undefined) syncTaskVirtualAsset(db, id);
 
   const fresh = getTaskById(db, userId, id)!;
   writeLocalAuditLog(db, {

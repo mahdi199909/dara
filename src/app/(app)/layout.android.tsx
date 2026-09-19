@@ -9,6 +9,7 @@ import GlobalCaptureFab from "@/components/GlobalCaptureFab";
 import SWRProvider from "@/components/SWRProvider";
 import FirstRunGate from "@/components/native/FirstRunGate";
 import WidgetQueueDrainer from "@/components/native/WidgetQueueDrainer";
+import SyncScheduler from "@/components/native/SyncScheduler";
 import ThemeSettingsSync from "@/components/ThemeSettingsSync";
 import SavedToast from "@/components/SavedToast";
 import UpdateAvailableBanner from "@/components/native/UpdateAvailableBanner";
@@ -43,6 +44,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SWRProvider>
         <ThemeSettingsSync />
         <WidgetQueueDrainer />
+        <SyncScheduler />
         <AndroidChrome>{children}</AndroidChrome>
       </SWRProvider>
     </FirstRunGate>

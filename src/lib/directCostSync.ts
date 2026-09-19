@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import { resolveDefaultAccountId } from "./accounts";
 import { computeVirtualAssetValue } from "./timeCost";
+import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
 
 /**
  * Keeps an entity's optional directCost/incomeAmount in sync with a linked Transaction, so
@@ -163,7 +164,7 @@ export async function syncTaskVirtualAsset(taskId: string) {
       },
     });
   } else {
-    await prisma.virtualAssetEntry.deleteMany({ where: { taskId } });
+    await deleteVirtualAssetEntriesWithTombstones({ taskId });
   }
 }
 

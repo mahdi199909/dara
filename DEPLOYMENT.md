@@ -13,6 +13,7 @@ Copy `.env.example` to `.env` and fill in real values:
 | `SESSION_COOKIE_NAME` | no | Defaults to `hesabkon_session` |
 | `NODE_ENV` | yes | `production` in deployment |
 | `APP_URL` | no | Used for cookie/redirect defaults; set to your real domain |
+| `TZ` | no | Timezone the server treats as "local" — day boundaries for habit check-ins, reports and the calendar follow it. Defaults to `Asia/Tehran` in the Dockerfile/compose file; if you run without Docker, set it yourself, otherwise days roll over at UTC midnight (03:30 Tehran) and a habit checked in on the web is stored under a different instant than the same day on the phone. |
 | `AI_PROVIDER`, `AI_API_KEY` | no | Leave empty — the app runs fully rule-based without them (see README §9/§10) |
 
 **Never commit `.env` to git.** `.gitignore` already excludes it.
@@ -87,6 +88,10 @@ docker compose exec -T postgres psql -U hesabkon hesabkon < backup.sql
 server {
     server_name app.example.com;
     listen 80;
+    # The Android app syncs through /api/sync/push. nginx's default 1 MB request-body cap answers
+    # anything bigger with a bare "413 Request Entity Too Large" (the app splits its own pushes
+    # to stay well under this, but a generous limit keeps older app builds working too).
+    client_max_body_size 20m;
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -113,6 +118,19 @@ app.example.com {
 ```
 
 Either way, once SSL terminates at the proxy, cookies are sent over HTTPS and `secure: true` (already set in `src/lib/auth.ts` when `NODE_ENV=production`) applies correctly.
+
+## 5b. Updating a running deployment
+
+```bash
+cd /path/to/checkout
+git pull
+docker compose up -d --build     # rebuilds the app image; `prisma db push` runs again at container start
+```
+
+`db push` only ever *adds* here (new tables/columns such as `SyncTombstone`), so nothing is dropped. After
+pulling a release that touches the sync routes (`src/app/api/sync/*`), redeploy the server **before** (or
+together with) shipping the matching Android build: an updated app works against an older server but
+falls back to the old behavior (deletions and display-name/settings don't sync until the server catches up).
 
 ## 6. Migrations going forward
 

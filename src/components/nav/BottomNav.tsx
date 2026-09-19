@@ -34,6 +34,14 @@ export default function BottomNav({ userName }: { userName: string }) {
       // "/login" isn't a real screen here (FirstRunGate owns the logged-out UI). Clear the cached
       // license/token instead and reload, so FirstRunGate's boot check finds nothing cached.
       const [{ dispatchLocal }, { getLocalDbInstance }] = await Promise.all([import("@/lib/localDispatcher"), import("@/local/db")]);
+      // Logging out drops the token, and with it any way to send changes that haven't synced yet —
+      // so try one last sync first (capped: being offline must not trap someone on this screen).
+      try {
+        const { syncWithServer } = await import("@/lib/nativeOnboarding");
+        await Promise.race([syncWithServer({ deep: true }), new Promise((resolve) => setTimeout(resolve, 10_000))]);
+      } catch {
+        // best effort
+      }
       dispatchLocal("POST", "/api/local/logout");
       // Must complete before navigating away: browserSqlJs.ts buffers writes in memory and
       // flushes to disk on a 300ms debounce (plus a pagehide safety net that can't actually block

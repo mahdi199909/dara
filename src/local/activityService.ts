@@ -20,6 +20,7 @@
 // version never leaves that transient state observable between passes.
 import { computeVirtualAssetValue } from "@/lib/timeCost";
 import type { LocalDb } from "./db";
+import { deleteRowsWithTombstones } from "./tombstones";
 
 interface ActivityRow {
   id: string;
@@ -90,7 +91,7 @@ export function recalcActivityDuration(db: LocalDb, activityId: string): number 
       );
     }
   } else {
-    db.run(`DELETE FROM "VirtualAssetEntry" WHERE "activityId" = ?`, [activityId]);
+    deleteRowsWithTombstones(db, "VirtualAssetEntry", '"activityId" = ?', [activityId]);
   }
 
   return totalDurationMin;

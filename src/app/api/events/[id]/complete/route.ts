@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
+import { deleteRowsWithTombstones } from "@/lib/tombstones";
 
 const bodySchema = z.object({ occurrenceDate: z.string().datetime() });
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { ipAddress, userAgent } = requestMeta(req);
 
     if (existing) {
-      await prisma.eventCompletion.delete({ where: { id: existing.id } });
+      await deleteRowsWithTombstones(userId, "eventCompletion", { id: existing.id });
       await writeAuditLog({
         userId,
         action: "EVENT_UNCOMPLETE",

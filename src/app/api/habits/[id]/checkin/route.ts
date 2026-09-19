@@ -5,6 +5,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncHabitCheckInVirtualAsset } from "@/lib/habitSync";
+import { deleteRowsWithTombstones, deleteVirtualAssetEntriesWithTombstones } from "@/lib/tombstones";
 
 const bodySchema = z.object({ date: z.string().datetime().optional() });
 
@@ -29,8 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { ipAddress, userAgent } = requestMeta(req);
 
     if (existing) {
-      await prisma.virtualAssetEntry.deleteMany({ where: { habitCheckInId: existing.id } });
-      await prisma.habitCheckIn.delete({ where: { id: existing.id } });
+      await deleteVirtualAssetEntriesWithTombstones({ habitCheckInId: existing.id });
+      await deleteRowsWithTombstones(userId, "habitCheckIn", { id: existing.id });
       await writeAuditLog({
         userId,
         action: "HABIT_UNCHECK",
