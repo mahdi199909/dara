@@ -26,6 +26,9 @@ import { createPhone, type Phone } from "@/testing/syncHarness";
 import { iso, linkPhone, syncUntilQuiet, type Account } from "@/testing/syncScenarios";
 
 const BASE = process.env.SYNC_REMOTE_BASE;
+// Deliberately fixed and printed at the end: the account is left on the server afterwards (nothing
+// here deletes it), so whoever ran the test can sign in as it and look at what a phone delivered.
+const PROBE_PASSWORD = "Probe12345!";
 
 async function remote(method: string, path: string, token: string | null, body?: unknown) {
   const res = await fetch(BASE + path, {
@@ -53,7 +56,7 @@ describe.skipIf(!BASE)("a deployed server, seen from a phone running this build"
   it("registers a throwaway account and links a phone to it", async () => {
     vi.stubGlobal("window", { Capacitor: { isNativePlatform: () => true } });
     const email = `claude-syncprobe-${Date.now()}@example.invalid`;
-    const res = await remote("POST", "/api/auth/register", null, { name: "Probe", email, password: "Probe12345!" });
+    const res = await remote("POST", "/api/auth/register", null, { name: "Probe", email, password: PROBE_PASSWORD });
     expect(res.status).toBe(200);
     account = { userId: res.json.id, token: res.json.token, email };
     phone = await createPhone();
@@ -135,6 +138,7 @@ describe.skipIf(!BASE)("a deployed server, seen from a phone running this build"
   }, 60_000);
 
   afterAll(() => {
+    if (account) console.log(`REMOTE PROBE ACCOUNT (left on the server — sign in at ${BASE}/login): ${account.email} / ${PROBE_PASSWORD}`);
     console.log("REMOTE ACCEPTANCE REPORT " + JSON.stringify({ base: BASE, serverProtocol: protocol, ...report }, null, 1));
   });
 });
