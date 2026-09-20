@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "./db";
 import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import { DATA_EXPORT_VERSION, exportAllData, validateExportFile, importAllData, type DataExportFile } from "./dataExport";
+import { installMemoryLogger } from "../lib/observability/testing";
 
 // Deliberately the same literal value src/local/localUser.ts's LOCAL_USER_ID constant always
 // bootstraps a fresh install with — dataExport.ts itself never imports that constant (it doesn't
@@ -229,10 +230,18 @@ describe("importAllData — insert-or-skip", () => {
   });
 
   it("counts a genuinely malformed row as an error without losing the rest of the table", async () => {
+    const memory = installMemoryLogger();
     const db = await freshDb();
     const good = taskRow({ id: "good-task" });
     const bad = { id: "bad-task", userId: USER_ID }; // missing required NOT NULL "title"
     const result = importAllData(db, fileOf({ Task: [good, bad] }));
+    memory.restore();
+
+    // The failure is logged with the row's table and id — never the row itself.
+    const failed = memory.sink.find("IMPORT_ROW_FAILED");
+    expect(failed.length).toBeGreaterThan(0);
+    expect(failed[0]).toMatchObject({ level: "WARN", layer: "local", entity_type: "Task", entity_id: "bad-task" });
+    expect(JSON.stringify(failed)).not.toContain("good-task");
 
     expect(result.added.Task).toBe(1);
     expect(result.errors.Task).toBe(1);

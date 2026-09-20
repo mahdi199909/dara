@@ -5,6 +5,7 @@
 // registered here should return the exact same JSON shape its web counterpart does.
 import { ZodError } from "zod";
 import { ApiError } from "@/lib/apiErrorBase";
+import { classifyError, getLogger } from "@/lib/observability";
 import { openLocalDb, type LocalDb } from "@/local/db";
 import { getLocalUserId } from "@/local/localUser";
 import * as tasksRepo from "@/local/repositories/tasks";
@@ -443,14 +444,16 @@ export interface LocalResponse {
   json: unknown;
 }
 
-function errorResponse(err: unknown): LocalResponse {
+const log = getLogger("api", "local-dispatcher");
+
+function errorResponse(err: unknown, request?: { method: string; path: string }): LocalResponse {
   if (err instanceof ZodError) {
     return { status: 400, json: { error: "اطلاعات ارسالی نامعتبر است.", details: err.flatten() } };
   }
   if (err instanceof ApiError) {
     return { status: err.status, json: { error: err.message } };
   }
-  console.error(err);
+  log.error("API_UNHANDLED_ERROR", { error: err, errorCode: classifyError(err) ?? "SYS-001", layer: "local", method: request?.method, path: request?.path });
   // `details` carries the real underlying message (not just a generic Persian string) so it can
   // surface all the way to FirstRunGate's error display — on-device failures here (e.g. the
   // sql.js/Capacitor Filesystem driver bootstrap) have no other way to be seen without ADB.
@@ -476,6 +479,6 @@ export function dispatchLocal(method: string, url: string, body?: unknown): Loca
     const json = route.handler({ db, userId, params, query: searchParams, body });
     return { status: route.status, json };
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, { method, path: pathname });
   }
 }

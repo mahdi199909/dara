@@ -17,8 +17,12 @@ import { useEffect, useState } from "react";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
 import { checkVersionGate, refreshVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { APP_NAME } from "@/lib/appVersion";
+import { getLogger } from "@/lib/observability";
 import { ApiClientError } from "@/lib/apiClient";
 import type { LocalDb } from "@/local/db";
+
+// No fixed module: the boot steps below belong to different domains (widgets, capital, categories…).
+const log = getLogger(null, "first-run-gate");
 
 function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
@@ -84,7 +88,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       const result = await checkVersionGate(currentBuild);
       setVersionBlock(result.blocked ? result : null);
     } catch (err) {
-      console.error("version gate check failed", err);
+      log.warn("RELEASE_UPDATE_CHECK_FAILED", { error: err, errorCode: "RELEASE-001", layer: "local", check: "version-gate" });
     }
   }
 
@@ -120,7 +124,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         const [{ drainWidgetQueue }, { getLocalUserId }] = await Promise.all([import("@/local/widgetQueue"), import("@/local/localUser")]);
         await drainWidgetQueue(driver, getLocalUserId(driver));
       } catch (err) {
-        console.error("widget queue drain failed", err);
+        log.error("WIDGET_QUEUE_FAILED", { error: err, errorCode: "WIDGET-001", layer: "local", trigger: "boot" });
       }
 
       // Best-effort, same reasoning: today's "سرمایه من" snapshot (see reportEngine.ts's
@@ -131,7 +135,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         const [{ getLocalUserId }, { recordDailyCapitalSnapshot }] = await Promise.all([import("@/local/localUser"), import("@/local/reportEngine")]);
         recordDailyCapitalSnapshot(driver, getLocalUserId(driver));
       } catch (err) {
-        console.error("capital snapshot on boot failed", err);
+        log.error("CAPITAL_SNAPSHOT_FAILED", { error: err, layer: "local", trigger: "boot" });
       }
 
       // Best-effort: backfills any default category added after this device's install (see
@@ -143,7 +147,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         ensureDefaultCategories(driver, userId);
         mergeDuplicateCategories(driver, userId);
       } catch (err) {
-        console.error("ensure default categories on boot failed", err);
+        log.warn("CATEGORY_DEFAULTS_FAILED", { error: err, layer: "local", trigger: "boot" });
       }
 
       // Best-effort, fire-and-forget: ask for notification permission up front (Android 13+)
@@ -151,7 +155,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       // time they add a task/event/installment reminder later.
       import("@/local/nativeNotifications")
         .then(({ requestNotificationPermission }) => requestNotificationPermission())
-        .catch((err) => console.error("notification permission request on boot failed", err));
+        .catch((err) => log.warn("LOCAL_NOTIFICATION_PERMISSION_FAILED", { error: err, errorCode: "NOTIF-002", layer: "local", trigger: "boot" }));
 
       const license = await getCachedLicense();
       setReady(!!license);

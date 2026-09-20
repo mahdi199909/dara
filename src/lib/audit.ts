@@ -1,4 +1,7 @@
 import { prisma } from "./db";
+import { getLogger } from "./observability";
+
+const log = getLogger("audit", "writer");
 
 interface AuditParams {
   userId: string;
@@ -29,7 +32,7 @@ export async function writeAuditLog(params: AuditParams): Promise<void> {
       },
     });
   } catch (err) {
-    console.error("Failed to write audit log", err);
+    log.error("AUDIT_WRITE_FAILED", { error: err, errorCode: "AUDIT-001", layer: "server", entityType: params.entityType, entityId: params.entityId, operation: params.action });
   }
 }
 

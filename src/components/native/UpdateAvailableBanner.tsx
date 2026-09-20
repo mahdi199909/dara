@@ -8,6 +8,9 @@
 import { useEffect, useState } from "react";
 import { checkVersionGate, refreshVersionGate } from "@/lib/versionGate";
 import { updateNoticeText } from "@/lib/appVersion";
+import { getLogger } from "@/lib/observability";
+
+const log = getLogger("release", "update-banner");
 
 interface Notice {
   downloadUrl: string;
@@ -58,7 +61,7 @@ export default function UpdateAvailableBanner() {
         }
         removeResumeListener = () => void handle.remove();
       } catch (err) {
-        console.error("update-available check failed", err);
+        log.warn("RELEASE_UPDATE_CHECK_FAILED", { error: err, errorCode: "RELEASE-001", layer: "local" });
       }
     })();
 

@@ -7,6 +7,7 @@ vi.mock("./widgetEvents", () => ({ publishEventsToWidget: (...args: unknown[]) =
 
 import type { LocalDb } from "./db";
 import { WIDGET_REFRESH_MIN_INTERVAL_MS, requestWidgetRefresh, resetWidgetRefreshForTests, scheduleWidgetRefresh } from "./widgetRefresh";
+import { installMemoryLogger } from "../lib/observability/testing";
 
 const db = {} as LocalDb;
 
@@ -68,21 +69,23 @@ describe("widget refresh", () => {
 
   it("still publishes the events and repaints when computing the capital summary fails", async () => {
     writeCapitalWidgetSummary.mockRejectedValueOnce(new Error("boom"));
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const memory = installMemoryLogger();
     scheduleWidgetRefresh(db);
     await vi.runAllTimersAsync();
     expect(publishEventsToWidget).toHaveBeenCalledTimes(1);
     expect(refresh).toHaveBeenCalledTimes(1);
-    errors.mockRestore();
+    memory.restore();
+    expect(memory.sink.find("WIDGET_REFRESH_FAILED")).toEqual([expect.objectContaining({ level: "ERROR", error_code: "WIDGET-002", metadata: { step: "capital_summary" } })]);
   });
 
   it("still repaints when publishing the events fails", async () => {
     publishEventsToWidget.mockRejectedValueOnce(new Error("boom"));
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const memory = installMemoryLogger();
     scheduleWidgetRefresh(db);
     await vi.runAllTimersAsync();
     expect(refresh).toHaveBeenCalledTimes(1);
-    errors.mockRestore();
+    memory.restore();
+    expect(memory.sink.find("WIDGET_REFRESH_FAILED")).toEqual([expect.objectContaining({ metadata: { step: "events_payload" } })]);
   });
 
   it("requestWidgetRefresh repaints immediately", () => {

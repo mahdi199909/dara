@@ -6,6 +6,9 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { routeFromWidgetUrl } from "@/lib/widgetRoutes";
+import { getLogger } from "@/lib/observability";
+
+const log = getLogger("system", "deep-link");
 
 // The launch URL stays readable for the life of the process; it must only be acted on once.
 let launchUrlHandled = false;
@@ -39,7 +42,7 @@ export default function DeepLinkHandler() {
       });
       remove = () => void handle.remove();
       if (cancelled) remove();
-    })().catch((err) => console.error("deep link setup failed", err));
+    })().catch((err) => log.warn("SYSTEM_DEEP_LINK_FAILED", { error: err, layer: "local" }));
 
     return () => {
       cancelled = true;

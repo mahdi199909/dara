@@ -8,6 +8,9 @@
 // repaint them, through the AndroidWidgets bridge MainActivity exposes.
 import type { LocalDb } from "./db";
 import { LOCAL_USER_ID } from "./localUser";
+import { getLogger } from "../lib/observability";
+
+const log = getLogger("widgets", "refresh");
 
 interface AndroidWidgetsBridge {
   refresh(): void;
@@ -30,7 +33,7 @@ export function requestWidgetRefresh(): void {
   try {
     bridge()?.refresh();
   } catch (err) {
-    console.error("widget refresh failed", err);
+    log.error("WIDGET_REFRESH_FAILED", { error: err, errorCode: "WIDGET-002", layer: "local", step: "bridge" });
   }
 }
 
@@ -42,13 +45,13 @@ async function publishAndRefresh(db: LocalDb): Promise<void> {
     const { writeCapitalWidgetSummary } = await import("./reportEngine");
     await writeCapitalWidgetSummary(db, LOCAL_USER_ID);
   } catch (err) {
-    console.error("capital widget summary failed", err);
+    log.error("WIDGET_REFRESH_FAILED", { error: err, errorCode: "WIDGET-002", layer: "local", step: "capital_summary" });
   }
   try {
     const { publishEventsToWidget } = await import("./widgetEvents");
     await publishEventsToWidget(db, LOCAL_USER_ID);
   } catch (err) {
-    console.error("events widget payload failed", err);
+    log.error("WIDGET_REFRESH_FAILED", { error: err, errorCode: "WIDGET-002", layer: "local", step: "events_payload" });
   }
   requestWidgetRefresh();
 }

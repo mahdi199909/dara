@@ -17,6 +17,9 @@ import type { LocalDb } from "./db";
 import { createActivity } from "./repositories/activities";
 import { addManualTimeEntry } from "./activityService";
 import { toggleHabitCheckIn } from "./repositories/habits";
+import { getLogger } from "../lib/observability";
+
+const log = getLogger("widgets", "queue");
 
 const QUEUE_KEY = "widget_pending_captures";
 // Kept as a separate key rather than folded into QUEUE_KEY above so the existing capture entry
@@ -109,7 +112,8 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
       });
       applied++;
     } catch (err) {
-      console.error("drainCaptureQueue: failed to apply a queued widget capture, will retry next drain", entry, err);
+      // The entry (what the person typed into the widget) is deliberately NOT logged.
+      log.error("WIDGET_QUEUE_FAILED", { error: err, errorCode: "WIDGET-001", layer: "local", queue: "capture", willRetry: true });
       failed.push(entry);
     }
   }
@@ -151,7 +155,7 @@ async function drainHabitCheckInQueue(db: LocalDb, userId: string): Promise<numb
       toggleHabitCheckIn(db, userId, entry.habitId, { date: entry.date });
       applied++;
     } catch (err) {
-      console.error("drainHabitCheckInQueue: failed to apply a queued habit toggle, will retry next drain", entry, err);
+      log.error("WIDGET_QUEUE_FAILED", { error: err, errorCode: "WIDGET-001", layer: "local", queue: "habit_checkin", entityType: "habit", entityId: entry.habitId, willRetry: true });
       failed.push(entry);
     }
   }

@@ -11,12 +11,12 @@ import { APK_STATIC_URL, LATEST_APP_RELEASE, LATEST_APP_VERSION_CODE } from "@/l
 import { GET, OPTIONS } from "@/app/api/app/version/route";
 import { GET as adminGet, PATCH as adminPatch } from "@/app/api/admin/release/route";
 import { middleware } from "@/middleware";
+import { installMemoryLogger } from "@/lib/observability/testing";
 
 beforeEach(() => {
   findUnique.mockReset();
   create.mockReset();
   update.mockReset();
-  vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 describe("getAppRelease", () => {
@@ -25,9 +25,16 @@ describe("getAppRelease", () => {
     expect(await getAppRelease()).toMatchObject({ latestVersionName: LATEST_APP_RELEASE.versionName, latestVersionCode: LATEST_APP_VERSION_CODE, downloadUrl: APK_STATIC_URL });
   });
 
-  it("still answers when the row cannot be read", async () => {
-    findUnique.mockRejectedValue(new Error("db down"));
-    expect((await getAppRelease()).latestVersionCode).toBe(LATEST_APP_VERSION_CODE);
+  it("still answers when the row cannot be read, and says so in the log", async () => {
+    const memory = installMemoryLogger();
+    try {
+      findUnique.mockRejectedValue(new Error("db down"));
+      expect((await getAppRelease()).latestVersionCode).toBe(LATEST_APP_VERSION_CODE);
+      expect(memory.sink.find("RELEASE_READ_FAILED")).toHaveLength(1);
+      expect(memory.sink.last()).toMatchObject({ level: "WARN", module: "release", error_code: "DB-002" });
+    } finally {
+      memory.restore();
+    }
   });
 });
 

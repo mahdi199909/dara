@@ -5,6 +5,7 @@ import { LOCAL_USER_ID } from "./localUser";
 import { pushLocalChanges, pullRemoteChanges, SyncHttpError } from "./sync";
 import { getSyncMeta, listSyncIssues, recordSyncIssue, META_TOMBSTONES_ACKED_AT } from "./syncMeta";
 import { deleteRowsWithTombstones, recordLocalTombstone } from "./tombstones";
+import { installMemoryLogger } from "../lib/observability/testing";
 
 const REMOTE_USER_ID = "remote_user_1";
 const TOKEN = "jwt-1";
@@ -319,6 +320,7 @@ describe("pullRemoteChanges", () => {
   });
 
   it("tolerates one malformed row without losing the rest of the batch, and reports it", async () => {
+    const memory = installMemoryLogger();
     const db = await freshDb();
     mockFetchOnce(200, {
       syncedAt: "2026-03-01T00:00:00.000Z",
@@ -337,6 +339,13 @@ describe("pullRemoteChanges", () => {
     expect(result.failures.map((f) => f.id)).toEqual(["cat_bad"]);
     expect(db.get(`SELECT "id" FROM "Category" WHERE "id" = ?`, ["cat_good"])).toBeTruthy();
     expect(db.get(`SELECT "id" FROM "Category" WHERE "id" = ?`, ["cat_bad"])).toBeUndefined();
+
+    // ...and it is logged: which table, which row, the database's reason — not the row's contents.
+    memory.restore();
+    const failed = memory.sink.find("SYNC_PULL_ROW_FAILED");
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({ level: "WARN", module: "sync", layer: "local", error_code: "SYNC-008", entity_type: "Category", entity_id: "cat_bad" });
+    expect(JSON.stringify(failed[0])).not.toContain("بد");
   });
 
   it("treats a natural-key duplicate (same habit, same day, other id) as already-there, not as a failure", async () => {

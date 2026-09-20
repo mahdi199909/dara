@@ -11,6 +11,9 @@
 // *set of tables* and their dependency order (see DATA_EXPORT_TABLES below), which changes far
 // less often than individual columns do.
 import type { LocalDb } from "./db";
+import { getLogger } from "../lib/observability";
+
+const log = getLogger("backup", "data-import");
 
 /**
  * Bump this whenever the shape of the exported JSON changes in a way a future importAllData
@@ -270,7 +273,8 @@ function insertTableRows(db: LocalDb, table: string, rows: Record<string, unknow
           progressed = true;
           continue;
         }
-        console.error(`import: failed to insert a "${table}" row (id=${String(row.id)})`, err);
+        // Ids and the database's own reason only — never the row, which is the person's data.
+        log.warn("IMPORT_ROW_FAILED", { error: err, layer: "local", entityType: table, entityId: String(row.id) });
         stillPending.push(row);
       }
     }

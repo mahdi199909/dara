@@ -26,6 +26,10 @@ import { useEffect } from "react";
 import { mutate } from "swr";
 import { getLocalDbInstance } from "@/local/db";
 import { refreshLicenseStatus, syncWithServer } from "@/lib/nativeOnboarding";
+import { getLogger } from "@/lib/observability";
+
+// No fixed module: the events below belong to different domains (widgets, capital).
+const log = getLogger(null, "queue-drainer");
 
 function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
@@ -50,12 +54,12 @@ export default function WidgetQueueDrainer() {
           try {
             await drainWidgetQueue(db, getLocalUserId(db));
           } catch (err) {
-            console.error("widget queue drain on resume failed", err);
+            log.error("WIDGET_QUEUE_FAILED", { error: err, errorCode: "WIDGET-001", layer: "local", trigger: "resume" });
           }
           try {
             recordDailyCapitalSnapshot(db, getLocalUserId(db));
           } catch (err) {
-            console.error("capital snapshot on resume failed", err);
+            log.error("CAPITAL_SNAPSHOT_FAILED", { error: err, layer: "local", trigger: "resume" });
           }
         }
         // Unconditional, and outside the try/catch above: a failed drain shouldn't also

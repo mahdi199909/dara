@@ -16,6 +16,9 @@
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import type { LocalDb } from "../db";
+import { getLogger } from "../../lib/observability";
+
+const log = getLogger("database", "sql-js-driver");
 
 const DB_FILE = "dara.sqlite3";
 const DB_TMP_FILE = "dara.sqlite3.tmp";
@@ -145,7 +148,7 @@ export async function loadBrowserSqliteDriver(options: BrowserSqliteDriverOption
       try {
         db = new SQL.Database(backup);
         recoveredFromBackup = true;
-        console.error("dara.sqlite3 was corrupt; recovered from dara.sqlite3.bak instead", primaryErr);
+        log.error("DB_LOCAL_RECOVERED", { error: primaryErr, errorCode: "DB-008", layer: "local", message: "dara.sqlite3 was corrupt; recovered from dara.sqlite3.bak instead" });
       } catch {
         throw primaryErr; // the backup is ALSO unreadable — surface the original error, nothing left to try
       }
@@ -182,7 +185,7 @@ export async function loadBrowserSqliteDriver(options: BrowserSqliteDriverOption
         try {
           options.onFlushed?.();
         } catch (err) {
-          console.error("onFlushed handler failed", err);
+          log.error("DB_LOCAL_FLUSH_CALLBACK_FAILED", { error: err, layer: "local" });
         }
       },
       (err) => {

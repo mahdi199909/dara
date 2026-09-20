@@ -18,7 +18,9 @@
     "build:android": "node scripts/build-android.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "logs:docs": "tsx scripts/logs/generate-docs.ts",
+    "logs:bench": "tsx scripts/logs/bench.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -1,6 +1,9 @@
 // On-device equivalent of src/lib/audit.ts's writeAuditLog — same fields, but there's no
 // HTTP request to pull ipAddress/userAgent from on a local call, so callers just omit them.
 import type { LocalDb } from "./db";
+import { getLogger } from "../lib/observability";
+
+const log = getLogger("audit", "local-writer");
 
 interface LocalAuditParams {
   userId: string;
@@ -31,6 +34,6 @@ export function writeLocalAuditLog(db: LocalDb, params: LocalAuditParams): void 
       ]
     );
   } catch (err) {
-    console.error("Failed to write local audit log", err);
+    log.error("AUDIT_WRITE_FAILED", { error: err, errorCode: "AUDIT-001", layer: "local", entityType: params.entityType, entityId: params.entityId, operation: params.action });
   }
 }

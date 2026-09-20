@@ -16,6 +16,9 @@ import type { LocalDb } from "./db";
 import { META_TOMBSTONES_ACKED_AT, clearSyncIssue, getSyncMeta, recordSyncIssue, retryableIssues, setSyncMeta } from "./syncMeta";
 import { applyRemoteTombstone, hasLocalTombstoneAtOrAfter, listLocalTombstonesSince } from "./tombstones";
 import { applyRemoteProfile, readLocalProfilePayload } from "./profileSyncLocal";
+import { getLogger } from "../lib/observability";
+
+const log = getLogger("sync", "pull");
 
 type Row = Record<string, unknown>;
 
@@ -330,7 +333,7 @@ function applyRowsWithRetry(db: LocalDb, table: string, rows: Row[], hasUpdatedA
   }
 
   const failures = pending.map((row) => ({ table, id: String(row.id), reason: lastError.get(String(row.id)) ?? "unknown error" }));
-  for (const f of failures) console.error(`sync pull: failed to apply a "${table}" row (id=${f.id}): ${f.reason}`);
+  for (const f of failures) log.warn("SYNC_PULL_ROW_FAILED", { errorCode: "SYNC-008", layer: "local", entityType: table, entityId: f.id, reason: f.reason });
   return { applied, failures };
 }
 

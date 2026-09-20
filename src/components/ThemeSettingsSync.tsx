@@ -4,6 +4,9 @@ import { useEffect } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { applyThemeClass, storeThemeMode, isThemeMode } from "@/lib/theme";
+import { getLogger } from "@/lib/observability";
+
+const log = getLogger("settings", "theme-sync");
 
 function isNativePlatform(): boolean {
   return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
@@ -22,7 +25,7 @@ async function syncNativeStatusBar(): Promise<void> {
     await StatusBar.setBackgroundColor({ color: isDark ? "#0E1412" : "#EFF2EE" });
     await StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light });
   } catch (err) {
-    console.error("status bar theme sync failed", err);
+    log.warn("SETTINGS_THEME_SYNC_FAILED", { error: err, layer: "local" });
   }
 }
 

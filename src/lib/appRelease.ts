@@ -4,6 +4,9 @@
 // always carried these fields), so both always say the same thing.
 import { prisma } from "@/lib/db";
 import { resolveAppRelease, type AppReleaseInfo } from "@/lib/appVersion";
+import { getLogger } from "@/lib/observability";
+
+const log = getLogger("release", "app-release");
 
 export const RELEASE_SINGLETON_ID = "singleton";
 
@@ -14,7 +17,7 @@ export async function getAppRelease(): Promise<AppReleaseInfo> {
   } catch (err) {
     // A version check must not fail just because the override row can't be read: the release that
     // ships in code is still the right answer.
-    console.error("app release row unreadable, using the built-in release", err);
+    log.warn("RELEASE_READ_FAILED", { error: err, errorCode: "DB-002" });
     return resolveAppRelease(null);
   }
 }

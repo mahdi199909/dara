@@ -11,6 +11,9 @@
 // Both go through syncWithServer, which is single-flight (a request that arrives mid-sync just
 // queues one more run), and refresh the on-screen data whenever a sync brought something in.
 import { mutate } from "swr";
+import { getLogger } from "./observability";
+
+const log = getLogger("sync", "scheduler");
 
 const DEBOUNCE_MS = 3_000;
 const POLL_INTERVAL_MS = 45_000;
@@ -28,7 +31,8 @@ async function backgroundSync(): Promise<void> {
     const outcome = await syncWithServer();
     if (outcome.pulledCount > 0 || outcome.deletionsPulled > 0) mutate(() => true, undefined, { revalidate: true });
   } catch (err) {
-    console.error("background sync failed", err);
+    // syncWithServer never throws by design; this only catches something unexpected around it.
+    log.error("SYNC_FAILED", { error: err, errorCode: "SYNC-009", layer: "local", trigger: "background" });
   }
 }
 

@@ -7,6 +7,9 @@
 // The plugin itself is only ever imported dynamically below (see every function here, and the
 // rest of this codebase's own Capacitor plugin usage) so this native-only code never enters the
 // plain web bundle.
+import { getLogger } from "../lib/observability";
+
+const log = getLogger("notifications", "native");
 
 /** What the OS needs to know to ring one reminder. */
 export interface ScheduledReminder {
@@ -35,7 +38,7 @@ export async function requestNotificationPermission(): Promise<void> {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
     await LocalNotifications.requestPermissions();
   } catch (err) {
-    console.error("requestNotificationPermission failed", err);
+    log.warn("LOCAL_NOTIFICATION_PERMISSION_FAILED", { error: err, errorCode: "NOTIF-002", layer: "local" });
   }
 }
 
@@ -70,7 +73,7 @@ export function scheduleReminderNotification(reminder: { id: string; title: stri
         ],
       });
     } catch (err) {
-      console.error("scheduleReminderNotification failed", err);
+      log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "schedule", entityType: "reminder", entityId: reminder.id });
     }
   })();
 }
@@ -93,7 +96,7 @@ export function rescheduleReminderNotification(reminder: { id: string; title: st
         ],
       });
     } catch (err) {
-      console.error("rescheduleReminderNotification failed", err);
+      log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "reschedule", entityType: "reminder", entityId: reminder.id });
     }
   })();
 }
@@ -107,7 +110,7 @@ export function cancelReminderNotification(reminderId: string): void {
       const { LocalNotifications } = await import("@capacitor/local-notifications");
       await LocalNotifications.cancel({ notifications: [{ id: reminderNotificationId(reminderId) }] });
     } catch (err) {
-      console.error("cancelReminderNotification failed", err);
+      log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "cancel", entityType: "reminder", entityId: reminderId });
     }
   })();
 }
@@ -143,7 +146,7 @@ export function syncScheduledReminderNotifications(wanted: ScheduledReminder[]):
         });
       }
     } catch (err) {
-      console.error("syncScheduledReminderNotifications failed", err);
+      log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "reconcile", wanted: wanted.length });
     }
   })();
 }

@@ -14,6 +14,9 @@ import { PULL_OVERLAP_DEEP_MS, PULL_OVERLAP_SHORT_MS, SyncHttpError, pullRemoteC
 import { reconcileReminderNotifications } from "./reminderNotifications";
 import { META_LAST_ERROR, META_LAST_OK_AT, setSyncMeta } from "./syncMeta";
 import type { LocalDb } from "./db";
+import { getLogger, syncErrorCode } from "../lib/observability";
+
+const log = getLogger("sync", "runner");
 
 export type SyncErrorKind = "network" | "auth" | "too-large" | "server" | "unknown";
 
@@ -131,7 +134,17 @@ export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyn
   } catch (err) {
     outcome.error = classifySyncError(err);
     setSyncMeta(db, META_LAST_ERROR, outcome.error.message);
-    console.error("sync failed", err);
+    // Going offline is routine on a phone (WARN); anything else is a real problem (ERROR). Only
+    // counts are logged — never what was in the rows.
+    log.log(outcome.error.kind === "network" ? "WARN" : "ERROR", "SYNC_FAILED", {
+      error: err,
+      errorCode: syncErrorCode(outcome.error.kind),
+      layer: "local",
+      kind: outcome.error.kind,
+      status: outcome.error.status,
+      pulledCount: outcome.pulledCount,
+      pushedCount: outcome.pushedCount,
+    });
   }
   outcome.finishedAt = new Date().toISOString();
   return outcome;
