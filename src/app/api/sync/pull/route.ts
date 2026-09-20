@@ -6,6 +6,8 @@ import { corsPreflight, withCors } from "@/lib/nativeCors";
 import { SYNC_PROTOCOL_VERSION, SYNC_TABLES } from "@/lib/syncTables";
 import { readProfileForPull } from "@/lib/profileSyncServer";
 import type { NextRequest } from "next/server";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { logSyncPull } from "@/lib/observability/server/syncLog";
 
 type AnyModel = { findMany: (args: any) => Promise<any[]> };
 function modelFor(name: string): AnyModel {
@@ -18,7 +20,7 @@ export async function OPTIONS() {
 
 // `since` is optional: its absence means "everything" — first sync ever, or a user who already
 // has data from the web app before this device ever ran a sync.
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId(req);
     const sinceParam = req.nextUrl.searchParams.get("since");
@@ -53,9 +55,13 @@ export async function GET(req: NextRequest) {
     const tombstones = tombstoneRows.map((t) => ({ table: t.table, id: t.rowId, deletedAt: t.deletedAt.toISOString() }));
 
     const profile = await readProfileForPull(userId, since);
+    logSyncPull(tables, tombstones.length, since !== null);
 
     return withCors(NextResponse.json({ protocol: SYNC_PROTOCOL_VERSION, syncedAt: syncedAt.toISOString(), tables, tombstones, profile }));
   } catch (err) {
     return withCors(handleApiError(err));
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/sync/pull", GET);
+export { loggedGET as GET };

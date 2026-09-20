@@ -17,17 +17,17 @@ Default module: `auth`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `AUTH_FORBIDDEN` | WARN | security | reserved | A signed-in user tried something they may not do. |
+| `AUTH_FORBIDDEN` | WARN | security | yes | A signed-in user tried something they may not do. |
 | `AUTH_LOGIN_ATTEMPT` | DEBUG | security | reserved | A login request arrived. |
-| `AUTH_LOGIN_FAILED` | WARN | security | reserved | A login was refused. |
-| `AUTH_LOGIN_SUCCESS` | INFO | security | reserved | A login succeeded. |
-| `AUTH_LOGOUT_SUCCESS` | INFO | security | reserved | A session was ended by the person. |
-| `AUTH_RATE_LIMITED` | WARN | security | reserved | Login attempts were throttled. |
-| `AUTH_REGISTER_FAILED` | WARN | security | reserved | An account could not be created. |
-| `AUTH_REGISTER_SUCCESS` | INFO | security | reserved | A new account was created. |
+| `AUTH_LOGIN_FAILED` | WARN | security | yes | A login was refused. |
+| `AUTH_LOGIN_SUCCESS` | INFO | security | yes | A login succeeded. |
+| `AUTH_LOGOUT_SUCCESS` | INFO | security | yes | A session was ended by the person. |
+| `AUTH_RATE_LIMITED` | WARN | security | yes | Login attempts were throttled. |
+| `AUTH_REGISTER_FAILED` | WARN | security | yes | An account could not be created. |
+| `AUTH_REGISTER_SUCCESS` | INFO | security | yes | A new account was created. |
 | `AUTH_SESSION_CREATED` | INFO | security | reserved | A session token was issued. |
 | `AUTH_SESSION_EXPIRED` | WARN | security | reserved | An expired session token was presented. |
-| `AUTH_SESSION_INVALID` | WARN | security | reserved | A missing or invalid session token was presented. |
+| `AUTH_SESSION_INVALID` | WARN | security | yes | A missing or invalid session token was presented. |
 
 ## TASK
 
@@ -317,16 +317,16 @@ Default module: `sync`
 | `SYNC_COMPLETED` | INFO | — | reserved | A sync cycle reached its end; counts and duration are in the fields. |
 | `SYNC_CONFLICT` | INFO | — | reserved | The same row changed on two sides; the newer edit won. |
 | `SYNC_FAILED` | ERROR | protected | yes | A sync cycle did not finish. |
-| `SYNC_PARTIAL_SUCCESS` | WARN | protected | reserved | A sync finished, but the server refused some rows. |
+| `SYNC_PARTIAL_SUCCESS` | WARN | protected | yes | A sync finished, but the server refused some rows. |
 | `SYNC_PAYLOAD_REJECTED` | WARN | protected | reserved | The server refused a row or a whole request body. |
 | `SYNC_PENDING` | DEBUG | — | reserved | A local write is waiting for the next sync. |
 | `SYNC_PULL_FAILED` | WARN | protected | reserved | Fetching changes from the server failed. |
 | `SYNC_PULL_ROW_FAILED` | WARN | protected | yes | A row the server sent could not be stored on the device. |
 | `SYNC_PULL_STARTED` | DEBUG | — | reserved | Fetching changes from the server. |
-| `SYNC_PULL_SUCCESS` | DEBUG | — | reserved | Server changes were fetched and applied. |
+| `SYNC_PULL_SUCCESS` | DEBUG | — | yes | Server changes were fetched and applied. |
 | `SYNC_PUSH_FAILED` | WARN | protected | reserved | Sending local changes to the server failed. |
 | `SYNC_PUSH_STARTED` | DEBUG | — | reserved | Sending local changes to the server. |
-| `SYNC_PUSH_SUCCESS` | DEBUG | — | reserved | Local changes were sent and accepted. |
+| `SYNC_PUSH_SUCCESS` | DEBUG | — | yes | Local changes were sent and accepted. |
 | `SYNC_RERUN_QUEUED` | DEBUG | — | reserved | A sync was requested while one was running; one more run is queued. |
 | `SYNC_RETRY` | WARN | protected | yes | A failed sync will be tried again. |
 | `SYNC_SIZE_LIMIT_EXCEEDED` | WARN | protected | reserved | A sync request exceeded the size limit and was split or refused. |
@@ -339,12 +339,12 @@ Default module: `database`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `DB_CONNECTION_ERROR` | ERROR | protected | reserved | The database could not be reached. |
-| `DB_CONNECTION_POOL_EXHAUSTED` | ERROR | protected | reserved | No database connection became available in time. |
+| `DB_CONNECTION_ERROR` | ERROR | protected | yes | The database could not be reached. |
+| `DB_CONNECTION_POOL_EXHAUSTED` | ERROR | protected | yes | No database connection became available in time. |
 | `DB_LOCAL_FLUSH_CALLBACK_FAILED` | ERROR | — | yes | A handler that runs after the on-device database is saved failed. |
 | `DB_LOCAL_RECOVERED` | ERROR | protected | yes | The on-device database file was corrupt; its backup copy was loaded instead. |
-| `DB_QUERY_ERROR` | ERROR | protected | reserved | A database query failed. |
-| `DB_SLOW_QUERY` | WARN | — | reserved | A database operation took longer than the slow-query threshold. |
+| `DB_QUERY_ERROR` | ERROR | protected | yes | A database query failed. |
+| `DB_SLOW_QUERY` | WARN | — | yes | A database operation took longer than the slow-query threshold. |
 | `DB_TRANSACTION_COMMIT` | DEBUG | — | reserved | A database transaction was committed. |
 | `DB_TRANSACTION_FAILED` | ERROR | protected | reserved | A database transaction failed. |
 | `DB_TRANSACTION_ROLLBACK` | WARN | protected | reserved | A database transaction was rolled back; nothing was committed. |
@@ -355,7 +355,7 @@ Default module: `api`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `API_SLOW_REQUEST` | WARN | — | reserved | An HTTP request took longer than the slow-request threshold. |
+| `API_SLOW_REQUEST` | WARN | — | yes | An HTTP request took longer than the slow-request threshold. |
 | `API_UNHANDLED_ERROR` | ERROR | protected | yes | A route handler threw something it did not handle. |
 
 ## SYSTEM
@@ -365,9 +365,9 @@ Default module: `system`
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
 | `SYSTEM_DEEP_LINK_FAILED` | WARN | — | yes | The app's deep-link handler could not be set up. |
-| `SYSTEM_SHUTDOWN` | INFO | — | reserved | The process is shutting down. |
-| `SYSTEM_STARTED` | INFO | — | reserved | The process started. |
-| `SYSTEM_UNHANDLED_ERROR` | CRITICAL | protected | reserved | An uncaught exception or unhandled promise rejection. |
+| `SYSTEM_SHUTDOWN` | INFO | — | yes | The process is shutting down. |
+| `SYSTEM_STARTED` | INFO | — | yes | The process started. |
+| `SYSTEM_UNHANDLED_ERROR` | CRITICAL | protected | yes | An uncaught exception or unhandled promise rejection. |
 
 ## BACKUP
 
@@ -417,8 +417,8 @@ Default module: `api`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `HTTP_REQUEST_COMPLETED` | INFO | high-volume | reserved | An HTTP request finished (status, duration and size in the fields). |
-| `HTTP_REQUEST_STARTED` | DEBUG | high-volume | reserved | An HTTP request arrived. |
+| `HTTP_REQUEST_COMPLETED` | INFO | high-volume | yes | An HTTP request finished (status, duration and size in the fields). |
+| `HTTP_REQUEST_STARTED` | DEBUG | high-volume | yes | An HTTP request arrived. |
 
 ## PAYMENT
 

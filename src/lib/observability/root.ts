@@ -30,9 +30,29 @@ function readEnv(): LogEnv {
   };
 }
 
-let rootCore: LoggerCore | null = null;
-let override: LoggerCore | null = null;
-const pendingProviders: ContextProvider[] = [];
+/**
+ * The shared state lives on globalThis under a registered symbol, not in module variables: a Next.js
+ * server build can hold this module more than once (the instrumentation bundle, a route bundle, the
+ * dev server after a hot reload), and every copy must see the same root logger and the same
+ * registered context providers.
+ */
+interface RootState {
+  core: LoggerCore | null;
+  override: LoggerCore | null;
+  providers: Map<string, ContextProvider>;
+}
+
+const STATE_KEY = Symbol.for("parva.observability.root.v1");
+
+function state(): RootState {
+  const holder = globalThis as unknown as Record<symbol, RootState | undefined>;
+  let current = holder[STATE_KEY];
+  if (!current) {
+    current = { core: null, override: null, providers: new Map() };
+    holder[STATE_KEY] = current;
+  }
+  return current;
+}
 
 function buildRootCore(): LoggerCore {
   const runtime = detectRuntime();
@@ -51,16 +71,17 @@ function buildRootCore(): LoggerCore {
     sinks: [new ConsoleSink({ format: config.format })],
     // A browser/WebView session is one launch; the server has no session until a request gives it one.
     staticContext: runtime.isServer ? undefined : { sessionId: newId("sess") },
-    contextProviders: pendingProviders,
+    contextProviders: [...state().providers.values()],
   });
   for (const warning of config.warnings) core.emit("WARN", "LOG_INTERNAL_ERROR", { message: warning }, { context: {} });
   return core;
 }
 
 export function getRootCore(): LoggerCore {
-  if (override) return override;
-  if (!rootCore) rootCore = buildRootCore();
-  return rootCore;
+  const current = state();
+  if (current.override) return current.override;
+  if (!current.core) current.core = buildRootCore();
+  return current.core;
 }
 
 /**
@@ -72,21 +93,33 @@ export function getLogger(module: string | null, component?: string): Logger {
   return new Logger(getRootCore, { module: module ?? undefined, component, context: {} });
 }
 
-/** Adds request/launch-scoped context to every record (the server's AsyncLocalStorage provider, a phone's device id). */
-export function addContextProvider(provider: ContextProvider): void {
-  pendingProviders.push(provider);
-  if (rootCore) rootCore.addContextProvider(provider);
-  if (override) override.addContextProvider(provider);
+/**
+ * Adds request/launch-scoped context to every record (the server's AsyncLocalStorage provider, a
+ * phone's device id). A provider registered under an id that is already taken is ignored, so a second
+ * copy of the registering module (see RootState) cannot double the context.
+ */
+export function addContextProvider(provider: ContextProvider, id?: string): void {
+  const current = state();
+  const key = id ?? `provider-${current.providers.size}`;
+  if (current.providers.has(key)) return;
+  current.providers.set(key, provider);
+  current.core?.addContextProvider(provider);
+  current.override?.addContextProvider(provider);
 }
 
 /** Tests: route every getLogger() handle to `core` until it is called again with null. */
 export function setRootCoreOverride(core: LoggerCore | null): void {
-  override = core;
+  const current = state();
+  current.override = core;
+  // A test logger is built without the process's providers; give it the registered ones so request
+  // context (request_id, user_id …) shows up in what the test reads back.
+  if (core) for (const provider of current.providers.values()) core.addContextProvider(provider);
 }
 
 /** Tests: forget the lazily built root so the next log call reads the environment again. */
 export function resetRootCore(): void {
-  rootCore = null;
-  override = null;
-  pendingProviders.length = 0;
+  const current = state();
+  current.core = null;
+  current.override = null;
+  current.providers.clear();
 }

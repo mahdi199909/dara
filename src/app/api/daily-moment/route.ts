@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { computeDailyMomentCandidates } from "@/lib/insightsData";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const candidates = await computeDailyMomentCandidates(userId);
@@ -12,3 +13,6 @@ export async function GET() {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/daily-moment", GET);
+export { loggedGET as GET };

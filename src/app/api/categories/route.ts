@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { CATEGORY_KINDS, VALUE_TYPES } from "@/lib/types";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   name: z.string().min(1).max(50),
@@ -18,7 +19,7 @@ const createSchema = z.object({
   parentCategoryId: z.string().min(1).nullable().optional(),
 });
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const categories = await prisma.category.findMany({
@@ -31,7 +32,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const { parentCategoryId, ...body } = createSchema.parse(await req.json());
@@ -68,3 +69,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/categories", GET);
+const loggedPOST = withApiLogging("POST", "/api/categories", POST);
+export { loggedGET as GET, loggedPOST as POST };

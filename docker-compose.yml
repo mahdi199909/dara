@@ -8,6 +8,11 @@ services:
       POSTGRES_USER: hesabkon
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: hesabkon
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - hesabkon_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,7 +22,10 @@ services:
       retries: 10
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -31,8 +39,21 @@ services:
       TZ: ${TZ:-Asia/Tehran}
       APP_URL: ${APP_URL:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      # Logging (see doc/logging/architecture.md). One JSON line per record on stdout.
+      APP_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_LEVEL_OVERRIDES: ${LOG_LEVEL_OVERRIDES:-}
+      LOG_SLOW_REQUEST_MS: ${LOG_SLOW_REQUEST_MS:-1000}
+      LOG_SLOW_QUERY_MS: ${LOG_SLOW_QUERY_MS:-300}
     ports:
       - "3000:3000"
+    # Docker keeps container stdout in one ever-growing file unless told otherwise. Five files of
+    # 20 MB per container is a hard ceiling on what the logs may occupy (~100 MB), oldest dropped first.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
 volumes:
   hesabkon_pgdata:

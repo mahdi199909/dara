@@ -14,6 +14,9 @@ Copy `.env.example` to `.env` and fill in real values:
 | `NODE_ENV` | yes | `production` in deployment |
 | `APP_URL` | no | Used for cookie/redirect defaults; set to your real domain |
 | `TZ` | no | Timezone the server treats as "local" — day boundaries for habit check-ins, reports and the calendar follow it. Defaults to `Asia/Tehran` in the Dockerfile/compose file; if you run without Docker, set it yourself, otherwise days roll over at UTC midnight (03:30 Tehran) and a habit checked in on the web is stored under a different instant than the same day on the phone. |
+| `LOG_LEVEL` | no | Logging threshold, default `info` in production. Accepts overrides: `info,SYNC=debug`. See section 5d. |
+| `LOG_SLOW_REQUEST_MS`, `LOG_SLOW_QUERY_MS` | no | A request / a database call at least this slow is logged as a warning (defaults 1000 / 300 ms) |
+| `LOG_HASH_SECRET` | no | Key for the e-mail pseudonyms in login-failure log lines; defaults to `JWT_SECRET` |
 | `AI_PROVIDER`, `AI_API_KEY` | no | Leave empty — the app runs fully rule-based without them (see README §9/§10) |
 
 **Never commit `.env` to git.** `.gitignore` already excludes it.
@@ -124,8 +127,11 @@ Either way, once SSL terminates at the proxy, cookies are sent over HTTPS and `s
 ```bash
 cd /path/to/checkout
 git pull
-docker compose up -d --build     # rebuilds the app image; `prisma db push` runs again at container start
+GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build   # rebuilds the app image; `prisma db push` runs again at container start
 ```
+
+`GIT_COMMIT` is baked into the image so every log line says which build wrote it (the image has no `.git`
+to ask). Leaving it out is harmless — the records then say `git_commit: "unknown"`.
 
 `db push` runs with `--accept-data-loss` (see the `Dockerfile`), which is safe for the changes shipped so far: it adds new
 tables/columns (such as `SyncTombstone`, `Reminder.updatedAt`) and converts the money columns from `integer` to
@@ -141,6 +147,29 @@ above ~2.1 billion Toman are refused by an old server, one row at a time, with t
 
 The web app's *backup* tab (download / restore a backup file) needs no server change: it is built on the same
 `/api/sync/pull` and `/api/sync/push` endpoints the phone syncs through.
+
+## 5d. Logs
+
+The app writes one JSON object per line to stdout — requests, failures, sign-in events, sync summaries
+(what each contains, and what is deliberately never logged: [doc/logging/architecture.md](doc/logging/architecture.md),
+[doc/logging/security.md](doc/logging/security.md)). Docker keeps them, and `docker-compose.yml` caps that at five
+files of 20 MB for the app and three of 10 MB for Postgres, so logs can never fill the disk.
+
+```bash
+docker compose logs app --since 1h                                   # raw
+docker logs parva-app-1 --since 1h 2>&1 | jq -c 'select(.level == "ERROR")'   # errors only (needs jq)
+docker logs parva-app-1 2>&1 | jq -c 'select(.request_id == "req_…")'         # one request, end to end
+```
+
+More recipes (slow requests, failed logins, sync results): [doc/logging/debugging.md](doc/logging/debugging.md).
+Every error the app returns carries a `code` and a `requestId`; ask a person who hit one for the
+`requestId` and search for it.
+
+To watch every request for a while, set `LOG_LEVEL=debug` in `.env` and `docker compose up -d`; set it back
+afterwards (successful reads are only written at debug level).
+
+Changing the compose file's `logging:` section, like any compose change, takes effect when the containers are
+recreated (`docker compose up -d`).
 
 ## 5c. Releasing a new Android APK
 

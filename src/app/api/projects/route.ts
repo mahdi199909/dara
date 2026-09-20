@@ -6,6 +6,7 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { createProjectCategory } from "@/lib/projectSync";
 import { PROJECT_STATUSES } from "@/lib/types";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -14,7 +15,7 @@ const createSchema = z.object({
   color: z.string().max(20).optional(),
 });
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const projects = await prisma.project.findMany({
@@ -30,7 +31,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
@@ -56,3 +57,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/projects", GET);
+const loggedPOST = withApiLogging("POST", "/api/projects", POST);
+export { loggedGET as GET, loggedPOST as POST };

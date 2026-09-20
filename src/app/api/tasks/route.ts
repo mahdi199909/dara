@@ -5,8 +5,9 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { createTaskSchema } from "@/lib/schemas/tasks";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(req.url);
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createTaskSchema.parse(await req.json());
@@ -73,3 +74,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/tasks", GET);
+const loggedPOST = withApiLogging("POST", "/api/tasks", POST);
+export { loggedGET as GET, loggedPOST as POST };

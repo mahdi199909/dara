@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const entries = await prisma.virtualAssetEntry.findMany({
@@ -59,3 +60,6 @@ export async function GET() {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/virtual-assets", GET);
+export { loggedGET as GET };

@@ -6,6 +6,7 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncHabitCheckInVirtualAsset } from "@/lib/habitSync";
 import { deleteRowsWithTombstones, deleteVirtualAssetEntriesWithTombstones } from "@/lib/tombstones";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const bodySchema = z.object({ date: z.string().datetime().optional() });
 
@@ -14,7 +15,7 @@ function startOfDay(d: Date) {
 }
 
 /** Toggles the check-in for a habit on a given day (defaults to today). */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const habit = await prisma.habit.findFirst({ where: { id: params.id, userId, deletedAt: null } });
@@ -74,7 +75,7 @@ const durationBodySchema = z.object({
  * already (a duration only makes sense for a day the habit was actually done), and re-syncs
  * the day's virtual asset value, which now factors the duration in — see habitSync.ts.
  */
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const habit = await prisma.habit.findFirst({ where: { id: params.id, userId, deletedAt: null } });
@@ -111,3 +112,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return handleApiError(err);
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/habits/[id]/checkin", POST);
+const loggedPATCH = withApiLogging("PATCH", "/api/habits/[id]/checkin", PATCH);
+export { loggedPOST as POST, loggedPATCH as PATCH };

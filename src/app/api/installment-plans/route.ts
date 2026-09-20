@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { generateInstallmentSchedule, summarizeInstallments } from "@/lib/installments";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   title: z.string().min(1).max(150),
@@ -18,7 +19,7 @@ const createSchema = z.object({
   reminderOffsets: z.array(z.number().int().min(0)).optional(),
 });
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const plans = await prisma.installmentPlan.findMany({
@@ -38,7 +39,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
@@ -97,3 +98,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/installment-plans", GET);
+const loggedPOST = withApiLogging("POST", "/api/installment-plans", POST);
+export { loggedGET as GET, loggedPOST as POST };

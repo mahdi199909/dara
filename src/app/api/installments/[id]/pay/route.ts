@@ -4,10 +4,11 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const schema = z.object({ accountId: z.string() });
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const installment = await prisma.installment.findFirst({
@@ -56,3 +57,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return handleApiError(err);
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/installments/[id]/pay", POST);
+export { loggedPOST as POST };

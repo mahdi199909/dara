@@ -19,7 +19,7 @@ export { LevelController } from "./core/levelControl";
 export { DOMAINS, MODULE_OF_DOMAIN, OPERATIONS, OPERATION_RESULTS, EVENTS, EVENT_NAMES, eventMeta, isEventName, domainOf, humanizeEvent, validateEventName } from "./core/events";
 export type { Domain, EventName, EventMeta, OperationBase, OperationEvent } from "./core/events";
 
-export { ERROR_CODES, isErrorCode, errorCodeMeta, classifyError, syncErrorCode } from "./core/errorCodes";
+export { ERROR_CODES, isErrorCode, errorCodeMeta, classifyError, codeForHttpStatus, syncErrorCode } from "./core/errorCodes";
 export type { ErrorCode, ErrorCodeMeta, SyncErrorKind } from "./core/errorCodes";
 
 export { newId, isId, ulid, newTraceId, newSpanId } from "./core/ids";

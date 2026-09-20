@@ -6,6 +6,7 @@ import { computeTimeAndMoneyReport, computeNetWorth } from "@/lib/reportEngine";
 import { toJalali, jalaliMonthRange } from "@/lib/jalali";
 import { summarizeInstallments } from "@/lib/installments";
 import { expandOccurrences } from "@/lib/recurrence";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -14,7 +15,7 @@ function endOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 }
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const now = new Date();
@@ -87,3 +88,6 @@ export async function GET() {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/dashboard", GET);
+export { loggedGET as GET };

@@ -59,7 +59,8 @@ describe("handleApiError", () => {
   it("logs an unexpected exception once — stack and code included — and tells the person nothing about it", async () => {
     const response = handleApiError(new Error("Can't reach postgresql://hesabkon:hunter2@postgres:5432/hesabkon"));
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "خطایی رخ داد. دوباره تلاش کنید." });
+    // The person still learns nothing about the cause — only a stable code they can quote.
+    expect(await response.json()).toEqual({ error: "خطایی رخ داد. دوباره تلاش کنید.", code: "SYS-001" });
 
     const logged = record("API_UNHANDLED_ERROR");
     expect(logged).toMatchObject({ level: "ERROR", module: "api", component: "error-handler", error_code: "SYS-001", error: { type: "Error" } });
@@ -132,7 +133,7 @@ describe("the on-device dispatcher", () => {
     const response = dispatchLocal("GET", "/api/tasks?status=TODO");
     expect(response.status).toBe(500);
     expect(response.json).toEqual({ error: "خطایی رخ داد. دوباره تلاش کنید.", details: "Error: disk I/O error" });
-    expect(record("API_UNHANDLED_ERROR")).toMatchObject({ module: "api", component: "local-dispatcher", layer: "local", error_code: "SYS-001", metadata: { method: "GET", path: "/api/tasks" } });
+    expect(record("API_UNHANDLED_ERROR")).toMatchObject({ module: "api", component: "local-dispatcher", layer: "local", error_code: "SYS-001", method: "GET", path: "/api/tasks" });
   });
 });
 

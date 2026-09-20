@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+async function POST(_req: Request, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const notification = await prisma.notification.findFirst({ where: { id: params.id, userId } });
@@ -15,3 +16,6 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return handleApiError(err);
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/notifications/[id]/read", POST);
+export { loggedPOST as POST };

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+// The isomorphic core only (no node: modules) — this file runs on the Edge runtime.
+import { newId } from "@/lib/observability/core/ids";
+import { getLogger } from "@/lib/observability/root";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "hesabkon_session";
 const SECRET = new TextEncoder().encode(
@@ -9,7 +12,11 @@ const SECRET = new TextEncoder().encode(
 const PUBLIC_PATHS = ["/login", "/register"];
 const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/quotes", "/api/app/version"];
 
-async function isAuthenticated(req: NextRequest): Promise<boolean> {
+const log = getLogger("auth", "middleware");
+
+type SessionState = "valid" | "missing" | "invalid";
+
+async function sessionState(req: NextRequest): Promise<SessionState> {
   // Falls back to `Authorization: Bearer <token>` alongside the cookie — see requireUserId in
   // src/lib/auth.ts for why: the Android app's Capacitor WebView can't rely on a cross-origin
   // cookie surviving to /api/license/status, so it carries the same session JWT as a bearer
@@ -17,13 +24,29 @@ async function isAuthenticated(req: NextRequest): Promise<boolean> {
   // route handler (which already accepts the header) ever runs.
   const bearerToken = req.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
   const token = req.cookies.get(COOKIE_NAME)?.value ?? bearerToken;
-  if (!token) return false;
+  if (!token) return "missing";
   try {
     await jwtVerify(token, SECRET);
-    return true;
+    return "valid";
   } catch {
-    return false;
+    return "invalid";
   }
+}
+
+/** The 401 for an API call with no usable session — logged here because the route never runs. */
+function unauthenticatedApiResponse(req: NextRequest, reason: "missing" | "invalid"): NextResponse {
+  const requestId = newId("req");
+  log.warn("AUTH_SESSION_INVALID", {
+    errorCode: "AUTH-003",
+    reason,
+    requestId,
+    httpMethod: req.method,
+    httpPath: req.nextUrl.pathname,
+    statusCode: 401,
+  });
+  const response = NextResponse.json({ error: "احراز هویت نشده‌اید.", code: "AUTH-003", requestId }, { status: 401 });
+  response.headers.set("X-Request-Id", requestId);
+  return response;
 }
 
 export async function middleware(req: NextRequest) {
@@ -45,12 +68,13 @@ export async function middleware(req: NextRequest) {
   // auth check below as normal.
   if (req.method === "OPTIONS") return NextResponse.next();
 
-  const authed = await isAuthenticated(req);
+  const session = await sessionState(req);
+  const authed = session === "valid";
 
   if (pathname.startsWith("/api")) {
     const isPublicApi = PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
     if (isPublicApi || authed) return NextResponse.next();
-    return NextResponse.json({ error: "احراز هویت نشده‌اید." }, { status: 401 });
+    return unauthenticatedApiResponse(req, session === "missing" ? "missing" : "invalid");
   }
 
   const isPublicPage = PUBLIC_PATHS.some((p) => pathname.startsWith(p));

@@ -1,6 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { prisma } from "./db";
+import { logSessionInvalid } from "./observability/server/authEvents";
+import { setRequestUser } from "./observability/server/requestContext";
 import type { NextRequest } from "next/server";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "hesabkon_session";
@@ -61,6 +63,7 @@ export async function getCurrentUser() {
   if (!token) return null;
   const payload = await verifySessionToken(token);
   if (!payload) return null;
+  setRequestUser(payload.userId);
   const user = await prisma.user.findUnique({ where: { id: payload.userId } });
   return user;
 }
@@ -77,9 +80,16 @@ export async function requireUserId(req?: NextRequest): Promise<string> {
   const cookieToken = cookies().get(COOKIE_NAME)?.value;
   const bearerToken = req?.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
   const token = cookieToken ?? bearerToken;
-  if (!token) throw new AuthError();
+  if (!token) {
+    logSessionInvalid("missing");
+    throw new AuthError();
+  }
   const payload = await verifySessionToken(token);
-  if (!payload) throw new AuthError();
+  if (!payload) {
+    logSessionInvalid("invalid");
+    throw new AuthError();
+  }
+  setRequestUser(payload.userId);
   return payload.userId;
 }
 

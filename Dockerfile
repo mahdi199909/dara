@@ -34,6 +34,14 @@ ENV NODE_ENV=production
 # are the same day. Node resolves named zones through its bundled ICU data, so this needs no tzdata.
 ENV TZ=Asia/Tehran
 
+# Which commit this image was built from, so every log record says what code produced it.
+# docker-compose.yml passes it in (`GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up -d
+# --build`); .dockerignore keeps .git out of the build context, so the image cannot ask git itself.
+# Only the running server reads it, so it sits here, after the expensive steps, and a new commit
+# does not invalidate the dependency and build layers above.
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=$GIT_COMMIT
+
 # Explicit `-p 3000` (not just `npm run start` / an ENV PORT default) because the host
 # platform (e.g. Railway) injects its own PORT env var at container runtime — which
 # overrides any ENV PORT baked into the image — and that injected value is NOT stable

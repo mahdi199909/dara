@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { recalcActivityDuration, syncDirectCostTransaction } from "@/lib/activityService";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -22,7 +23,7 @@ async function getOwned(userId: string, id: string) {
   return activity;
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     await getOwned(userId, params.id);
@@ -36,7 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -87,3 +88,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/activities/[id]", GET);
+const loggedPATCH = withApiLogging("PATCH", "/api/activities/[id]", PATCH);
+const loggedDELETE = withApiLogging("DELETE", "/api/activities/[id]", DELETE);
+export { loggedGET as GET, loggedPATCH as PATCH, loggedDELETE as DELETE };

@@ -17,6 +17,48 @@ Logging must never become a second, unprotected copy of a person's data.
    turns them off.
 5. **Errors are scrubbed**: an exception message can carry a connection string, a token or an
    address; every message and stack goes through the same text scrubber as any other string.
+6. **A database error never reaches a log as Prisma wrote it** (see the next section).
+7. **What a request carried is not logged**: no body, no query string (`?search=…` can be private), no
+   headers, no cookies. The path is logged without its query, and the *route pattern*
+   (`/api/tasks/[id]`) is what metrics group by.
+
+## Database errors: Prisma prints your data **[done]**
+
+The text of a failed Prisma call is *the call itself*, with its arguments: the e-mail being
+registered, the task title, the amount. Prisma also prints it to stderr by itself, and raises it again
+as an engine `error` event. Left alone, that is a second copy of a person's data in the log. So:
+
+- `src/lib/db.ts` creates the client with `log: [{ emit: "event", … }]` — nothing is written by Prisma.
+- `serializeError` recognises a Prisma error (by its class name, or by the "Invalid … invocation" header
+  Prisma puts on every failed call, whatever the call was written as) and rebuilds the message from what
+  is safe: the operation (for example `prisma.user.create()`), the explanation Prisma prints at the very
+  end (for example "Unique constraint failed on the fields: (email)" — quoted values blanked, runs of 4+
+  digits blanked), and the schema names in `meta` (`modelName`, `target`, `field_name` … never a value or a
+  driver message).
+- the **stack** is rebuilt from its `    at …` frames only: V8 starts a stack with the whole message,
+  which for Prisma is the data.
+- the engine's own copy of a failed query (an `error` event with the same text) is dropped — the
+  extension records that failure once, classified; other engine events are scrubbed of PostgreSQL's
+  `Key (email)=(…)` detail lines first.
+- the Prisma extension records **model, operation, duration and error code** — never the SQL or the arguments.
+
+This was found and fixed against the real client (the unit tests alone had assumed a message shape
+Prisma does not use): `src/testing/observabilityPipeline.e2e.test.ts` provokes real unique-constraint,
+foreign-key and validation failures and asserts nothing typed by the person appears anywhere.
+
+## Authentication events **[done]**
+
+`AUTH_LOGIN_FAILED`, `AUTH_RATE_LIMITED`, `AUTH_REGISTER_FAILED`, `AUTH_SESSION_INVALID`, `AUTH_FORBIDDEN` are
+WARN, security-flagged and never sampled. They say *why* (`wrong_password` vs `no_such_user` — visible in
+the log, identical in the response, so an attacker learns nothing) and *from where* (IP), and identify
+the account only as `emailHash`: `em_` + 12 hex characters of an HMAC-SHA256 of the lower-cased address,
+keyed from `LOG_HASH_SECRET` (or `JWT_SECRET`). Two failures for the same account are visibly the same;
+the address cannot be read or tested back out of the log without the key.
+
+Headers a client supplies (`traceparent`, `X-Parva-Device-Id`, `X-Parva-Sync-Id`, `X-Request-Id`) are
+validated against a strict shape and dropped when malformed, so a hostile value can never reach a log
+line as free text. The request id the server trusts is always its own; a client's `X-Request-Id` is kept
+only as a hint.
 
 ## The redaction layer (`core/redact.ts`) **[done]**
 
@@ -63,8 +105,8 @@ Developer-facing tools (support timeline, diagnostics export) only ever show the
 ## IP addresses and users
 
 `user_id` is an opaque id, never an e-mail address. IP addresses are recorded only for security
-events (login failures, rate limiting) and in the audit trail (as today); ordinary request records do
-not carry them.
+events (`AUTH_LOGIN_SUCCESS`/`FAILED`, `AUTH_RATE_LIMITED`, `AUTH_REGISTER_*`) and in the audit trail (as
+today); ordinary request records (`HTTP_REQUEST_COMPLETED`) do not carry them.
 
 ## Sampling and security events
 

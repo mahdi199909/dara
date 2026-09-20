@@ -4,10 +4,11 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const schema = z.object({ offsetMinutes: z.number().int().min(0) });
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const event = await prisma.event.findFirst({ where: { id: params.id, userId, deletedAt: null } });
@@ -41,3 +42,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return handleApiError(err);
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/events/[id]/reminders", POST);
+export { loggedPOST as POST };

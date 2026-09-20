@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { CATEGORY_KINDS, VALUE_TYPES } from "@/lib/types";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(50).optional(),
@@ -25,7 +26,7 @@ async function getOwned(userId: string, id: string) {
   return category;
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -64,7 +65,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -91,3 +92,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return handleApiError(err);
   }
 }
+
+const loggedPATCH = withApiLogging("PATCH", "/api/categories/[id]", PATCH);
+const loggedDELETE = withApiLogging("DELETE", "/api/categories/[id]", DELETE);
+export { loggedPATCH as PATCH, loggedDELETE as DELETE };

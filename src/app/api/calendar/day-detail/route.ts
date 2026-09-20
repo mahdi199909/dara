@@ -3,12 +3,13 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { ApiError } from "@/lib/apiErrorBase";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // The calendar month view's day-click detail — habits and financial transactions for one day.
 // Deliberately NOT events/tasks: /api/events?from=X&to=X (same day twice) already covers those
 // for the existing month/week/day views, so the day-detail modal just fetches both in parallel
 // instead of this route re-deriving what that one already does well.
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(req.url);
@@ -51,3 +52,6 @@ export async function GET(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/calendar/day-detail", GET);
+export { loggedGET as GET };

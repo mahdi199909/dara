@@ -7,6 +7,8 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { seedDefaultCategoriesForUser } from "@/lib/defaults";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
+import { logRegisterFailed, logRegisterSuccess } from "@/lib/observability/server/authEvents";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const schema = z.object({
   name: z.string().min(1, "نام الزامی است.").max(100),
@@ -18,13 +20,16 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const body = schema.parse(await req.json());
     const email = body.email.toLowerCase().trim();
 
     const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) throw new ApiError("این ایمیل قبلاً ثبت شده است.", 409);
+    if (existing) {
+      logRegisterFailed({ email, reason: "email_taken", ip: requestMeta(req).ipAddress });
+      throw new ApiError("این ایمیل قبلاً ثبت شده است.", 409, "AUTH-005");
+    }
 
     const passwordHash = await hashPassword(body.password);
     const user = await prisma.user.create({
@@ -50,9 +55,13 @@ export async function POST(req: NextRequest) {
 
     const token = await createSessionToken({ userId: user.id, email: user.email });
     await setSessionCookie(token);
+    logRegisterSuccess({ userId: user.id, ip: ipAddress });
 
     return withCors(NextResponse.json({ id: user.id, name: user.name, email: user.email, token }));
   } catch (err) {
     return withCors(handleApiError(err));
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/auth/register", POST);
+export { loggedPOST as POST };

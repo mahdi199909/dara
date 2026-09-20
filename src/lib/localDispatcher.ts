@@ -453,7 +453,7 @@ function errorResponse(err: unknown, request?: { method: string; path: string })
   if (err instanceof ApiError) {
     return { status: err.status, json: { error: err.message } };
   }
-  log.error("API_UNHANDLED_ERROR", { error: err, errorCode: classifyError(err) ?? "SYS-001", layer: "local", method: request?.method, path: request?.path });
+  log.error("API_UNHANDLED_ERROR", { error: err, errorCode: classifyError(err) ?? "SYS-001", layer: "local", httpMethod: request?.method, httpPath: request?.path });
   // `details` carries the real underlying message (not just a generic Persian string) so it can
   // surface all the way to FirstRunGate's error display — on-device failures here (e.g. the
   // sql.js/Capacitor Filesystem driver bootstrap) have no other way to be seen without ADB.

@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, trialDayNumber, isTrialElapsed } from "@/lib/habitStreak";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -28,7 +29,7 @@ function startOfDay(d: Date) {
  * Returns every active habit together with today's check-in state, its current streak, and
  * a 30-day adherence series — everything Home and the Reports "عادت‌ها" tab need in one call.
  */
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const today = startOfDay(new Date());
@@ -70,7 +71,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
@@ -108,3 +109,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/habits", GET);
+const loggedPOST = withApiLogging("POST", "/api/habits", POST);
+export { loggedGET as GET, loggedPOST as POST };

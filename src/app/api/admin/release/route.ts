@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin";
 import { handleApiError } from "@/lib/apiError";
 import { RELEASE_SINGLETON_ID } from "@/lib/appRelease";
 import { resolveAppRelease } from "@/lib/appVersion";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // The row is an OVERRIDE on top of the release that ships in code (see resolveAppRelease): the
 // newest version and its download link are announced without anyone touching this screen, and
@@ -18,7 +19,7 @@ async function getOrInitRelease() {
   });
 }
 
-export async function GET() {
+async function GET() {
   try {
     await requireAdmin();
     const release = await getOrInitRelease();
@@ -36,7 +37,7 @@ const updateSchema = z.object({
   downloadUrl: z.string().trim().refine((url) => url === "" || /^https?:\/\//i.test(url), "لینک دانلود باید با http یا https شروع شود."),
 });
 
-export async function PATCH(req: NextRequest) {
+async function PATCH(req: NextRequest) {
   try {
     await requireAdmin();
     const body = updateSchema.parse(await req.json());
@@ -50,3 +51,7 @@ export async function PATCH(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/admin/release", GET);
+const loggedPATCH = withApiLogging("PATCH", "/api/admin/release", PATCH);
+export { loggedGET as GET, loggedPATCH as PATCH };

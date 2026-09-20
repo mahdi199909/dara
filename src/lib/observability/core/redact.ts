@@ -325,10 +325,113 @@ function primitiveOrUndefined(value: unknown): string | number | undefined {
 }
 
 /**
+ * The header Prisma puts on every query error: "Invalid `prisma.task.update()` invocation". The
+ * callee is whatever text the call was written with (`prisma.…`, `tx.…`, `this.db.…`), so it is
+ * matched loosely.
+ */
+const PRISMA_INVOCATION = /Invalid `[^`\n]{1,120}\(\)` invocation/;
+
+/** True for the text of a failed Prisma query — which reproduces the call's arguments and so must never be logged as is. */
+export function isPrismaInvocationMessage(message: string): boolean {
+  return PRISMA_INVOCATION.test(message);
+}
+/** A line of the source excerpt Prisma prints under that header ("  41   title: …", "→ 42 await …"). */
+const PRISMA_EXCERPT_LINE = /^\s*(?:[→>]\s*)?\d+\s|^\s*[{}]\s*$/m;
+/** What an excerpt or argument line can start with at column 0; an explanation never does. */
+const EXCERPT_START = /^(?:[→>]\s*)?\d+\s|^[{}()+-]/;
+const QUOTED_VALUE = /"[^"\n]*"|'[^'\n]*'/g;
+/** A run of four or more digits: an amount, an id number, a phone — never needed to understand the error. */
+const LONG_NUMBER = /\d{4,}/g;
+/** The only `meta` entries safe to keep: they name schema objects, never carry a value. */
+const PRISMA_META_KEYS = ["modelName", "target", "field_name", "column", "column_name", "table", "constraint"] as const;
+
+/**
+ * The explanation at the very end of a Prisma message ("Unique constraint failed on the fields:
+ * (`email`)"): the trailing unindented lines, after the source excerpt. Prisma 5 either separates
+ * the excerpt from it with a blank line (validation errors) or runs straight into it (query
+ * errors), so the last paragraph is walked backwards until the first line that is not prose.
+ */
+function trailingExplanation(paragraph: string): string {
+  const lines = paragraph.split("\n");
+  const kept: string[] = [];
+  for (let i = lines.length - 1; i >= 0 && kept.length < 5; i--) {
+    const line = lines[i];
+    if (!line.trim() || /^\s/.test(line) || EXCERPT_START.test(line)) break;
+    kept.unshift(line.trim());
+  }
+  return kept.join(" ");
+}
+
+function looksLikePrisma(name: unknown, message: string): boolean {
+  return (typeof name === "string" && name.startsWith("PrismaClient")) || PRISMA_INVOCATION.test(message);
+}
+
+/**
+ * Prisma's error message reproduces the failing call with its arguments — an e-mail, a task title,
+ * an amount — so it must never reach a log. What stays is the operation ("prisma.task.update()"),
+ * the explanation Prisma prints as the last paragraph (with any quoted value blanked), and the
+ * schema names in `meta` (which fields collided, which relation failed).
+ */
+function prismaSafeMessage(err: object, message: string): string {
+  const parts: string[] = [];
+  const invocation = message.match(PRISMA_INVOCATION)?.[0];
+  if (invocation) parts.push(invocation);
+
+  const paragraphs = message
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  // A failed call: the explanation trails the excerpt. Anything else (a connection failure, a panic)
+  // is a plain sentence in the first paragraph.
+  const first = paragraphs[0] ?? "";
+  const explanation = invocation
+    ? paragraphs.length > 1
+      ? trailingExplanation(paragraphs[paragraphs.length - 1])
+      : ""
+    : PRISMA_EXCERPT_LINE.test(first)
+      ? ""
+      : first;
+  if (explanation) {
+    // Only a failed call's explanation can quote a value (an amount, an id); a connection failure's
+    // "host:5432" is not one, and the port is exactly what one needs to read.
+    const blanked = explanation.replace(QUOTED_VALUE, '"…"');
+    parts.push((invocation ? blanked.replace(LONG_NUMBER, "#") : blanked).replace(/\s+/g, " ").slice(0, 300));
+  }
+
+  const meta = safeGet(err, "meta");
+  if (meta !== null && typeof meta === "object") {
+    const named: string[] = [];
+    for (const key of PRISMA_META_KEYS) {
+      const value = safeGet(meta, key);
+      if (typeof value === "string") named.push(`${key}=${value}`);
+      else if (Array.isArray(value) && value.every((item) => typeof item === "string")) named.push(`${key}=${value.join(",")}`);
+    }
+    if (named.length > 0) parts.push(`(${named.join("; ")})`);
+  }
+  return parts.join(": ") || "Prisma error";
+}
+
+/**
+ * The stack without its first lines. V8 begins a stack with "Name: message", which for a
+ * multi-line message (Prisma's is a whole source excerpt) puts the message — and any data in it —
+ * ahead of the frames. Rebuild it from the safe first line plus the "    at …" frames only.
+ */
+function safeStack(stack: string, headline: string, rawMessage: string, maxFrames: number): string {
+  const lines = stack.split("\n");
+  const frames = lines.filter((line) => /^\s+at\s/.test(line));
+  if (frames.length > 0) return [headline, ...frames.slice(0, maxFrames)].join("\n");
+  // Not V8-shaped (no "at" lines): drop the message's own lines from the top when they are there.
+  const messageLines = rawMessage.split("\n").length;
+  const startsWithMessage = rawMessage !== "" && stack.includes(rawMessage.split("\n")[0]);
+  return [headline, ...(startsWithMessage ? lines.slice(messageLines) : lines).slice(0, maxFrames)].join("\n");
+}
+
+/**
  * A structured, size-bounded, secret-free description of any thrown value. The message and stack
- * go through scrubString (a Prisma or fetch error can carry a connection string or a token), and a
- * stack is kept only when asked for — it belongs in server logs and the on-device log file, never in
- * anything shown to a person.
+ * go through scrubString (a fetch error can carry a token, a database error a connection string),
+ * Prisma errors are rewritten so the arguments of the failed query never appear (see
+ * prismaSafeMessage), and a stack is kept only when asked for — it belongs in server logs and the
+ * on-device log file, never in anything shown to a person.
  */
 export function serializeError(err: unknown, options: ErrorSerializeOptions = {}, depth = 0): SerializedError {
   const opts = { ...ERROR_DEFAULTS, ...options };
@@ -336,9 +439,12 @@ export function serializeError(err: unknown, options: ErrorSerializeOptions = {}
     if (typeof err === "object" && err !== null && isErrorLike(err)) {
       const name = safeGet(err, "name");
       const rawMessage = safeGet(err, "message");
+      const messageText = typeof rawMessage === "string" ? rawMessage : String(rawMessage ?? "");
+      const type = typeof name === "string" && name ? name : (safeGet(safeGet(err, "constructor"), "name") as string) || "Error";
+      const prisma = looksLikePrisma(name, messageText);
       const serialized: SerializedError = {
-        type: typeof name === "string" && name ? name : (safeGet(safeGet(err, "constructor"), "name") as string) || "Error",
-        message: truncate(scrubString(typeof rawMessage === "string" ? rawMessage : String(rawMessage ?? "")), opts.maxMessageChars),
+        type,
+        message: truncate(scrubString(prisma ? prismaSafeMessage(err, messageText) : messageText), opts.maxMessageChars),
       };
       const code = primitiveOrUndefined(safeGet(err, "code"));
       if (code !== undefined) serialized.code = code;
@@ -348,8 +454,8 @@ export function serializeError(err: unknown, options: ErrorSerializeOptions = {}
       if (opts.includeStack) {
         const stack = safeGet(err, "stack");
         if (typeof stack === "string" && stack) {
-          const lines = stack.split("\n").slice(0, opts.maxStackFrames + 1);
-          serialized.stack = truncate(scrubString(lines.join("\n")), opts.maxStackChars);
+          const headline = `${type}: ${serialized.message.split("\n")[0]}`;
+          serialized.stack = truncate(scrubString(safeStack(stack, headline, messageText, opts.maxStackFrames)), opts.maxStackChars);
         }
       }
 

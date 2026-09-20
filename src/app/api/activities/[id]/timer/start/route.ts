@@ -4,8 +4,9 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { startTimer } from "@/lib/activityService";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const activity = await prisma.activity.findFirst({ where: { id: params.id, userId, deletedAt: null } });
@@ -29,3 +30,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return handleApiError(err);
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/activities/[id]/timer/start", POST);
+export { loggedPOST as POST };

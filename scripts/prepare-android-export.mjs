@@ -28,6 +28,9 @@ const apiDir = join(root, "src/app/api");
 // tests included. It's only ever useful next to the routes, so it goes with them.
 const testingDir = join(root, "src/testing");
 const middlewareFile = join(root, "src/middleware.ts");
+// Runs the server's process-level logging (uncaught-error and shutdown listeners); nothing in a
+// static export has a server process to run it in.
+const instrumentationFile = join(root, "src/instrumentation.ts");
 const androidLayout = join(root, "src/app/(app)/layout.android.tsx");
 const webLayout = join(root, "src/app/(app)/layout.tsx");
 
@@ -42,6 +45,10 @@ if (existsSync(testingDir)) {
 if (existsSync(middlewareFile)) {
   rmSync(middlewareFile, { force: true });
   console.log("Removed src/middleware.ts.");
+}
+if (existsSync(instrumentationFile)) {
+  rmSync(instrumentationFile, { force: true });
+  console.log("Removed src/instrumentation.ts.");
 }
 if (!existsSync(androidLayout)) {
   console.error(`Expected ${androidLayout} to exist — did it get renamed/moved?`);

@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { deleteVirtualAssetEntriesWithTombstones } from "@/lib/tombstones";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // No edit here, deliberately: a VirtualAssetEntry's value is derived from a real
 // activity/task/project/habit check-in (see prisma/schema.prisma's own comment on this model) —
@@ -13,7 +14,7 @@ import { deleteVirtualAssetEntriesWithTombstones } from "@/lib/tombstones";
 // syncProjectCompletionAsset, syncHabitCheckInVirtualAsset, ...) will just recreate it — the same
 // "hard delete, doesn't stick against a live source" trade-off already accepted for
 // EventCompletion/Reminder elsewhere in this schema.
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await prisma.virtualAssetEntry.findFirst({ where: { id: params.id, userId } });
@@ -37,3 +38,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return handleApiError(err);
   }
 }
+
+const loggedDELETE = withApiLogging("DELETE", "/api/virtual-assets/[id]", DELETE);
+export { loggedDELETE as DELETE };

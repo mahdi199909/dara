@@ -3,7 +3,8 @@
 Sync between a phone and the server is the most delicate flow in Parva: a change made offline on the
 phone must reach the server and then the web, without loss or duplication. A support question like
 *"I recorded an expense on my phone but it is not on the web"* must be answerable from the logs, step by
-step. Status: **[done]** exists today, **[planned 4]** with the sync-correlation work.
+step. Status: **[done]** exists today (the phone's failure records and — since phase 1 — the server's
+side of every push and pull), **[planned 4]** with the client sync-correlation work.
 
 ## How sync works (what the logs describe)
 
@@ -29,6 +30,26 @@ The phone logs the outcome of a failed cycle and each row it could not apply:
 `kind` → code: network `SYNC-001`, server `SYNC-002`, auth `SYNC-003`, too-large `SYNC-004`,
 unknown `SYNC-009`. Only counts and ids are logged, never rows or tokens (see [security.md](security.md)).
 
+### The server's side **[done, phase 1]**
+
+Every `/api/sync/push` and `/api/sync/pull` is an ordinary request first: an `HTTP_REQUEST_COMPLETED` with
+`request_id`, `user_id`, status and duration (`POST /api/sync/push` at INFO, the poll at DEBUG). On top of
+that the routes write one summary record each (`src/lib/observability/server/syncLog.ts`):
+
+| Event | Level | Fields (all in `metadata`) |
+| --- | --- | --- |
+| `SYNC_PUSH_SUCCESS` | INFO when rows/deletions/profile were applied, DEBUG when nothing changed | `counts` {upserted, skipped, rejected}, `tables` (the same per table), `tombstones` {applied, ignored}, `profile` |
+| `SYNC_PARTIAL_SUCCESS` | WARN | as above plus `rejections`: `"Table: kind of refusal"` → count |
+| `SYNC_PULL_SUCCESS` | INFO when rows/deletions were sent, DEBUG when the device was up to date | `rows`, `tables` (rows per table), `tombstones`, `incremental` (a cursor was given) |
+
+The kinds of refusal are a closed list, never the refused text (a refusal's own message quotes the value
+that failed): `missing id`, `parent row not found for this account`, `id belongs to a different account`,
+`missing parent row`, `duplicate of an existing row`, `<field>: required value is missing | not a boolean |
+not a valid date | not an integer | not a number | value is larger than the server allows`, or `other`.
+No row, id or value is logged. If the request carries the app's `X-Parva-Sync-Id`, `X-Parva-Device-Id`
+and `traceparent` (the app sends them from phase 4; the server already accepts them), each of these
+records — and every other record of that request — carries `sync_id`, `device_id` and the phone's `trace_id`.
+
 ## Planned **[planned 4]**
 
 **One id for the whole cycle.** Each cycle gets a `sync_id`; every record the phone writes during it
@@ -40,12 +61,12 @@ phone   SYNC_STARTED          sync_id=sync_…  trigger=resume
 phone   SYNC_PULL_STARTED / SYNC_PULL_SUCCESS   record_count, duration_ms
 phone   SYNC_PUSH_STARTED     record_count, payload_size
 server  HTTP_REQUEST_COMPLETED  POST /api/sync/push  request_id=req_…  sync_id=sync_…  status=200  duration_ms
-server  SYNC_PUSH_SUCCESS     created/updated/skipped/rejected per table, tombstones applied
+server  SYNC_PUSH_SUCCESS     upserted/skipped/rejected per table, tombstones applied   [done]
 phone   SYNC_COMPLETED        created, updated, deleted, rejected, duration_ms
 ```
 
-Failures use `SYNC_FAILED`, `SYNC_RETRY`, `SYNC_PARTIAL_SUCCESS` (server refused some rows),
-`SYNC_PAYLOAD_REJECTED` (ids and reasons, capped), `SYNC_SIZE_LIMIT_EXCEEDED` (a 413 and the split that
+Failures use `SYNC_FAILED`, `SYNC_RETRY`, `SYNC_PARTIAL_SUCCESS` (server refused some rows — **done**
+on the server), `SYNC_PAYLOAD_REJECTED` (ids and reasons, capped), `SYNC_SIZE_LIMIT_EXCEEDED` (a 413 and the split that
 followed), `SYNC_CONFLICT` (a last-write-wins skip). Entity ids per row are logged only at DEBUG (or
 always for rejected rows), so "did entity X go through?" can be answered by raising `SYNC=debug` for that
 user for a short while.

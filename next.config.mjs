@@ -20,6 +20,9 @@ const nextConfig = {
   ...(isAndroidExport
     ? { output: "export", images: { unoptimized: true } }
     : {
+        // src/instrumentation.ts starts the server's process-level logging (startup, crash and
+        // shutdown records). Not needed — and not present — in the static export.
+        experimental: { instrumentationHook: true },
         // The permanent download link (APK_STATIC_URL in src/lib/appVersion.ts). GitHub serves
         // whichever release is newest at the "latest" address, so publishing a release — pushing a
         // vX.Y.Z tag, see .github/workflows/build-android.yml — is all it takes to change what this

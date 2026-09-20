@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   name: z.string().min(1).max(150),
@@ -15,7 +16,7 @@ const createSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const assets = await prisma.asset.findMany({
@@ -28,7 +29,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
@@ -61,3 +62,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/assets", GET);
+const loggedPOST = withApiLogging("POST", "/api/assets", POST);
+export { loggedGET as GET, loggedPOST as POST };

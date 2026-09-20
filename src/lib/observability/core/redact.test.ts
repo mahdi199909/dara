@@ -332,3 +332,154 @@ describe("serializeError", () => {
     expect(() => serializeError(hostile)).not.toThrow();
   });
 });
+
+describe("serializeError — Prisma errors", () => {
+  /** What Prisma 5 really produces: the failing call, with its arguments, ahead of the explanation. */
+  const knownRequestMessage = [
+    "",
+    "Invalid `prisma.user.create()` invocation in",
+    "/app/.next/server/app/api/auth/register/route.js:1:2345",
+    "",
+    "  38 ",
+    "  39 const user = await prisma.user.create({",
+    "  40   data: {",
+    '→ 41     email: "ali@example.com",',
+    '         name: "Ali Rezaei",',
+    '         passwordHash: "$2a$12$abcdefghijklmnopqrstuv"',
+    "       }",
+    "     })",
+    "",
+    "Unique constraint failed on the fields: (`email`)",
+  ].join("\n");
+
+  function prismaError(name: string, message: string, extra: Record<string, unknown> = {}): Error {
+    const err = Object.assign(new Error(message), { name, clientVersion: "5.19.1", ...extra });
+    err.stack = `${name}: ${message}\n    at RequestHandler.handleRequestError (node_modules/@prisma/client/runtime/library.js:1:1)\n    at POST (route.ts:41:22)`;
+    return err;
+  }
+
+  it("keeps the operation and the explanation but none of the arguments", () => {
+    const out = serializeError(prismaError("PrismaClientKnownRequestError", knownRequestMessage, { code: "P2002", meta: { target: ["email"] } }));
+    expect(out.type).toBe("PrismaClientKnownRequestError");
+    expect(out.code).toBe("P2002");
+    expect(out.message).toContain("prisma.user.create()");
+    expect(out.message).toContain("Unique constraint failed on the fields");
+    expect(out.message).toContain("target=email");
+    expect(out.message).not.toContain("ali@example.com");
+    expect(out.message).not.toContain("Ali Rezaei");
+    expect(out.message).not.toContain("passwordHash");
+    expect(out.message).not.toContain("/app/.next");
+  });
+
+  it("does not let the arguments reach the stack either", () => {
+    const out = serializeError(prismaError("PrismaClientKnownRequestError", knownRequestMessage, { code: "P2002" }), { includeStack: true });
+    const stack = out.stack!;
+    expect(stack).not.toContain("ali@example.com");
+    expect(stack).not.toContain("Ali Rezaei");
+    expect(stack).not.toContain("passwordHash");
+    expect(stack.split("\n")[0]).toMatch(/^PrismaClientKnownRequestError: /);
+    expect(stack).toContain("    at POST (route.ts:41:22)");
+  });
+
+  it("recognises a validation error and blanks any quoted value in its explanation", () => {
+    const message = ["", "Invalid `prisma.task.create()` invocation:", "", "{", "  data: {", '    title: "Buy a gift for Sara",', "  }", "}", "", 'Argument `where`: Got invalid value "Sara-secret" on prisma.task.create. Provided String, expected Int.'].join("\n");
+    const out = serializeError(prismaError("PrismaClientValidationError", message));
+    expect(out.message).toContain("prisma.task.create()");
+    expect(out.message).toContain("Argument `where`");
+    expect(out.message).not.toContain("Sara");
+    expect(out.message).not.toContain("gift");
+  });
+
+  it("reads the explanation from the real shape of a query error, where the excerpt runs straight into it", () => {
+    const message = [
+      "",
+      "Invalid `server.prisma.user.create()` invocation in",
+      "C:\\repo\\src\\thing.test.ts:14:34",
+      "",
+      '  11 it("debug", async () => {',
+      "  12   const { email } = await server.registerUser();",
+      "→ 14   try { await server.prisma.user.create(",
+      "Unique constraint failed on the fields: (`email`)",
+    ].join("\n");
+    const out = serializeError(prismaError("PrismaClientKnownRequestError", message, { code: "P2002", meta: { target: ["email"] } }));
+    expect(out.message).toBe("Invalid `server.prisma.user.create()` invocation: Unique constraint failed on the fields: (`email`): (target=email)");
+    expect(out.message).not.toContain("registerUser");
+    expect(out.message).not.toContain("C:");
+  });
+
+  it("keeps a multi-line explanation but stops at the first indented or numbered line", () => {
+    const message = ["", "Invalid `prisma.task.update()` invocation:", "", "  {", '    where: { id: "secret-id" }', "  }", "Argument `data` is missing.", "Available options are listed in green."].join("\n");
+    const out = serializeError(prismaError("PrismaClientValidationError", message));
+    expect(out.message).toBe("Invalid `prisma.task.update()` invocation: Argument `data` is missing. Available options are listed in green.");
+    expect(out.message).not.toContain("secret-id");
+  });
+
+  it("blanks long numbers in the explanation — an amount that did not fit a column, an id", () => {
+    const message = ["", "Invalid `prisma.transaction.create()` invocation:", "", "Unable to fit integer value 3000000000 into an INT4, or account 1234567890 not found"].join("\n");
+    const out = serializeError(prismaError("PrismaClientKnownRequestError", message));
+    expect(out.message).not.toContain("3000000000");
+    expect(out.message).not.toContain("1234567890");
+    expect(out.message).toContain("#");
+  });
+
+  it("does not depend on what the call was written as: prisma.…, tx.…, this.db.…", () => {
+    for (const callee of ["tx.user.create()", "this.db.user.create()", "server.prisma.user.create()"]) {
+      const message = knownRequestMessage.replace("prisma.user.create()", callee);
+      const out = serializeError(new Error(message));
+      expect(out.message, callee).toContain(callee);
+      expect(out.message, callee).toContain("Unique constraint failed on the fields");
+      expect(out.message, callee).not.toContain("ali@example.com");
+    }
+  });
+
+  it("recognises a Prisma message even when the error is not named like one", () => {
+    const out = serializeError(new Error(knownRequestMessage));
+    expect(out.message).not.toContain("ali@example.com");
+    expect(out.message).toContain("prisma.user.create()");
+  });
+
+  it("drops a last paragraph that is source code rather than an explanation", () => {
+    const message = ["", "Invalid `prisma.user.update()` invocation in", "/app/route.js:1:1", "", "  12 await prisma.user.update({", '→ 13   data: { email: "x@y.z" }', "  14 })"].join("\n");
+    const out = serializeError(new Error(message));
+    expect(out.message).toBe("Invalid `prisma.user.update()` invocation");
+  });
+
+  it("keeps only the schema names from meta, never a value or a driver message", () => {
+    const err = prismaError("PrismaClientKnownRequestError", "\nInvalid `prisma.task.update()` invocation:\n\n\nForeign key constraint failed on the field: `projectId`", {
+      code: "P2003",
+      meta: { field_name: "projectId", modelName: "Task", message: 'Key (email)=(ali@example.com) is not present in table "User"', target: ["a", "b"] },
+    });
+    const out = serializeError(err);
+    expect(out.message).toContain("field_name=projectId");
+    expect(out.message).toContain("modelName=Task");
+    expect(out.message).toContain("target=a,b");
+    expect(out.message).not.toContain("ali@example.com");
+  });
+
+  it("describes an initialisation failure without echoing anything but the host", () => {
+    const err = prismaError("PrismaClientInitializationError", "Can't reach database server at `db`:`5432`\n\nPlease make sure your database server is running at `db`:`5432`.");
+    const out = serializeError(err);
+    expect(out.message).toBe("Can't reach database server at `db`:`5432`");
+  });
+
+  it("falls back to a generic label when there is nothing safe to say", () => {
+    expect(serializeError(prismaError("PrismaClientRustPanicError", "")).message).toBe("Prisma error");
+  });
+
+  it("leaves the message of an ordinary error alone but still rebuilds its stack from frames", () => {
+    const err = new Error("first line\nsecond line with a secret note");
+    err.stack = "Error: first line\nsecond line with a secret note\n    at a (x.ts:1:1)\n    at b (x.ts:2:1)";
+    const out = serializeError(err, { includeStack: true });
+    expect(out.message).toBe("first line\nsecond line with a secret note");
+    expect(out.stack).toBe("Error: first line\n    at a (x.ts:1:1)\n    at b (x.ts:2:1)");
+  });
+
+  it("copes with a stack that has no V8-style frames", () => {
+    const err = new Error("boom");
+    err.stack = "boom\nfn@file.js:1:1\nother@file.js:2:2";
+    // (the e-mail scrubber may blur "fn@file.js" — the point is the message line is not duplicated)
+    const lines = serializeError(err, { includeStack: true }).stack!.split("\n");
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe("Error: boom");
+  });
+});

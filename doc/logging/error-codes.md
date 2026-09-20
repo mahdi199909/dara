@@ -6,15 +6,15 @@
 
 | Code | Name | HTTP | Retryable | Emitted | Description |
 | --- | --- | --- | --- | --- | --- |
-| `AUTH-001` | INVALID_CREDENTIALS | 401 | no | reserved | Email or password did not match an account. |
-| `AUTH-002` | RATE_LIMITED | 429 | yes | reserved | Too many login attempts from one address for one account. |
+| `AUTH-001` | INVALID_CREDENTIALS | 401 | no | yes | Email or password did not match an account. |
+| `AUTH-002` | RATE_LIMITED | 429 | yes | yes | Too many login attempts from one address for one account. |
 | `AUTH-003` | SESSION_INVALID | 401 | no | yes | The session token is missing, malformed, expired or signed with another secret. |
-| `AUTH-004` | FORBIDDEN | 403 | no | reserved | Signed in, but not allowed to do this (e.g. an admin-only route). |
-| `AUTH-005` | EMAIL_ALREADY_REGISTERED | 409 | no | reserved | An account with this email already exists. |
+| `AUTH-004` | FORBIDDEN | 403 | no | yes | Signed in, but not allowed to do this (e.g. an admin-only route). |
+| `AUTH-005` | EMAIL_ALREADY_REGISTERED | 409 | no | yes | An account with this email already exists. |
 | `VAL-001` | INVALID_INPUT | 400 | no | yes | The request body or parameters failed schema validation. |
 | `DB-001` | CONNECTION_ERROR | 503 | yes | yes | The database could not be reached. |
 | `DB-002` | QUERY_ERROR | 500 | no | yes | A database query failed. |
-| `DB-003` | TRANSACTION_FAILED | 500 | no | reserved | A database transaction could not be completed. |
+| `DB-003` | TRANSACTION_FAILED | 500 | no | yes | A database transaction could not be completed. |
 | `DB-004` | POOL_EXHAUSTED | 503 | yes | yes | No database connection became available in time. |
 | `DB-005` | UNIQUE_VIOLATION | 409 | no | yes | A unique constraint rejected the write. |
 | `DB-006` | FOREIGN_KEY_VIOLATION | 409 | no | yes | A write referenced a row that does not exist. |

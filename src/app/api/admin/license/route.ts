@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import { handleApiError, ApiError } from "@/lib/apiError";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 async function findUserByEmail(email: string) {
   const user = await prisma.user.findUnique({ where: { email }, select: { id: true, name: true, email: true } });
@@ -10,7 +11,7 @@ async function findUserByEmail(email: string) {
   return user;
 }
 
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     await requireAdmin();
     const email = req.nextUrl.searchParams.get("email");
@@ -32,7 +33,7 @@ const updateSchema = z.object({
   months: z.number().int().min(1).max(24).optional(),
 });
 
-export async function PATCH(req: NextRequest) {
+async function PATCH(req: NextRequest) {
   try {
     await requireAdmin();
     const body = updateSchema.parse(await req.json());
@@ -61,3 +62,7 @@ export async function PATCH(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/admin/license", GET);
+const loggedPATCH = withApiLogging("PATCH", "/api/admin/license", PATCH);
+export { loggedGET as GET, loggedPATCH as PATCH };

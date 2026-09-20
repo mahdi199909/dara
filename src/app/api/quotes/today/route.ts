@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // Content lives outside src/ on purpose — it's editable copy, not code, and the whole point is
 // that whoever runs this app can update it without touching TypeScript. Read fresh on every
@@ -36,9 +37,12 @@ export async function OPTIONS() {
 // Public and unauthenticated on purpose: the text itself isn't user-specific (every user on a
 // given day gets the same quote), so there's nothing here worth gating behind a session. The
 // client alone decides whether to display it, based on the viewer's own cached license status.
-export async function GET() {
+async function GET() {
   const quotes = loadQuotes();
   if (quotes.length === 0) return withCors(NextResponse.json({ quote: null }));
   const quote = quotes[dayOfYear(new Date()) % quotes.length];
   return withCors(NextResponse.json({ quote }));
 }
+
+const loggedGET = withApiLogging("GET", "/api/quotes/today", GET);
+export { loggedGET as GET };

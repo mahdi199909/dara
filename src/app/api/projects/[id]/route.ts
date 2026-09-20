@@ -8,6 +8,7 @@ import { computeHourlyValue } from "@/lib/hourlyValue";
 import { computeRealCost } from "@/lib/timeCost";
 import { renameProjectCategory, deactivateProjectCategory, syncProjectCompletionAsset } from "@/lib/projectSync";
 import { PROJECT_STATUSES } from "@/lib/types";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -22,7 +23,7 @@ async function getOwned(userId: string, id: string) {
   return project;
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const project = await getOwned(userId, params.id);
@@ -80,7 +81,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -118,7 +119,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -142,3 +143,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/projects/[id]", GET);
+const loggedPATCH = withApiLogging("PATCH", "/api/projects/[id]", PATCH);
+const loggedDELETE = withApiLogging("DELETE", "/api/projects/[id]", DELETE);
+export { loggedGET as GET, loggedPATCH as PATCH, loggedDELETE as DELETE };

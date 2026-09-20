@@ -6,6 +6,7 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
 import type { NextRequest } from "next/server";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // First login on any device (web or Android) starts the user's one-time free trial — see the
 // original product ask: "ابتدای عضویت یک ماه امکان ثبت رایگان داشته باشد."
@@ -28,7 +29,7 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId(req);
 
@@ -83,3 +84,6 @@ export async function GET(req: NextRequest) {
     return withCors(handleApiError(err));
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/license/status", GET);
+export { loggedGET as GET };

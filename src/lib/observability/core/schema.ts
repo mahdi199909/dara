@@ -57,6 +57,12 @@ export interface LogRecord {
   entity_type?: string;
   entity_id?: string;
   operation?: string;
+  /** HTTP requests (the API, and the on-device dispatcher's stand-in for them). */
+  method?: string;
+  /** The request path without its query string. */
+  path?: string;
+  status_code?: number;
+  response_size?: number;
   layer?: Layer;
   sync_id?: string;
   local_event_id?: string;
@@ -101,6 +107,11 @@ export interface LogFields extends LogContext {
   operation?: string;
   syncStatus?: SyncStatus;
   durationMs?: number;
+  /** HTTP: written as method / path / status_code / response_size. */
+  httpMethod?: string;
+  httpPath?: string;
+  statusCode?: number;
+  responseSize?: number;
   module?: string;
   component?: string;
   [key: string]: unknown;

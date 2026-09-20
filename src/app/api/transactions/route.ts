@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { TRANSACTION_TYPES } from "@/lib/types";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   type: z.enum(TRANSACTION_TYPES),
@@ -21,7 +22,7 @@ const createSchema = z.object({
   activityId: z.string().optional(),
 });
 
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(req.url);
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
@@ -101,3 +102,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/transactions", GET);
+const loggedPOST = withApiLogging("POST", "/api/transactions", POST);
+export { loggedGET as GET, loggedPOST as POST };

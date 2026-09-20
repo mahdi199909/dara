@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { daysSinceLastCheckIn, isHabitNeglected } from "@/lib/habitStreak";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const NEGLECT_THRESHOLD_DAYS = 3;
 // Same as the neglect threshold: re-nudge every few days, not on every single poll.
@@ -13,7 +14,7 @@ const NUDGE_COOLDOWN_DAYS = 3;
  * returns unread notifications. This avoids needing a background worker for the MVP; the
  * client polls this endpoint.
  */
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const now = new Date();
@@ -83,3 +84,6 @@ export async function GET() {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/notifications", GET);
+export { loggedGET as GET };

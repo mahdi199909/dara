@@ -9,6 +9,8 @@ import { coerceSyncRow } from "@/lib/syncCoercion";
 import { applyPushedProfile } from "@/lib/profileSyncServer";
 import type { ProfilePayload } from "@/lib/profileSync";
 import type { NextRequest } from "next/server";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { logSyncPush } from "@/lib/observability/server/syncLog";
 
 type Row = Record<string, unknown>;
 type PushBody = {
@@ -65,7 +67,7 @@ function describeFailure(err: unknown): string {
   return (lines[lines.length - 1] ?? message).slice(0, 200);
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId(req);
     const body = (await req.json()) as PushBody;
@@ -230,8 +232,14 @@ export async function POST(req: NextRequest) {
 
     const profile = body.profile ? await applyPushedProfile(userId, body.profile) : undefined;
 
+    // Counts per table and the kinds of refusal — never the rows or the refusal texts themselves.
+    logSyncPush(results, tombstoneSummary, Boolean(body.profile));
+
     return withCors(NextResponse.json({ protocol: SYNC_PROTOCOL_VERSION, results, tombstones: tombstoneSummary, ...(profile ? { profile } : {}) }));
   } catch (err) {
     return withCors(handleApiError(err));
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/sync/push", POST);
+export { loggedPOST as POST };

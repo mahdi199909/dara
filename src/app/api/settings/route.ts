@@ -7,6 +7,7 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { computeHourlyValue } from "@/lib/hourlyValue";
 import { CURRENCY_UNITS } from "@/lib/types";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -28,7 +29,7 @@ const updateSchema = z.object({
   calendarFeaturedId: z.string().nullable().optional(),
 });
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     // Deliberately not an unconditional upsert: Prisma bumps @updatedAt even for an empty update,
@@ -50,7 +51,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(req: NextRequest) {
+async function PATCH(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = updateSchema.parse(await req.json());
@@ -88,3 +89,7 @@ export async function PATCH(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/settings", GET);
+const loggedPATCH = withApiLogging("PATCH", "/api/settings", PATCH);
+export { loggedGET as GET, loggedPATCH as PATCH };

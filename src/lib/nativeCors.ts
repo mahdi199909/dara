@@ -10,7 +10,10 @@
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  // traceparent / X-Parva-* are how the app ties its own log lines to the server's (see
+  // doc/logging/sync.md); X-Request-Id comes back so the app can quote it in a bug report.
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, Traceparent, X-Request-Id, X-Parva-Device-Id, X-Parva-Sync-Id",
+  "Access-Control-Expose-Headers": "X-Request-Id",
 };
 
 export function corsPreflight(): Response {

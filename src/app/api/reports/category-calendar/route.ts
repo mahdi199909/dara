@@ -3,8 +3,9 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { computeCategoryCalendar } from "@/lib/reportEngine";
 import { jalaliMonthRange, toJalali } from "@/lib/jalali";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(req.url);
@@ -19,3 +20,6 @@ export async function GET(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/reports/category-calendar", GET);
+export { loggedGET as GET };

@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { addManualTimeEntry, startTimer, syncDirectCostTransaction } from "@/lib/activityService";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -18,7 +19,7 @@ const createSchema = z.object({
   startTimerNow: z.boolean().optional(),
 });
 
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const { searchParams } = new URL(req.url);
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
@@ -100,3 +101,7 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/activities", GET);
+const loggedPOST = withApiLogging("POST", "/api/activities", POST);
+export { loggedGET as GET, loggedPOST as POST };

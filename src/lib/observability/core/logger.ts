@@ -66,7 +66,7 @@ export interface LoggerOptions {
 }
 
 const CONTEXT_KEYS = ["userId", "sessionId", "requestId", "traceId", "spanId", "deviceId", "osVersion", "tz", "platform", "layer", "syncId", "localEventId"] as const;
-const RESERVED_KEYS = new Set<string>([...CONTEXT_KEYS, "message", "error", "errorCode", "entityType", "entityId", "operation", "syncStatus", "durationMs", "module", "component", "metadata"]);
+const RESERVED_KEYS = new Set<string>([...CONTEXT_KEYS, "message", "error", "errorCode", "entityType", "entityId", "operation", "syncStatus", "durationMs", "httpMethod", "httpPath", "statusCode", "responseSize", "module", "component", "metadata"]);
 const LEVEL_ORDER: readonly Level[] = ["TRACE", "DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"];
 const MAX_MESSAGE_CHARS = 500;
 
@@ -141,12 +141,17 @@ export class LoggerCore {
   }
 
   addContextProvider(provider: ContextProvider): void {
-    this.providers.push(provider);
+    if (!this.providers.includes(provider)) this.providers.push(provider);
   }
 
   /** Merges into the fixed context (e.g. a phone learns its device id after startup). */
   setStaticContext(context: LogContext): void {
     this.staticContext = { ...this.staticContext, ...context };
+  }
+
+  /** The context a record written right now would carry (static + providers) — how an error response learns its request id. */
+  currentContext(): LogContext {
+    return this.buildContext({ context: {} }, undefined);
   }
 
   async flush(): Promise<void> {
@@ -279,6 +284,10 @@ export class LoggerCore {
     if (fields?.entityId !== undefined && fields.entityId !== null) record.entity_id = String(fields.entityId);
     if (fields?.operation) record.operation = String(fields.operation);
     if (fields?.syncStatus) record.sync_status = fields.syncStatus;
+    if (fields?.httpMethod) record.method = String(fields.httpMethod);
+    if (fields?.httpPath) record.path = truncateMessage(scrubString(String(fields.httpPath)));
+    if (typeof fields?.statusCode === "number" && Number.isFinite(fields.statusCode)) record.status_code = fields.statusCode;
+    if (typeof fields?.responseSize === "number" && Number.isFinite(fields.responseSize)) record.response_size = fields.responseSize;
     if (typeof fields?.durationMs === "number" && Number.isFinite(fields.durationMs)) record.duration_ms = round2(fields.durationMs);
     if (errorCode) record.error_code = errorCode;
     if (errorBlock) record.error = errorBlock;

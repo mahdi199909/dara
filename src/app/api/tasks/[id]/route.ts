@@ -5,6 +5,7 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { updateTaskSchema } from "@/lib/schemas/tasks";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 async function getOwned(userId: string, id: string) {
   const task = await prisma.task.findFirst({ where: { id, userId, deletedAt: null } });
@@ -12,7 +13,7 @@ async function getOwned(userId: string, id: string) {
   return task;
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -56,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -79,3 +80,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return handleApiError(err);
   }
 }
+
+const loggedPATCH = withApiLogging("PATCH", "/api/tasks/[id]", PATCH);
+const loggedDELETE = withApiLogging("DELETE", "/api/tasks/[id]", DELETE);
+export { loggedPATCH as PATCH, loggedDELETE as DELETE };

@@ -4,8 +4,9 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { toCsv } from "@/lib/csv";
 import { formatJalali } from "@/lib/jalali";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function GET(_req: NextRequest, { params }: { params: { entity: string } }) {
+async function GET(_req: NextRequest, { params }: { params: { entity: string } }) {
   try {
     const userId = await requireUserId();
 
@@ -129,3 +130,6 @@ export async function GET(_req: NextRequest, { params }: { params: { entity: str
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/export/[entity]", GET);
+export { loggedGET as GET };

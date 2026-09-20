@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clearSessionCookie } from "@/lib/auth";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 /**
  * Clears an orphaned session cookie (valid JWT signature, but the referenced user no
@@ -8,7 +9,10 @@ import { clearSessionCookie } from "@/lib/auth";
  * Set-Cookie and the redirect — otherwise middleware (which only checks JWT validity,
  * not DB existence) would keep bouncing the still-cookied browser back to "/".
  */
-export async function GET(req: NextRequest) {
+async function GET(req: NextRequest) {
   clearSessionCookie();
   return NextResponse.redirect(new URL("/login", req.url));
 }
+
+const loggedGET = withApiLogging("GET", "/api/auth/session-expired", GET);
+export { loggedGET as GET };

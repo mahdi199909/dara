@@ -3,13 +3,14 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { computeUpgradeEffect } from "@/lib/reportEngine";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // 15 seconds: long enough to cover the round trip from "user just saved a record" to this
 // endpoint's next SWR poll, short enough that reloading the page an hour later never resurfaces
 // a stale toast for an entry the user has already seen and moved on from.
 const FRESHNESS_WINDOW_MS = 15_000;
 
-export async function GET() {
+async function GET() {
   try {
     const userId = await requireUserId();
     const latest = await prisma.virtualAssetEntry.findFirst({
@@ -28,3 +29,6 @@ export async function GET() {
     return handleApiError(err);
   }
 }
+
+const loggedGET = withApiLogging("GET", "/api/virtual-assets/latest-effect", GET);
+export { loggedGET as GET };

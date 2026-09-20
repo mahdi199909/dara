@@ -8,6 +8,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { parseQuickCapture } from "@/lib/parser";
 import { addManualTimeEntry, syncDirectCostTransaction } from "@/lib/activityService";
 import { resolveDefaultAccountId } from "@/lib/accounts";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const schema = z.object({
   text: z.string().min(1).max(500),
@@ -30,7 +31,7 @@ async function resolveCategory(userId: string, categoryId: string | undefined, h
   return match?.id;
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = schema.parse(await req.json());
@@ -94,3 +95,6 @@ export async function POST(req: NextRequest) {
     return handleApiError(err);
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/quick-capture", POST);
+export { loggedPOST as POST };

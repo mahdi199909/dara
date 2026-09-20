@@ -4,8 +4,9 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog } from "@/lib/audit";
 import { deleteRowsWithTombstones } from "@/lib/tombstones";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const reminder = await prisma.reminder.findFirst({ where: { id: params.id, userId } });
@@ -19,3 +20,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return handleApiError(err);
   }
 }
+
+const loggedDELETE = withApiLogging("DELETE", "/api/reminders/[id]", DELETE);
+export { loggedDELETE as DELETE };

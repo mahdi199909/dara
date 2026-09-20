@@ -110,6 +110,8 @@ export function classifyError(err: unknown): ErrorCode | null {
   const { name, code } = err as { name?: unknown; code?: unknown };
   if (name === "ZodError") return "VAL-001";
   if (name === "AuthError") return "AUTH-003";
+  // Thrown before any query ran: the connection itself could not be made (host, port, credentials).
+  if (name === "PrismaClientInitializationError") return "DB-001";
   if (typeof code === "string") {
     switch (code) {
       case "P2002":
@@ -130,4 +132,18 @@ export function classifyError(err: unknown): ErrorCode | null {
     }
   }
   return null;
+}
+
+/**
+ * The generic code for an HTTP status — what an error response carries when the code that threw did
+ * not name a more specific one. Statuses with no honest generic code (409, 402 …) return undefined.
+ */
+export function codeForHttpStatus(status: number): ErrorCode | undefined {
+  if (status === 400 || status === 422) return "VAL-001";
+  if (status === 401) return "AUTH-003";
+  if (status === 403) return "AUTH-004";
+  if (status === 404) return "DB-007";
+  if (status === 429) return "AUTH-002";
+  if (status >= 500) return "SYS-001";
+  return undefined;
 }

@@ -7,6 +7,8 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
+import { logLoginFailed, logLoginSuccess, logRateLimited } from "@/lib/observability/server/authEvents";
+import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const schema = z.object({
   email: z.string().email("ایمیل نامعتبر است."),
@@ -17,7 +19,7 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
-export async function POST(req: NextRequest) {
+async function POST(req: NextRequest) {
   try {
     const { ipAddress, userAgent } = requestMeta(req);
     const body = schema.parse(await req.json());
@@ -25,12 +27,14 @@ export async function POST(req: NextRequest) {
 
     const rl = checkRateLimit(`login:${ipAddress ?? "unknown"}:${email}`);
     if (!rl.allowed) {
-      throw new ApiError("تعداد تلاش‌های ورود بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.", 429);
+      logRateLimited({ email, ip: ipAddress });
+      throw new ApiError("تعداد تلاش‌های ورود بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.", 429, "AUTH-002");
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
-      throw new ApiError("ایمیل یا رمز عبور اشتباه است.", 401);
+      logLoginFailed({ email, reason: user ? "wrong_password" : "no_such_user", ip: ipAddress });
+      throw new ApiError("ایمیل یا رمز عبور اشتباه است.", 401, "AUTH-001");
     }
 
     const token = await createSessionToken({ userId: user.id, email: user.email });
@@ -44,6 +48,7 @@ export async function POST(req: NextRequest) {
       ipAddress,
       userAgent,
     });
+    logLoginSuccess({ userId: user.id, ip: ipAddress });
 
     // `token` lets the Android app carry this session as a bearer token (see requireUserId) —
     // the web frontend already has it via the Set-Cookie header above and simply ignores this field.
@@ -52,3 +57,6 @@ export async function POST(req: NextRequest) {
     return withCors(handleApiError(err));
   }
 }
+
+const loggedPOST = withApiLogging("POST", "/api/auth/login", POST);
+export { loggedPOST as POST };
