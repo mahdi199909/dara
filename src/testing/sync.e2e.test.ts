@@ -791,3 +791,54 @@ describe("backup and restore between the phone and the web", () => {
     expect(other.db.get<{ virtualAssetValue: number }>(`SELECT "virtualAssetValue" FROM "CapitalSnapshot" WHERE "id" = 'snap1'`)!.virtualAssetValue).toBe(4_000_000_000);
   });
 });
+
+describe("clients that predate a table's updatedAt column", () => {
+  it("a reminder pushed without updatedAt does not overwrite the server's newer copy", async () => {
+    const account = await server.registerUser();
+    server.setWebSession(account.token);
+    const event = (await server.mustWeb("POST", "/api/events", { title: "جلسه", startAt: iso(2, 10), endAt: iso(2, 11), reminderOffsets: [10] })).event;
+    const [reminder] = await server.prisma.reminder.findMany({ where: { userId: account.userId } });
+
+    // The server's copy has fired (and so carries a fresh updatedAt).
+    await server.prisma.reminder.update({ where: { id: reminder.id }, data: { notified: true } });
+
+    // An older client pushes its not-fired copy of the same reminder, with no updatedAt column at all.
+    const stale = {
+      id: reminder.id,
+      userId: "whoever",
+      targetType: "EVENT",
+      eventId: event.id,
+      installmentId: null,
+      title: reminder.title,
+      offsetMinutes: 10,
+      remindAt: reminder.remindAt,
+      notified: 0,
+      dismissed: 0,
+      createdAt: reminder.createdAt,
+    };
+    const res = await server.mustWeb("POST", "/api/sync/push", { tables: { Reminder: [stale] } });
+
+    expect(res.results.Reminder.skipped).toBe(1);
+    expect(res.results.Reminder.upserted).toBe(0);
+    expect((await server.prisma.reminder.findUnique({ where: { id: reminder.id } })).notified).toBe(true);
+  });
+
+  it("still stores a reminder it has never seen, and gives it a usable updatedAt", async () => {
+    const account = await server.registerUser();
+    server.setWebSession(account.token);
+    const event = (await server.mustWeb("POST", "/api/events", { title: "جلسه", startAt: iso(3, 10), endAt: iso(3, 11) })).event;
+    const created = new Date("2026-08-01T10:00:00.000Z").toISOString();
+
+    const res = await server.mustWeb("POST", "/api/sync/push", {
+      tables: {
+        Reminder: [
+          { id: "old-client-reminder", userId: "x", targetType: "EVENT", eventId: event.id, installmentId: null, title: "قدیمی", offsetMinutes: 30, remindAt: iso(3, 9), notified: 0, dismissed: 0, createdAt: created },
+        ],
+      },
+    });
+
+    expect(res.results.Reminder.upserted).toBe(1);
+    const stored = await server.prisma.reminder.findUnique({ where: { id: "old-client-reminder" } });
+    expect(stored.updatedAt.toISOString()).toBe(created);
+  });
+});

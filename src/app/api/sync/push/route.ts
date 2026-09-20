@@ -130,6 +130,14 @@ export async function POST(req: NextRequest) {
         }
         const data = coerced.data;
 
+        // A client that predates a table's updatedAt column (a phone on an older build pushing a
+        // Reminder, or a backup made by one) sends none. Without one, last-write-wins cannot order
+        // the row and it would overwrite the server's copy every time — so treat it as last
+        // edited when it was created, which is all such a row ever knew.
+        if (config.hasUpdatedAt && (data.updatedAt === undefined || data.updatedAt === null) && data.createdAt) {
+          data.updatedAt = data.createdAt;
+        }
+
         // Never trust a client-supplied userId — always force it to the authenticated caller,
         // whether directly (most tables) or by verifying the parent row's owner (the 5 tables
         // with no userId column of their own).
