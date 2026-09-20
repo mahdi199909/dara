@@ -16,6 +16,7 @@
         android:src="@drawable/ic_habit_unchecked"
         android:contentDescription="@string/widget_habits_checkbox_description" />
 
+    <!-- The colour is a first-paint default; HabitsWidgetService sets it from the theme per row. -->
     <TextView
         android:id="@+id/habit_title"
         android:layout_width="0dp"
@@ -24,7 +25,7 @@
         android:layout_marginStart="8dp"
         android:textDirection="rtl"
         android:textAlignment="viewStart"
-        android:textColor="#374151"
+        android:textColor="#111111"
         android:textSize="12sp"
         android:fontFamily="sans-serif"
         android:maxLines="1"

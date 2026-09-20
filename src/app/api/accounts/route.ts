@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
@@ -9,7 +10,7 @@ import { ACCOUNT_TYPES } from "@/lib/types";
 const createSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(ACCOUNT_TYPES).optional(),
-  initialBalance: z.number().int().optional(),
+  initialBalance: tomanInt().optional(),
 });
 
 async function withBalance(account: { id: string; initialBalance: number }) {

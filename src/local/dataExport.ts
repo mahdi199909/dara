@@ -42,6 +42,9 @@ export const DATA_EXPORT_VERSION = 1;
  *    creates directly (not from a prisma migration), device-specific by nature, meaningless to
  *    replay on another device.
  *
+ * CapitalSnapshot (the "سرمایه من" growth history) references only the user; it is listed with the
+ * other user-content tables so a backup keeps that history.
+ *
  * Event is the one table with a *same-table* self-reference (recurrenceParentId, for a single
  * edited occurrence pointing back at its recurring series) — see insertTableRows' multi-pass
  * retry, which handles that ordering without needing a topological sort of individual rows.
@@ -66,6 +69,7 @@ export const DATA_EXPORT_TABLES = [
   "VirtualAssetEntry",
   "Transaction",
   "Reminder",
+  "CapitalSnapshot",
   "AuditLog",
   "Notification",
 ] as const;
@@ -259,6 +263,13 @@ function insertTableRows(db: LocalDb, table: string, rows: Record<string, unknow
         added++;
         progressed = true;
       } catch (err) {
+        // The same logical row is already here under another id — this device's own Settings row,
+        // today's CapitalSnapshot, the same habit on the same day. Nothing to retry, nothing lost.
+        if (err instanceof Error && /UNIQUE constraint failed/i.test(err.message)) {
+          skipped++;
+          progressed = true;
+          continue;
+        }
         console.error(`import: failed to insert a "${table}" row (id=${String(row.id)})`, err);
         stillPending.push(row);
       }

@@ -18,6 +18,7 @@ vi.mock("@/local/nativeNotifications", () => ({
   rescheduleReminderNotification: () => {},
   cancelReminderNotification: () => {},
   cancelReminderNotifications: () => {},
+  syncScheduledReminderNotifications: () => {},
 }));
 vi.mock("@/lib/versionGate", () => ({ cacheVersionGate: async () => {}, checkVersionGate: async () => ({ blocked: false }) }));
 

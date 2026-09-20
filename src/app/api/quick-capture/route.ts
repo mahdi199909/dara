@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
@@ -13,7 +14,7 @@ const schema = z.object({
   type: z.enum(["TASK", "ACTIVITY", "EVENT", "EXPENSE"]).optional(),
   title: z.string().max(200).optional(),
   durationMinutes: z.number().int().min(0).optional(),
-  amount: z.number().int().min(0).optional(),
+  amount: tomanInt().min(0).optional(),
   date: z.string().datetime().optional(),
   categoryId: z.string().optional(),
   projectId: z.string().optional(),

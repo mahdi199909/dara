@@ -1,6 +1,7 @@
 // Shared between src/app/api/habits/**/route.ts (web) and src/local/repositories/habits.ts
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 
 export const createHabitSchema = z.object({
   title: z.string().min(1).max(200),
@@ -8,7 +9,7 @@ export const createHabitSchema = z.object({
   icon: z.string().max(8).nullable().optional(),
   color: z.string().max(20).optional(),
   categoryId: z.string().nullable().optional(),
-  virtualAssetValuePerCheckIn: z.number().int().min(0).optional(),
+  virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
   // BJ Fogg "Tiny Habits" trial — see the isTrial doc comment on the Habit model.
   isTrial: z.boolean().optional(),
   cue: z.string().max(300).nullable().optional(),
@@ -22,7 +23,7 @@ export const updateHabitSchema = z.object({
   icon: z.string().max(8).nullable().optional(),
   color: z.string().max(20).optional(),
   categoryId: z.string().nullable().optional(),
-  virtualAssetValuePerCheckIn: z.number().int().min(0).optional(),
+  virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
   isActive: z.boolean().optional(),
   // isTrial: false promotes a trial habit to a permanent one (see the Habit model doc).
   isTrial: z.boolean().optional(),

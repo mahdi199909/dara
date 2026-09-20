@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
 import { checkVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { ApiClientError } from "@/lib/apiClient";
+import type { LocalDb } from "@/local/db";
 
 function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
@@ -96,11 +97,20 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       // The on-device database driver is loaded once here, before anything (including the
       // cached-license check right below) tries to read/write local data — see
       // src/local/drivers/browserSqlJs.ts and setLocalDbDriver in src/lib/localDispatcher.ts.
-      const [{ loadBrowserSqliteDriver }, { setLocalDbDriver }] = await Promise.all([
+      const [{ loadBrowserSqliteDriver }, { setLocalDbDriver }, { scheduleWidgetRefresh }] = await Promise.all([
         import("@/local/drivers/browserSqlJs"),
         import("@/lib/localDispatcher"),
+        import("@/local/widgetRefresh"),
       ]);
-      const { driver, recoveredFromBackup: recovered } = await loadBrowserSqliteDriver();
+      // Every time the database reaches disk the home-screen widgets (which read that file) are
+      // repainted, so they never lag behind what the app shows.
+      let savedDb: LocalDb | null = null;
+      const { driver, recoveredFromBackup: recovered } = await loadBrowserSqliteDriver({
+        onFlushed: () => {
+          if (savedDb) scheduleWidgetRefresh(savedDb);
+        },
+      });
+      savedDb = driver;
       setLocalDbDriver(driver);
       if (recovered) setRecoveredFromBackup(true);
 

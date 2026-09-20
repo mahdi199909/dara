@@ -1042,6 +1042,26 @@ export function computeFounderCapital(db: LocalDb, userId: string): FounderCapit
   };
 }
 
+/** Hands today's/lifetime invested hours to the "سرمایه من" home-screen widget (CapitalWidgetProvider.java
+ * reads this Preferences key and only this — it never computes the number itself). Pure read of the
+ * database, so it is safe to call after every save without feeding back into another save. */
+function publishCapitalToWidget(capital: FounderCapital): Promise<void> {
+  return Preferences.set({
+    key: "widget_capital_summary",
+    value: JSON.stringify({
+      investedHoursToday: Math.round(capital.todayDeltaMinutes / 60),
+      investedHoursTotal: Math.round(capital.investedMinutes / 60),
+      updatedAt: new Date().toISOString(),
+    }),
+  });
+}
+
+/** Recomputes the capital and publishes it to the widget WITHOUT writing a snapshot row — used
+ * after every save (src/local/widgetRefresh.ts), where writing a row would trigger another save. */
+export function writeCapitalWidgetSummary(db: LocalDb, userId: string): Promise<void> {
+  return publishCapitalToWidget(computeFounderCapital(db, userId));
+}
+
 /** On-device mirror of src/lib/reportEngine.ts's recordDailyCapitalSnapshot — see its doc
  * comment for the idempotent-upsert rationale. */
 export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): FounderCapital {
@@ -1057,20 +1077,11 @@ export function recordDailyCapitalSnapshot(db: LocalDb, userId: string): Founder
     [crypto.randomUUID(), userId, date, capital.investedMinutes, capital.virtualAssetValue, now]
   );
 
-  // CapitalWidgetProvider.java reads this and only this — it never computes the number itself,
-  // so it's always exactly as fresh as the last boot/resume/capital-page-view that ran this
-  // function, never independently wrong. Fire-and-forget: this function is called synchronously
-  // (and its return value used immediately) at all three call sites (FirstRunGate, resume, the
-  // local /api/capital handler), so awaiting the write here would change its signature for all of
-  // them for a widget refresh none of them need to wait on.
-  void Preferences.set({
-    key: "widget_capital_summary",
-    value: JSON.stringify({
-      investedHoursToday: Math.round(capital.todayDeltaMinutes / 60),
-      investedHoursTotal: Math.round(capital.investedMinutes / 60),
-      updatedAt: now,
-    }),
-  });
+  // Fire-and-forget: this function is called synchronously (and its return value used
+  // immediately) at all three call sites (FirstRunGate, resume, the local /api/capital handler),
+  // so awaiting the write here would change its signature for all of them for a widget refresh
+  // none of them need to wait on. (Also refreshed after every save — see widgetRefresh.ts.)
+  void publishCapitalToWidget(capital);
 
   return capital;
 }

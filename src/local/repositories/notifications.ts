@@ -106,7 +106,7 @@ function fireDueReminders(db: LocalDb, userId: string, nowIso: string) {
       relatedType: reminder.targetType,
       relatedId: reminder.eventId ?? reminder.installmentId ?? null,
     });
-    db.run(`UPDATE "Reminder" SET "notified" = 1 WHERE "id" = ?`, [reminder.id]);
+    db.run(`UPDATE "Reminder" SET "notified" = 1, "updatedAt" = ? WHERE "id" = ?`, [new Date().toISOString(), reminder.id]);
   }
 }
 

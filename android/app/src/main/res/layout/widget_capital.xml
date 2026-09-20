@@ -19,12 +19,16 @@
         android:orientation="vertical"
         android:padding="14dp">
 
+        <!-- Text colours here are only the first-paint defaults; the provider sets them from the
+             theme (WidgetTheme.getTextColor) on every update so they always contrast with the
+             background. -->
         <TextView
+            android:id="@+id/widget_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/widget_capital_title"
             android:textDirection="rtl"
-            android:textColor="#1A1D29"
+            android:textColor="#111111"
             android:textSize="13sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif"
@@ -35,17 +39,47 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textDirection="rtl"
-            android:textColor="#0E5F54"
+            android:textColor="#111111"
             android:textSize="15sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif"
             android:layout_marginBottom="8dp"
             android:visibility="gone" />
 
-        <LinearLayout
-            android:id="@+id/shortcuts_container"
+        <!-- GridView (not the plain row of three buttons this used to be) is what gives the
+             shortcuts real touch-scrolling inside a widget — see CapitalShortcutsService for the
+             RemoteViewsFactory backing it. setEmptyView (CapitalWidgetProvider) needs its target to
+             be a sibling of the grid within this same inflated tree, hence the wrapping FrameLayout. -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <GridView
+                android:id="@+id/shortcuts_grid"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layoutDirection="rtl"
+                android:numColumns="3"
+                android:horizontalSpacing="6dp"
+                android:verticalSpacing="6dp"
+                android:stretchMode="columnWidth"
+                android:scrollbars="vertical"
+                android:scrollbarThumbVertical="@drawable/widget_scrollbar_thumb"
+                android:scrollbarSize="3dp"
+                android:fadeScrollbars="false" />
+
+            <TextView
+                android:id="@+id/shortcuts_empty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/widget_capital_shortcuts_empty"
+                android:textDirection="rtl"
+                android:textAlignment="viewStart"
+                android:textColor="#B3111111"
+                android:textSize="12sp"
+                android:fontFamily="sans-serif" />
+
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>

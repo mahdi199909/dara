@@ -53,6 +53,11 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <!-- After midnight / a clock or time-zone change "today" is a different day: these
+                     broadcasts are exempt from Android's ban on manifest-registered implicit receivers. -->
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -72,6 +77,11 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <!-- After midnight / a clock or time-zone change "today" is a different day: these
+                     broadcasts are exempt from Android's ban on manifest-registered implicit receivers. -->
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -90,11 +100,23 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <!-- After midnight / a clock or time-zone change "today" is a different day: these
+                     broadcasts are exempt from Android's ban on manifest-registered implicit receivers. -->
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_capital_info" />
         </receiver>
+
+        <!-- Backs widget_capital.xml's shortcut GridView (see CapitalShortcutsService). Same
+             BIND_REMOTEVIEWS requirement as the other two RemoteViewsServices above. -->
+        <service
+            android:name=".CapitalShortcutsService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

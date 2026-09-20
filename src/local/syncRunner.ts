@@ -11,6 +11,7 @@
 import { LOCAL_USER_ID, mergeDuplicateCategories } from "./localUser";
 import { setLastPulledAt, setLastPushedAt } from "./repositories/licenseCache";
 import { PULL_OVERLAP_DEEP_MS, PULL_OVERLAP_SHORT_MS, SyncHttpError, pullRemoteChanges, pushLocalChanges, type RowIssue } from "./sync";
+import { reconcileReminderNotifications } from "./reminderNotifications";
 import { META_LAST_ERROR, META_LAST_OK_AT, setSyncMeta } from "./syncMeta";
 import type { LocalDb } from "./db";
 
@@ -109,6 +110,12 @@ export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyn
     // The device seeds its own default categories at install; the account has its own. Merge the
     // pairs now, before they are pushed anywhere (see mergeDuplicateCategories).
     if (firstEver || pull.pulled.Category) mergeDuplicateCategories(db, LOCAL_USER_ID);
+
+    // Reminders that arrived (or were moved / deleted) from another device are only in SQLite now;
+    // give the OS the same picture so they ring even with the app closed.
+    if (firstEver || pull.tombstonesApplied > 0 || pull.pulled.Reminder || pull.pulled.Event || pull.pulled.Installment || pull.pulled.InstallmentPlan) {
+      reconcileReminderNotifications(db);
+    }
 
     const push = await pushLocalChanges(db, license.token, license.remoteUserId, license.lastPushedAt);
     setLastPushedAt(db, push.pushedAt);

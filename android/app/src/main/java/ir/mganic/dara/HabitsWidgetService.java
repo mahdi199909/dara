@@ -46,12 +46,15 @@ public class HabitsWidgetService extends RemoteViewsService {
     }
 
     private static class HabitsRemoteViewsFactory implements RemoteViewsFactory {
-        private static final String LOCAL_USER_ID = "local-device-user";
         private static final String PREFS_GROUP = "CapacitorStorage";
         private static final String PENDING_CHECKINS_KEY = "widget_pending_habit_checkins";
 
         private final Context context;
         private final List<HabitRow> rows = new ArrayList<>();
+
+        // Re-read with the data (onDataSetChanged), so a theme change shows up on the next refresh.
+        private int textColor = 0xFF111111;
+        private boolean lightText = false;
 
         HabitsRemoteViewsFactory(Context context) {
             this.context = context;
@@ -72,6 +75,9 @@ public class HabitsWidgetService extends RemoteViewsService {
         @Override
         public void onDataSetChanged() {
             rows.clear();
+
+            textColor = WidgetTheme.getTextColor(context, HabitsWidgetProvider.DEFAULT_BACKGROUND_ARGB);
+            lightText = WidgetTheme.useLightText(context, HabitsWidgetProvider.DEFAULT_BACKGROUND_ARGB);
 
             String todayIso = todayIsoUtc();
             List<String[]> habits = readTodayHabits();
@@ -104,10 +110,12 @@ public class HabitsWidgetService extends RemoteViewsService {
             HabitRow row = rows.get(position);
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_habits_item);
             views.setTextViewText(R.id.habit_title, row.title);
-            views.setImageViewResource(
-                R.id.habit_checkbox,
-                row.checked ? R.drawable.ic_habit_checked : R.drawable.ic_habit_unchecked
-            );
+            views.setTextColor(R.id.habit_title, textColor);
+            // The ticked/unticked icons come in a light and a dark variant so they stay visible
+            // whichever way the text (and therefore the background) goes.
+            int checkedIcon = lightText ? R.drawable.ic_habit_checked_light : R.drawable.ic_habit_checked;
+            int uncheckedIcon = lightText ? R.drawable.ic_habit_unchecked_light : R.drawable.ic_habit_unchecked;
+            views.setImageViewResource(R.id.habit_checkbox, row.checked ? checkedIcon : uncheckedIcon);
 
             // A collection widget's rows can't each carry their own independent PendingIntent —
             // only a single PendingIntentTemplate on the ListView itself (see
@@ -160,23 +168,22 @@ public class HabitsWidgetService extends RemoteViewsService {
           * that's what the ListView's own scrolling is for now. */
         private List<String[]> readTodayHabits() {
             List<String[]> result = new ArrayList<>();
-            String dbPath = context.getFilesDir().getAbsolutePath() + "/dara.sqlite3";
             SQLiteDatabase db = null;
             try {
-                db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY);
+                db = WidgetDb.openReadOnly(context);
+                if (db == null) return result; // never opened / mid-write — the ListView shows its empty state
                 Cursor cursor = db.rawQuery(
                     "SELECT \"id\", \"title\" FROM \"Habit\" " +
                     "WHERE \"userId\" = ? AND \"deletedAt\" IS NULL AND \"isActive\" = 1 AND \"isTrial\" = 0 " +
                     "ORDER BY \"createdAt\" ASC",
-                    new String[] { LOCAL_USER_ID }
+                    new String[] { WidgetDb.LOCAL_USER_ID }
                 );
                 while (cursor.moveToNext()) {
                     result.add(new String[] { cursor.getString(0), cursor.getString(1) });
                 }
                 cursor.close();
             } catch (Exception e) {
-                // Database not created yet, or some other read issue — an empty list renders the
-                // ListView's own setEmptyView state.
+                // Some other read issue — an empty list renders the ListView's own setEmptyView state.
             } finally {
                 if (db != null) db.close();
             }
@@ -186,15 +193,15 @@ public class HabitsWidgetService extends RemoteViewsService {
         /** habitIds that already have a real HabitCheckIn row for the given day. */
         private Set<String> readCheckedInHabitIds(String todayIso) {
             Set<String> result = new HashSet<>();
-            String dbPath = context.getFilesDir().getAbsolutePath() + "/dara.sqlite3";
             SQLiteDatabase db = null;
             try {
-                db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY);
+                db = WidgetDb.openReadOnly(context);
+                if (db == null) return result;
                 Cursor cursor = db.rawQuery(
                     "SELECT hc.\"habitId\" FROM \"HabitCheckIn\" hc " +
                     "JOIN \"Habit\" h ON h.\"id\" = hc.\"habitId\" " +
                     "WHERE h.\"userId\" = ? AND hc.\"date\" = ?",
-                    new String[] { LOCAL_USER_ID, todayIso }
+                    new String[] { WidgetDb.LOCAL_USER_ID, todayIso }
                 );
                 while (cursor.moveToNext()) {
                     result.add(cursor.getString(0));

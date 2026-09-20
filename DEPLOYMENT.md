@@ -127,10 +127,20 @@ git pull
 docker compose up -d --build     # rebuilds the app image; `prisma db push` runs again at container start
 ```
 
-`db push` only ever *adds* here (new tables/columns such as `SyncTombstone`), so nothing is dropped. After
-pulling a release that touches the sync routes (`src/app/api/sync/*`), redeploy the server **before** (or
+`db push` runs with `--accept-data-loss` (see the `Dockerfile`), which is safe for the changes shipped so far: it adds new
+tables/columns (such as `SyncTombstone`, `Reminder.updatedAt`) and converts the money columns from `integer` to
+`double precision` **in place, keeping every value** (a whole-Toman amount is exact in a double up to ~9 quadrillion).
+That conversion is what lifts the old ~2.1 billion Toman ceiling (PostgreSQL's 32-bit `integer`); it was checked on a
+real PostgreSQL 16 by loading the previous schema with data, running exactly this command, and reading the values back.
+Back up first anyway (`pg_dump`, see section 5) — it is one command and the conversion rewrites those tables.
+
+After pulling a release that touches the sync routes (`src/app/api/sync/*`), redeploy the server **before** (or
 together with) shipping the matching Android build: an updated app works against an older server but
-falls back to the old behavior (deletions and display-name/settings don't sync until the server catches up).
+falls back to the old behavior (deletions and display-name/settings don't sync until the server catches up; amounts
+above ~2.1 billion Toman are refused by an old server, one row at a time, with the reason shown in the app).
+
+The web app's *backup* tab (download / restore a backup file) needs no server change: it is built on the same
+`/api/sync/pull` and `/api/sync/push` endpoints the phone syncs through.
 
 ## 6. Migrations going forward
 

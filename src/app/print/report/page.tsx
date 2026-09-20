@@ -19,8 +19,12 @@ export default function PrintReportPage() {
 
 function PrintReportContent() {
   const params = useSearchParams();
+  // Either a named preset, or the exact from/to a custom range was sent with (see the Reports page).
+  const from = params.get("from");
+  const to = params.get("to");
   const preset = params.get("preset") ?? "month";
-  const { data } = useSWR<any>(`/api/reports?preset=${preset}`, fetcher);
+  const reportUrl = from && to ? `/api/reports?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` : `/api/reports?preset=${preset}`;
+  const { data } = useSWR<any>(reportUrl, fetcher);
   const { data: identityData } = useSWR<{ statements: IdentityStatementDto[] }>("/api/identity", fetcher);
   const { format } = useCurrencyUnit();
 

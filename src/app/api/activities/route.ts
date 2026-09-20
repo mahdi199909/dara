@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
@@ -12,7 +13,7 @@ const createSchema = z.object({
   categoryId: z.string().optional(),
   taskId: z.string().optional(),
   projectId: z.string().optional(),
-  directCost: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
   durationMin: z.number().int().min(0).optional(),
   startTimerNow: z.boolean().optional(),
 });

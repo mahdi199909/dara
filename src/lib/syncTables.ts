@@ -27,7 +27,7 @@ export interface SyncTableConfig {
   model: string;
   /** True for tables with an `updatedAt @updatedAt` column — these get real last-write-wins
    * upserts. False means the table is effectively append-only (AssetTransaction/EventCompletion/
-   * Reminder have no updatedAt at all): rows are inserted once by id and never updated by sync. */
+   * CapitalSnapshot have no updatedAt at all): rows are inserted once by id and never updated by sync. */
   hasUpdatedAt: boolean;
   /** True for tables with a `deletedAt` column — a soft-delete round-trips like any other field
    * change. Tables without it (HabitCheckIn, TimeEntry, Installment, VirtualAssetEntry,
@@ -61,7 +61,7 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: "EventCompletion", model: "eventCompletion", hasUpdatedAt: false, hasDeletedAt: false, ownership: { type: "parent", parentModel: "event", relationField: "event", fkColumn: "eventId" } },
   { table: "VirtualAssetEntry", model: "virtualAssetEntry", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
   { table: "Transaction", model: "transaction", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
-  { table: "Reminder", model: "reminder", hasUpdatedAt: false, hasDeletedAt: false, ownership: { type: "direct" } },
+  { table: "Reminder", model: "reminder", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
   // No updatedAt column — recordDailyCapitalSnapshot upserts *today's* row in place
   // (ON CONFLICT("userId","date") DO UPDATE) as more time gets logged through the day, so a
   // same-day edit after this row's first sync won't be picked up again until a fresh row is
@@ -87,3 +87,10 @@ export const SYNC_PROTOCOL_VERSION = 2;
  * that travels with push/pull and is applied as a DELETE on the other side.
  */
 export const TOMBSTONE_TABLES: readonly string[] = ["EventCompletion", "HabitCheckIn", "Reminder", "VirtualAssetEntry"];
+
+/**
+ * Tables whose rows can point at another row of the same table. When several rows travel together
+ * the parents must be sent first (a child in an earlier request than its parent is refused), so
+ * senders order rows by whether this column is set — see the phone's sync and the web backup import.
+ */
+export const SELF_REFERENCE_COLUMN: Readonly<Record<string, string>> = { Category: "parentCategoryId", Event: "recurrenceParentId" };

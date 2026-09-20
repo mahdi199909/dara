@@ -8,6 +8,14 @@
 // rest of this codebase's own Capacitor plugin usage) so this native-only code never enters the
 // plain web bundle.
 
+/** What the OS needs to know to ring one reminder. */
+export interface ScheduledReminder {
+  id: string;
+  title: string;
+  body: string;
+  remindAt: string;
+}
+
 /**
  * Same algorithm as Java's String.hashCode() — deterministic, and the `| 0` keeps the result
  * within the signed 32-bit range the plugin's own `id` field requires. A Reminder's real id is a
@@ -106,4 +114,36 @@ export function cancelReminderNotification(reminderId: string): void {
 
 export function cancelReminderNotifications(reminderIds: string[]): void {
   for (const id of reminderIds) cancelReminderNotification(id);
+}
+
+/**
+ * Makes the OS's pending notifications exactly `wanted`: schedules (or re-times — scheduling an id
+ * that is already pending replaces it) every wanted reminder and cancels any pending one that is
+ * no longer wanted. Reminders are the only notifications this app schedules, which is what makes
+ * "not in the list" mean "stale". Used after a sync, for reminders that were created, moved or
+ * removed on another device — the ones the phone's own repositories never saw happen.
+ */
+export function syncScheduledReminderNotifications(wanted: ScheduledReminder[]): void {
+  void (async () => {
+    try {
+      const { LocalNotifications } = await import("@capacitor/local-notifications");
+      const wantedIds = new Set(wanted.map((w) => reminderNotificationId(w.id)));
+      const pending = await LocalNotifications.getPending();
+      const stale = pending.notifications.filter((n) => !wantedIds.has(n.id));
+      if (stale.length > 0) await LocalNotifications.cancel({ notifications: stale.map((n) => ({ id: n.id })) });
+      if (wanted.length > 0) {
+        await LocalNotifications.schedule({
+          notifications: wanted.map((w) => ({
+            id: reminderNotificationId(w.id),
+            title: w.title,
+            body: w.body,
+            schedule: { at: new Date(w.remindAt), allowWhileIdle: true },
+            isExactNotification: false,
+          })),
+        });
+      }
+    } catch (err) {
+      console.error("syncScheduledReminderNotifications failed", err);
+    }
+  })();
 }

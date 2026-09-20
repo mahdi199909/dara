@@ -10,6 +10,7 @@ import SWRProvider from "@/components/SWRProvider";
 import FirstRunGate from "@/components/native/FirstRunGate";
 import WidgetQueueDrainer from "@/components/native/WidgetQueueDrainer";
 import SyncScheduler from "@/components/native/SyncScheduler";
+import DeepLinkHandler from "@/components/native/DeepLinkHandler";
 import ThemeSettingsSync from "@/components/ThemeSettingsSync";
 import SavedToast from "@/components/SavedToast";
 import UpdateAvailableBanner from "@/components/native/UpdateAvailableBanner";
@@ -45,6 +46,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <ThemeSettingsSync />
         <WidgetQueueDrainer />
         <SyncScheduler />
+        <DeepLinkHandler />
         <AndroidChrome>{children}</AndroidChrome>
       </SWRProvider>
     </FirstRunGate>

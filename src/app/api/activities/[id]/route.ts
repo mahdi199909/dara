@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
@@ -12,7 +13,7 @@ const updateSchema = z.object({
   categoryId: z.string().nullable().optional(),
   taskId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
-  directCost: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
 });
 
 async function getOwned(userId: string, id: string) {

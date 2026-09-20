@@ -186,14 +186,14 @@ public class QuickCaptureActivity extends Activity {
     /** Top 8 past Activity titles for this device's user, ranked by frecency, most first. */
     private List<TitleSuggestion> readTopTitles() {
         List<TitleSuggestion> result = new ArrayList<>();
-        String dbPath = getFilesDir().getAbsolutePath() + "/dara.sqlite3";
         SQLiteDatabase db = null;
         SimpleDateFormat isoFmt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
         isoFmt.setTimeZone(TimeZone.getTimeZone("UTC"));
         long now = System.currentTimeMillis();
 
         try {
-            db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY);
+            db = WidgetDb.openReadOnly(this);
+            if (db == null) return result; // never opened / mid-write — no suggestions
             Cursor cursor = db.rawQuery(
                 "SELECT title, COUNT(*) as cnt, MAX(createdAt) as lastUsed " +
                 "FROM Activity " +
@@ -231,10 +231,10 @@ public class QuickCaptureActivity extends Activity {
     /** id, icon, name — ordered by how often each category is used on Activity rows, most first. */
     private List<String[]> readTopCategories() {
         List<String[]> result = new ArrayList<>();
-        String dbPath = getFilesDir().getAbsolutePath() + "/dara.sqlite3";
         SQLiteDatabase db = null;
         try {
-            db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY);
+            db = WidgetDb.openReadOnly(this);
+            if (db == null) return result; // never opened / mid-write — treated as "no categories"
             Cursor cursor = db.rawQuery(
                 "SELECT c.id, c.icon, c.name " +
                 "FROM Category c " +

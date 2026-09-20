@@ -160,9 +160,9 @@ export function createInstallmentPlan(db: LocalDb, userId: string, input: Create
         const reminderId = crypto.randomUUID();
         const title = `سررسید قسط: ${input.title}`;
         db.run(
-          `INSERT INTO "Reminder" ("id","userId","targetType","eventId","installmentId","title","offsetMinutes","remindAt","notified","dismissed","createdAt")
-           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          [reminderId, userId, "INSTALLMENT", null, installment.id, title, offsetMinutes, remindAt.toISOString(), 0, 0, ts]
+          `INSERT INTO "Reminder" ("id","userId","targetType","eventId","installmentId","title","offsetMinutes","remindAt","notified","dismissed","createdAt","updatedAt")
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [reminderId, userId, "INSTALLMENT", null, installment.id, title, offsetMinutes, remindAt.toISOString(), 0, 0, ts, ts]
         );
         scheduleReminderNotification({
           id: reminderId,

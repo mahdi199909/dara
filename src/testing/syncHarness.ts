@@ -59,6 +59,9 @@ const ROUTE_DEFS: Array<{ pattern: string; load: Loader }> = [
   { pattern: "/api/tasks/:id", load: () => import("@/app/api/tasks/[id]/route") },
   { pattern: "/api/transactions", load: () => import("@/app/api/transactions/route") },
   { pattern: "/api/transactions/:id", load: () => import("@/app/api/transactions/[id]/route") },
+  { pattern: "/api/reports", load: () => import("@/app/api/reports/route") },
+  { pattern: "/api/capital", load: () => import("@/app/api/capital/route") },
+  { pattern: "/api/dashboard", load: () => import("@/app/api/dashboard/route") },
   { pattern: "/api/virtual-assets", load: () => import("@/app/api/virtual-assets/route") },
   { pattern: "/api/virtual-assets/:id", load: () => import("@/app/api/virtual-assets/[id]/route") },
 ];

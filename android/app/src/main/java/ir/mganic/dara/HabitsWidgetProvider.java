@@ -32,10 +32,19 @@ import java.util.Calendar;
 // SQLite) on next app open/resume. HabitsWidgetService's factory overlays these not-yet-drained
 // taps on top of the SQLite read so the checkbox shows correct-looking instant feedback rather
 // than flipping back to unchecked until the next real drain.
+//
+// Keeping the rows current: a collection widget only re-reads its rows when
+// notifyAppWidgetViewDataChanged is called — updateAppWidget alone (what onUpdate used to do, on
+// the 30-minute timer and every time the app was left) repaints the frame but leaves the rows as
+// they were. onUpdate now notifies as well, and the clock/date/time-zone broadcasts do too, so the
+// list rolls over to the new day on its own.
 public class HabitsWidgetProvider extends AppWidgetProvider {
 
     static final String ACTION_TOGGLE_CHECKIN = "ir.mganic.dara.action.TOGGLE_HABIT_CHECKIN";
     static final String EXTRA_HABIT_ID = "habitId";
+
+    /** The widget's own original background (WidgetTheme paints something else only when the user picked a colour). */
+    static final int DEFAULT_BACKGROUND_ARGB = 0xFFFFFFFF;
 
     // Same SharedPreferences file @capacitor/preferences reads/writes as "CapacitorStorage" —
     // see QuickCaptureActivity's PREFS_GROUP for the established precedent of native code
@@ -50,12 +59,16 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
         // unconditionally is safe — see AppWidgetProvider.onReceive()'s own action dispatch.
         super.onReceive(context, intent);
 
-        if (ACTION_TOGGLE_CHECKIN.equals(intent.getAction())) {
+        String action = intent.getAction();
+        if (ACTION_TOGGLE_CHECKIN.equals(action)) {
             String habitId = intent.getStringExtra(EXTRA_HABIT_ID);
             if (habitId != null) {
                 enqueuePendingToggle(context, habitId);
                 notifyDataChanged(context);
             }
+        } else if (WidgetRefresh.isClockChange(action)) {
+            // Midnight (or a clock/time-zone change): "today" is a different day now.
+            notifyDataChanged(context);
         }
     }
 
@@ -64,6 +77,8 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             appWidgetManager.updateAppWidget(appWidgetId, buildViews(context, appWidgetId));
         }
+        // updateAppWidget repaints the frame; this is what makes the factory re-read the rows.
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.habits_list);
     }
 
     /** Refreshes just the list's data (re-running the factory's onDataSetChanged) rather than a
@@ -81,7 +96,9 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
     private RemoteViews buildViews(Context context, int appWidgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_habits);
 
-        views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, 0xFFFFFFFF));
+        views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, DEFAULT_BACKGROUND_ARGB));
+        views.setTextColor(R.id.widget_title, WidgetTheme.getTextColor(context, DEFAULT_BACKGROUND_ARGB));
+        views.setTextColor(R.id.habits_empty_view, WidgetTheme.getSecondaryTextColor(context, DEFAULT_BACKGROUND_ARGB));
 
         Intent serviceIntent = new Intent(context, HabitsWidgetService.class);
         serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
@@ -105,17 +122,10 @@ public class HabitsWidgetProvider extends AppWidgetProvider {
         );
         views.setPendingIntentTemplate(R.id.habits_list, toggleTemplate);
 
-        // Explicit MainActivity intent, not getLaunchIntentForPackage() — that resolves to
-        // whichever Activity holds the LAUNCHER intent-filter, which is now SplashActivity; a
-        // widget tap should jump straight into the app, not sit through the splash delay.
-        Intent launch = new Intent(context, MainActivity.class);
-        launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent launchPendingIntent = PendingIntent.getActivity(
-            context, appWidgetId, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-        // Fires for taps outside the list itself (the title, empty space) — a tap that lands on
-        // the list goes through the adapter's own template/fill-in above instead.
-        views.setOnClickPendingIntent(R.id.widget_habits_root, launchPendingIntent);
+        // A tap anywhere else on the card (the title, empty space) opens the app on the habits
+        // screen — a tap that lands on the list goes through the adapter's own template/fill-in
+        // above instead.
+        views.setOnClickPendingIntent(R.id.widget_habits_root, WidgetLinks.open(context, appWidgetId, WidgetLinks.ROUTE_HABITS, false));
 
         return views;
     }

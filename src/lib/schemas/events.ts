@@ -4,6 +4,7 @@
 // src/local/repositories/events.ts's file header for the (intentional) asymmetries between
 // the create and update schemas.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { RECURRENCE_FREQS, VALUE_TYPES } from "@/lib/types";
 
 export const createEventSchema = z
@@ -17,8 +18,8 @@ export const createEventSchema = z
     categoryId: z.string().optional(),
     projectId: z.string().optional(),
     valueType: z.enum(VALUE_TYPES).optional(),
-    directCost: z.number().int().min(0).optional(),
-    incomeAmount: z.number().int().min(0).optional(),
+    directCost: tomanInt().min(0).optional(),
+    incomeAmount: tomanInt().min(0).optional(),
     recurrenceFreq: z.enum(RECURRENCE_FREQS).optional(),
     recurrenceInterval: z.number().int().min(1).optional(),
     recurrenceUntil: z.string().datetime().nullable().optional(),
@@ -42,8 +43,8 @@ export const updateEventSchema = z.object({
   categoryId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   valueType: z.enum(VALUE_TYPES).optional(),
-  directCost: z.number().int().min(0).optional(),
-  incomeAmount: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
+  incomeAmount: tomanInt().min(0).optional(),
   recurrenceFreq: z.enum(RECURRENCE_FREQS).optional(),
   recurrenceInterval: z.number().int().min(1).optional(),
   recurrenceUntil: z.string().datetime().nullable().optional(),

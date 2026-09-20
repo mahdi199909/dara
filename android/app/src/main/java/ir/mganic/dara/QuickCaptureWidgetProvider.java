@@ -14,12 +14,21 @@ import android.widget.RemoteViews;
 // it writes to SharedPreferences instead of the app's SQLite file directly.
 public class QuickCaptureWidgetProvider extends AppWidgetProvider {
 
+    /** The widget's own original background — the brand teal — used until the user picks a colour. */
+    private static final int DEFAULT_BACKGROUND_ARGB = 0xFF0E5F54;
+
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
         for (int appWidgetId : appWidgetIds) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_quick_capture);
 
-            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, 0xFF0E5F54));
+            views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, DEFAULT_BACKGROUND_ARGB));
+            // White on the default teal, as always; near-black (or white) automatically on any
+            // colour the user picks — whichever contrasts.
+            int textColor = WidgetTheme.getTextColor(context, DEFAULT_BACKGROUND_ARGB);
+            views.setTextColor(R.id.capture_title_text, textColor);
+            views.setTextColor(R.id.capture_subtitle_text, WidgetTheme.getSecondaryTextColor(context, DEFAULT_BACKGROUND_ARGB));
+            views.setTextColor(R.id.capture_plus_text, textColor);
 
             Intent intent = new Intent(context, QuickCaptureActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);

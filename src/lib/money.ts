@@ -1,5 +1,13 @@
 import { CURRENCY_UNIT_LABELS, type CurrencyUnit } from "./types";
 
+/**
+ * The largest single amount the app accepts, in Toman (999,999,999,999,999 ≈ 1e15). Money lives in
+ * double-precision columns, exact for every integer up to 2^53 ≈ 9e15; this leaves room to add
+ * thousands of maximal rows together without losing a Toman. Enforced by the zod schemas
+ * (src/lib/schemas/money.ts) and by MoneyInput while typing.
+ */
+export const MAX_MONEY_TOMAN = 999_999_999_999_999;
+
 const PERSIAN_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
 
 // How many Toman one unit of each currency display unit is worth — 1 Toman = 10 Rial, and

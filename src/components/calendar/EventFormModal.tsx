@@ -8,6 +8,7 @@ import MoneyInput from "@/components/ui/MoneyInput";
 import TimePicker from "@/components/ui/TimePicker";
 import { XIcon, TrashIcon } from "@/components/icons";
 import { REMINDER_OFFSET_PRESETS, RECURRENCE_FREQS, type RecurrenceFreq } from "@/lib/types";
+import { customOffsetToMinutes, planReminderChanges, reminderOffsetLabel, type ExistingReminder } from "@/lib/reminderPlan";
 
 const RECURRENCE_LABELS: Record<RecurrenceFreq, string> = {
   NONE: "بدون تکرار",
@@ -56,7 +57,22 @@ export default function EventFormModal({
   );
   const [recurrenceCount, setRecurrenceCount] = useState(event?.recurrenceCount ? String(event.recurrenceCount) : "10");
   const [recurrenceUntil, setRecurrenceUntil] = useState(event?.recurrenceUntil ? new Date(event.recurrenceUntil) : defaultDate);
-  const [reminderOffsets, setReminderOffsets] = useState<number[]>([30]);
+  // Reminders are separate rows, one per lead time. Editing an event starts from the ones it
+  // already has (ticked), and saving applies the difference — see planReminderChanges.
+  const [savedReminders, setSavedReminders] = useState<ExistingReminder[]>(() =>
+    ((event?.reminders ?? []) as Array<{ id: string; offsetMinutes: number }>).map((r) => ({ id: r.id, offsetMinutes: r.offsetMinutes }))
+  );
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>(() =>
+    event ? Array.from(new Set(savedReminders.map((r) => r.offsetMinutes))) : [30]
+  );
+  // Lead times that aren't one of the preset chips (created earlier via a custom value, the API, or another device).
+  const [extraOffsets, setExtraOffsets] = useState<number[]>(() =>
+    Array.from(new Set(savedReminders.map((r) => r.offsetMinutes))).filter((m) => !REMINDER_OFFSET_PRESETS.some((p) => p.minutes === m))
+  );
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customAmount, setCustomAmount] = useState("");
+  const [customUnit, setCustomUnit] = useState<"MINUTE" | "HOUR" | "DAY">("MINUTE");
+  const [customError, setCustomError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +80,24 @@ export default function EventFormModal({
   function toggleOffset(minutes: number) {
     setReminderOffsets((prev) => (prev.includes(minutes) ? prev.filter((m) => m !== minutes) : [...prev, minutes]));
   }
+
+  function addCustomOffset() {
+    const minutes = customOffsetToMinutes(Number(customAmount), customUnit);
+    if (minutes === null) {
+      setCustomError("یک مدت معتبر (حداکثر ۳۶۵ روز) وارد کنید.");
+      return;
+    }
+    setCustomError(null);
+    if (!REMINDER_OFFSET_PRESETS.some((p) => p.minutes === minutes)) setExtraOffsets((prev) => (prev.includes(minutes) ? prev : [...prev, minutes]));
+    setReminderOffsets((prev) => (prev.includes(minutes) ? prev : [...prev, minutes]));
+    setCustomAmount("");
+    setCustomOpen(false);
+  }
+
+  const offsetChips = [
+    ...REMINDER_OFFSET_PRESETS.map((p) => ({ minutes: p.minutes as number, label: p.label as string })),
+    ...extraOffsets.map((m) => ({ minutes: m, label: reminderOffsetLabel(m) })),
+  ].sort((a, b) => a.minutes - b.minutes);
 
   function dayIso(d: Date) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -91,7 +125,10 @@ export default function EventFormModal({
       };
 
       if (isEdit) {
+        // The event first: moving it re-times its existing reminders, and a reminder created
+        // afterwards is computed from the new start.
         await apiPatch(`/api/events/${event.id}`, payload);
+        await applyReminderChanges();
       } else {
         await apiPost("/api/events", { ...payload, reminderOffsets });
       }
@@ -100,6 +137,23 @@ export default function EventFormModal({
       setError(err?.message ?? "ثبت انجام نشد.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** Deletes/creates reminders so they match the ticked chips. Tracks what has already gone through, so
+   * pressing save again after a failure half-way retries only the rest instead of duplicating. */
+  async function applyReminderChanges() {
+    const plan = planReminderChanges(savedReminders, reminderOffsets);
+    let current = savedReminders;
+    for (const id of plan.remove) {
+      await apiDelete(`/api/reminders/${id}`);
+      current = current.filter((r) => r.id !== id);
+      setSavedReminders(current);
+    }
+    for (const offsetMinutes of plan.add) {
+      const created = (await apiPost(`/api/events/${event.id}/reminders`, { offsetMinutes })) as { reminder: { id: string } };
+      current = [...current, { id: created.reminder.id, offsetMinutes }];
+      setSavedReminders(current);
     }
   }
 
@@ -191,25 +245,60 @@ export default function EventFormModal({
             </div>
           )}
 
-          {!isEdit && (
-            <div>
-              <p className="text-xs text-muted mb-1.5">یادآوری</p>
-              <div className="flex flex-wrap gap-1.5">
-                {REMINDER_OFFSET_PRESETS.map((p) => (
-                  <button
-                    type="button"
-                    key={p.minutes}
-                    onClick={() => toggleOffset(p.minutes)}
-                    className={`text-xs px-2.5 py-1 rounded-full ${
-                      reminderOffsets.includes(p.minutes) ? "bg-accent text-on-accent" : "bg-canvas text-muted"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+          <div>
+            <p className="text-xs text-muted mb-1.5">یادآوری</p>
+            <div className="flex flex-wrap gap-1.5">
+              {offsetChips.map((p) => (
+                <button
+                  type="button"
+                  key={p.minutes}
+                  onClick={() => toggleOffset(p.minutes)}
+                  aria-pressed={reminderOffsets.includes(p.minutes)}
+                  className={`text-xs px-2.5 py-1 rounded-full ${
+                    reminderOffsets.includes(p.minutes) ? "bg-accent text-on-accent" : "bg-canvas text-muted"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCustomOpen((v) => !v)}
+                className="text-xs px-2.5 py-1 rounded-full border border-dashed border-line text-muted hover:text-ink"
+              >
+                + سفارشی
+              </button>
             </div>
-          )}
+            {customOpen && (
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  dir="ltr"
+                  min={1}
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addCustomOffset();
+                    }
+                  }}
+                  placeholder="مدت"
+                  className="bg-surface w-24 rounded-lg border border-line px-3 py-1.5 text-sm text-right"
+                />
+                <select value={customUnit} onChange={(e) => setCustomUnit(e.target.value as "MINUTE" | "HOUR" | "DAY")} className="bg-surface rounded-lg border border-line px-2 py-1.5 text-sm">
+                  <option value="MINUTE">دقیقه</option>
+                  <option value="HOUR">ساعت</option>
+                  <option value="DAY">روز</option>
+                </select>
+                <span className="text-xs text-muted">قبل</span>
+                <button type="button" onClick={addCustomOffset} className="text-xs px-3 py-1.5 rounded-lg bg-accent text-on-accent">
+                  افزودن
+                </button>
+              </div>
+            )}
+            {customError && <p className="text-xs text-waste mt-1">{customError}</p>}
+          </div>
 
           {error && <p className="text-sm text-waste">{error}</p>}
 

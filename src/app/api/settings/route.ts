@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
@@ -13,9 +14,9 @@ const updateSchema = z.object({
   currency: z.string().max(10).optional(),
   currencyDisplayUnit: z.enum(CURRENCY_UNITS).optional(),
   calendarType: z.enum(["jalali", "gregorian"]).optional(),
-  monthlyIncome: z.number().int().min(0).nullable().optional(),
+  monthlyIncome: tomanInt().min(0).nullable().optional(),
   workingHoursMonth: z.number().int().min(1).max(744).nullable().optional(),
-  hourlyValueOverride: z.number().int().min(0).nullable().optional(),
+  hourlyValueOverride: tomanInt().min(0).nullable().optional(),
   dashboardCardPrefs: z.record(z.boolean()).optional(),
   dailyMomentEnabled: z.boolean().optional(),
   wakeHour: z.number().int().min(0).max(23).optional(),

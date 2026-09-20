@@ -14,18 +14,17 @@
 // Also, PATCH's response/audit newValue is the bare post-update row (no relations at all), even
 // though it may call recalcActivityDuration first — see the comment inside updateActivity.
 //
-// Deliberately NOT ported: syncDirectCostTransaction (src/lib/directCostSync.ts's
-// syncActivityDirectCostTransaction, re-exported from src/lib/activityService.ts). It needs to
-// write a Transaction row; src/local/repositories/transactions.ts now covers plain Transaction
-// CRUD, but wiring the sync side-effect itself is out of scope for this pass — see the two
-// call sites below (create/update) marked with a deferral comment instead of being silently
-// dropped.
+// Like the web routes, creating/updating an activity keeps its linked expense Transaction in
+// step (syncActivityDirectCostTransaction — see ../directCostSync). It used to be skipped here
+// ("deferred"), so an activity with a direct cost logged on the phone produced no expense while
+// the same activity logged on the web did.
 import { ApiError } from "@/lib/apiErrorBase";
 import type { CreateActivityInput, UpdateActivityInput, AddTimeEntryInput } from "@/lib/schemas/activities";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
 import { recalcActivityDuration, startTimer, stopTimer, addManualTimeEntry, type TimeEntryRow } from "../activityService";
+import { syncActivityDirectCostTransaction } from "../directCostSync";
 
 interface ActivityRow {
   id: string;
@@ -192,8 +191,7 @@ export function createActivity(db: LocalDb, userId: string, input: CreateActivit
     startTimer(db, userId, id);
   }
 
-  // Deferred: the web route calls syncDirectCostTransaction(activity.id) here when
-  // directCost > 0 — see the file header. Skipped for this pass.
+  if ((input.directCost ?? 0) > 0) syncActivityDirectCostTransaction(db, id);
 
   const fresh = attachForCreateResponse(db, [db.get<ActivityRow>(`SELECT * FROM "Activity" WHERE "id" = ?`, [id])!])[0];
   writeLocalAuditLog(db, { userId, action: "CREATE", entityType: "Activity", entityId: id, newValue: fresh });
@@ -234,8 +232,7 @@ export function updateActivity(db: LocalDb, userId: string, id: string, input: U
   const fresh = db.get<ActivityRow>(`SELECT * FROM "Activity" WHERE "id" = ?`, [id])!;
 
   if (input.categoryId !== undefined) recalcActivityDuration(db, id);
-  // Deferred: the web route calls syncDirectCostTransaction(activity.id) here when
-  // input.directCost !== undefined — see the file header. Skipped for this pass.
+  if (input.directCost !== undefined) syncActivityDirectCostTransaction(db, id);
 
   writeLocalAuditLog(db, { userId, action: "UPDATE", entityType: "Activity", entityId: id, oldValue: existing, newValue: fresh });
   return fresh;

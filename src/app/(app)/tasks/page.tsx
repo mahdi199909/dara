@@ -7,6 +7,7 @@ import { useCategories, useProjects } from "@/lib/hooks";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { TrashIcon, PlusIcon } from "@/components/icons";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
+import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
 import { formatJalali } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
@@ -159,13 +160,20 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
           placeholder="عنوان کار"
           className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
         />
-        <div className="grid grid-cols-3 gap-2">
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
-            <option value="">دسته‌بندی</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-            ))}
-          </select>
+        <div>
+          <p className="text-xs text-muted mb-1.5">دسته‌بندی (اختیاری)</p>
+          <CategoryChipPicker
+            categories={selectableCategories(categories)}
+            selectedId={categoryId || null}
+            allowClear
+            onPick={(c) => {
+              setCategoryId(c?.id ?? "");
+              // A project's own category also tags the task to that project (same as Quick Capture).
+              if (c?.projectId) setProjectId(c.projectId);
+            }}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
             <option value="">پروژه</option>
             {projects.map((p) => (

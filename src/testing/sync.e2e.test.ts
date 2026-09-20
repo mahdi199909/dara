@@ -16,15 +16,27 @@ vi.mock("@/local/nativeNotifications", () => ({
   rescheduleReminderNotification: () => {},
   cancelReminderNotification: () => {},
   cancelReminderNotifications: () => {},
+  syncScheduledReminderNotifications: () => {},
+}));
+// The capital report hands its numbers to the home-screen widget through Capacitor Preferences,
+// which needs a browser's localStorage — absent here.
+vi.mock("@capacitor/preferences", () => ({
+  Preferences: { get: async () => ({ value: null }), set: async () => {}, remove: async () => {}, keys: async () => ({ keys: [] }) },
 }));
 vi.mock("@/lib/versionGate", () => ({ cacheVersionGate: async () => {}, checkVersionGate: async () => ({ blocked: false }) }));
 
 import { createPhone, createServerHarness, type Phone, type ServerHarness } from "@/testing/syncHarness";
-import { expectEndpointParity, iso, linkPhone, syncPhone, syncUntilQuiet, type Account } from "@/testing/syncScenarios";
+import { compareEndpoint, expectEndpointParity, iso, linkPhone, syncPhone, syncUntilQuiet, type Account } from "@/testing/syncScenarios";
 import { AccountSwitchRequired, completeFirstRun, syncWithServer } from "@/lib/nativeOnboarding";
 import { getLinkedAccount } from "@/local/accountSwitch";
+import { exportAllData, importAllData, validateExportFile } from "@/local/dataExport";
+import { exportServerBackup, importBackupToServer, type BackupApi } from "@/lib/webBackup";
 import { DEFAULT_CATEGORIES } from "@/lib/defaultCategories";
 import { SYNC_TABLES } from "@/lib/syncTables";
+
+// Each scenario spins up real route handlers + two SQLite databases; the heaviest ones take a
+// few seconds on a busy machine, well past vitest's 5 s default.
+vi.setConfig({ testTimeout: 60_000 });
 
 let server: ServerHarness;
 
@@ -549,5 +561,233 @@ describe("signing in as a different account on the same phone", () => {
 
     expect(await serverCount("task", account)).toBe(1);
     expect(phone.must("GET", "/api/tasks").tasks.map((t: { title: string }) => t.title)).toEqual(["ثبت‌شده‌ی آفلاین"]);
+  });
+});
+
+describe("costs, reminders and large amounts", () => {
+  it("an event and an activity with a cost leave the same linked transactions on the phone as on the web", async () => {
+    const account = await server.registerUser();
+    server.setWebSession(account.token);
+    const phone = await linkedPhone(account);
+
+    // The identical inputs, once through the phone's repositories and once through the web routes.
+    const event = { startAt: iso(1, 10), endAt: iso(1, 11), directCost: 40_000, incomeAmount: 90_000 };
+    const activity = { durationMin: 30, directCost: 15_000 };
+    phone.must("POST", "/api/events", { title: "رویداد گوشی", ...event });
+    phone.must("POST", "/api/activities", { title: "فعالیت گوشی", ...activity });
+    await server.mustWeb("POST", "/api/events", { title: "رویداد وب", ...event });
+    await server.mustWeb("POST", "/api/activities", { title: "فعالیت وب", ...activity });
+
+    type Tx = { type: string; amount: number; eventId?: string | null; activityId?: string | null };
+    const shape = (tx: Tx) => `${tx.type}:${tx.amount}:${tx.eventId ? "event" : tx.activityId ? "activity" : "-"}`;
+    const phoneOwn = (phone.must("GET", "/api/transactions").transactions as Tx[]).map(shape).sort();
+    const webOwn = ((await server.mustWeb("GET", "/api/transactions")).transactions as Tx[]).map(shape).sort();
+    // Before syncing, each side holds only what it created itself — and they must have created the same thing.
+    expect(phoneOwn).toEqual(["EXPENSE:15000:activity", "EXPENSE:40000:event", "INCOME:90000:event"]);
+    expect(webOwn).toEqual(phoneOwn);
+
+    const rounds = await syncUntilQuiet(phone);
+    for (const r of rounds) expect(r.error, r.error?.message).toBeUndefined();
+    expect(await serverCount("transaction", account, { deletedAt: null })).toBe(6);
+    expect(localCount(phone, "Transaction", '"deletedAt" IS NULL')).toBe(6);
+    await expectEndpointParity(server, phone, "/api/transactions");
+  });
+
+  it("changing an event's cost on the phone updates its expense instead of adding another, and clearing it removes it", async () => {
+    const account = await server.registerUser();
+    const phone = await linkedPhone(account);
+    const event = phone.must("POST", "/api/events", { title: "جلسه", startAt: iso(1, 10), endAt: iso(1, 11), directCost: 10_000 }).event;
+    await syncUntilQuiet(phone);
+    expect(await serverCount("transaction", account, { deletedAt: null })).toBe(1);
+
+    await tick();
+    phone.must("PATCH", `/api/events/${event.id}`, { directCost: 25_000 });
+    await syncUntilQuiet(phone);
+    const [tx] = await server.prisma.transaction.findMany({ where: { userId: account.userId, deletedAt: null } });
+    expect(tx.amount).toBe(25_000);
+
+    await tick();
+    phone.must("PATCH", `/api/events/${event.id}`, { directCost: 0 });
+    await syncUntilQuiet(phone);
+    expect(await serverCount("transaction", account, { deletedAt: null })).toBe(0);
+  });
+
+  it("rescheduling an event on the web moves the phone's reminders too, and one removed on the phone is removed on the web", async () => {
+    const account = await server.registerUser();
+    server.setWebSession(account.token);
+    const phone = await linkedPhone(account);
+    const event = phone.must("POST", "/api/events", { title: "جلسه", startAt: iso(2, 10), endAt: iso(2, 11), reminderOffsets: [10, 60] }).event;
+    await syncUntilQuiet(phone);
+    expect(await serverCount("reminder", account)).toBe(2);
+
+    await tick();
+    const newStart = iso(5, 15);
+    await server.mustWeb("PATCH", `/api/events/${event.id}`, { startAt: newStart, endAt: iso(5, 16) });
+    await syncUntilQuiet(phone);
+
+    const local = phone.db.all<{ offsetMinutes: number; remindAt: string }>(`SELECT "offsetMinutes","remindAt" FROM "Reminder" ORDER BY "offsetMinutes"`);
+    expect(local.map((r) => new Date(r.remindAt).getTime())).toEqual([new Date(newStart).getTime() - 10 * 60000, new Date(newStart).getTime() - 60 * 60000]);
+
+    await tick();
+    const toRemove = phone.db.get<{ id: string }>(`SELECT "id" FROM "Reminder" WHERE "offsetMinutes" = 60`)!;
+    phone.must("DELETE", `/api/reminders/${toRemove.id}`);
+    await server.mustWeb("POST", `/api/events/${event.id}/reminders`, { offsetMinutes: 1440 }); // a new one on the web meanwhile
+    await syncUntilQuiet(phone);
+
+    const serverOffsets = (await server.prisma.reminder.findMany({ where: { userId: account.userId } })).map((r: { offsetMinutes: number }) => r.offsetMinutes).sort((a: number, b: number) => a - b);
+    const phoneOffsets = phone.db.all<{ offsetMinutes: number }>(`SELECT "offsetMinutes" FROM "Reminder"`).map((r) => r.offsetMinutes).sort((a, b) => a - b);
+    expect(serverOffsets).toEqual([10, 1440]);
+    expect(phoneOffsets).toEqual(serverOffsets);
+  });
+
+  it("a reminder that already fired on the phone stays fired when the server's not-fired copy arrives", async () => {
+    const account = await server.registerUser();
+    const phone = await linkedPhone(account);
+    const event = phone.must("POST", "/api/events", { title: "گذشته", startAt: iso(1, 10), endAt: iso(1, 11), reminderOffsets: [10] }).event;
+    await syncUntilQuiet(phone);
+    const reminderId = phone.db.get<{ id: string }>(`SELECT "id" FROM "Reminder" WHERE "eventId" = ?`, [event.id])!.id;
+
+    // The phone fired it (locally), but the server still holds the not-fired copy — with a NEWER
+    // updatedAt, as right after the server upgrade that added Reminder.updatedAt.
+    const past = "2020-01-01T00:00:00.000Z";
+    await tick(30);
+    phone.db.run(`UPDATE "Reminder" SET "notified" = 1, "remindAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [past, past, reminderId]);
+    await server.prisma.reminder.update({ where: { id: reminderId }, data: { notified: false, remindAt: new Date(past), updatedAt: new Date() } });
+    await syncUntilQuiet(phone);
+
+    expect(phone.db.get<{ notified: number }>(`SELECT "notified" FROM "Reminder" WHERE "id" = ?`, [reminderId])!.notified).toBe(1);
+  });
+
+  it("amounts far above 2,147,483,647 Toman survive the phone, the server and the web unchanged", async () => {
+    const account = await server.registerUser();
+    server.setWebSession(account.token);
+    const phone = await linkedPhone(account);
+
+    const acct = phone.must("POST", "/api/accounts", { name: "بانک بزرگ", type: "BANK_ACCOUNT", initialBalance: 9_000_000_000 }).account;
+    phone.must("POST", "/api/transactions", { type: "INCOME", amount: 3_500_000_000, accountId: acct.id, description: "فروش" });
+    phone.must("POST", "/api/assets", { name: "خانه", purchasePrice: 25_000_000_000, currentValue: 31_000_000_000 });
+    phone.must("POST", "/api/tasks", { title: "معامله", directCost: 2_500_000_000, incomeAmount: 4_000_000_000 });
+    phone.must("POST", "/api/installment-plans", { title: "وام", totalAmount: 12_000_000_000, installmentAmount: 1_000_000_000, numberOfInstallments: 12, dueDay: 5 });
+
+    // …and the same kind of numbers typed on the web, which the phone must receive intact.
+    const webAcct = (await server.mustWeb("POST", "/api/accounts", { name: "حساب وب", type: "BANK_ACCOUNT", initialBalance: 7_000_000_000 })).account;
+    await server.mustWeb("POST", "/api/transactions", { type: "EXPENSE", amount: 5_000_000_000, accountId: webAcct.id });
+    await server.mustWeb("POST", "/api/assets", { name: "ویلا", purchasePrice: 40_000_000_000, currentValue: 44_000_000_000 });
+
+    const rounds = await syncUntilQuiet(phone);
+    for (const r of rounds) {
+      expect(r.error, r.error?.message).toBeUndefined();
+      expect(r.rejectedCount, JSON.stringify(r.issues)).toBe(0);
+    }
+
+    const byNumber = (a: number, b: number) => a - b;
+    const serverTx = (await server.prisma.transaction.findMany({ where: { userId: account.userId, deletedAt: null } })).map((t: { amount: number }) => t.amount).sort(byNumber);
+    const serverAssets = (await server.prisma.asset.findMany({ where: { userId: account.userId } })).map((a: { purchasePrice: number }) => a.purchasePrice).sort(byNumber);
+    const phoneTx = phone.db.all<{ amount: number }>(`SELECT "amount" FROM "Transaction" WHERE "deletedAt" IS NULL`).map((t) => t.amount).sort(byNumber);
+    const phoneAssets = phone.db.all<{ purchasePrice: number }>(`SELECT "purchasePrice" FROM "Asset"`).map((a) => a.purchasePrice).sort(byNumber);
+
+    // 3.5B + 5B typed by hand, plus the task's linked 2.5B expense and 4B income.
+    expect(serverTx).toEqual([2_500_000_000, 3_500_000_000, 4_000_000_000, 5_000_000_000]);
+    expect(serverAssets).toEqual([25_000_000_000, 40_000_000_000]);
+    expect(phoneTx).toEqual(serverTx);
+    expect(phoneAssets).toEqual(serverAssets);
+
+    for (const url of ["/api/accounts", "/api/transactions", "/api/assets", "/api/tasks", "/api/installment-plans"]) await expectEndpointParity(server, phone, url);
+
+    // The derived screens must cope with the same numbers on both sides.
+    for (const url of ["/api/reports?preset=year", "/api/capital"]) {
+      const c = await compareEndpoint(server, phone, url);
+      expect(c.webStatus, `web ${url}`).toBe(200);
+      expect(c.phoneStatus, `phone ${url}`).toBe(200);
+    }
+  });
+});
+
+describe("backup and restore between the phone and the web", () => {
+  const webApi = (): BackupApi => ({
+    get: (url) => server.mustWeb("GET", url),
+    post: (url, body) => server.mustWeb("POST", url, body),
+  });
+
+  it("a phone's backup file restores onto a web account without doubling the default categories or losing links", async () => {
+    const phone = await createPhone();
+    createEverythingOnPhone(phone);
+    phone.activate();
+    const file = JSON.parse(JSON.stringify(exportAllData(phone.db)));
+    const validated = validateExportFile(file);
+    expect(validated.ok).toBe(true);
+
+    const account = await server.registerUser(); // a brand-new account: has only its own default categories
+    const result = await importBackupToServer(webApi(), file);
+    expect(result.rejected, JSON.stringify(result.rejected)).toEqual([]);
+
+    // Every content row arrived (default categories merged into the account's own, so only the custom ones are new).
+    for (const table of ["Task", "Habit", "Activity", "Event", "Transaction", "FinanceAccount", "Asset", "InstallmentPlan", "Installment", "Reminder", "HabitCheckIn"]) {
+      const config = SYNC_TABLES.find((t) => t.table === table)!;
+      expect(await serverCount(config.model, account), `${table} on the web`).toBe(localCount(phone, table));
+    }
+    const categories = await server.prisma.category.findMany({ where: { userId: account.userId, deletedAt: null } });
+    const names = categories.map((c: { name: string }) => c.name);
+    expect(new Set(names).size, `duplicate category names: ${names.join("، ")}`).toBe(names.length);
+    expect(names).toContain("ورزش");
+
+    // A task filed under a default category still points at a live category of the account.
+    const tasks = (await server.mustWeb("GET", "/api/tasks")).tasks as Array<{ title: string; categoryId: string | null }>;
+    const linked = tasks.find((t) => t.title === "تسک ۱")!;
+    expect(categories.some((c: { id: string }) => c.id === linked.categoryId)).toBe(true);
+    expect(categories.find((c: { id: string }) => c.id === linked.categoryId).name).toBe("کار");
+
+    // Restoring the same file again changes nothing.
+    const again = await importBackupToServer(webApi(), file);
+    expect(again.rejected).toEqual([]);
+    expect(await serverCount("task", account)).toBe(localCount(phone, "Task"));
+  });
+
+  it("a web backup file restores onto a fresh phone with no errors, and the phone shows the same data", async () => {
+    const account = await server.registerUser();
+    await createEverythingOnWeb();
+
+    const file = JSON.parse(JSON.stringify(await exportServerBackup(webApi())));
+    const validated = validateExportFile(file);
+    expect(validated.ok).toBe(true);
+    // The file names its owner the way a phone's own backup does, never the server's account id.
+    for (const row of file.tables.Task as Array<{ userId: string }>) expect(row.userId).not.toBe(account.userId);
+
+    const phone = await createPhone();
+    phone.activate();
+    const result = importAllData(phone.db, validated.ok ? validated.file : file);
+    expect(result.errors, JSON.stringify(result.errors)).toEqual({});
+
+    for (const table of ["Task", "Habit", "Activity", "Event", "Transaction", "FinanceAccount", "Asset", "InstallmentPlan", "Installment", "Reminder", "HabitCheckIn"]) {
+      const config = SYNC_TABLES.find((t) => t.table === table)!;
+      expect(localCount(phone, table), `${table} on the phone`).toBe(await serverCount(config.model, account));
+    }
+    // The lists the two platforms show have the same number of items (their category ids differ — the
+    // phone re-points rows at its own copy of each default category — so the rows aren't compared field by field).
+    const firstList = (body: Record<string, unknown>) => Object.values(body).find(Array.isArray) as unknown[];
+    for (const url of ["/api/tasks", "/api/habits", "/api/accounts", "/api/transactions", "/api/assets", "/api/installment-plans"]) {
+      const onPhone = firstList(phone.must("GET", url));
+      const onWeb = firstList(await server.mustWeb("GET", url));
+      expect(onPhone.length, `${url} on the phone`).toBe(onWeb.length);
+      expect(onWeb.length, `${url} on the web`).toBeGreaterThan(0);
+    }
+    // Tasks the web user made under a default category show under the phone's own copy of it.
+    const webTask = (await server.mustWeb("GET", "/api/tasks")).tasks.find((t: { title: string }) => t.title === "تسک وب");
+    const phoneTask = (phone.must("GET", "/api/tasks").tasks as Array<{ title: string; category: { name: string } | null }>).find((t) => t.title === "تسک وب")!;
+    expect(phoneTask.category?.name).toBe(webTask.category?.name);
+  });
+
+  it("the CapitalSnapshot growth history is part of a backup", async () => {
+    const phone = await createPhone();
+    phone.activate();
+    phone.db.run(`INSERT INTO "CapitalSnapshot" ("id","userId","date","investedMinutes","virtualAssetValue","createdAt") VALUES (?,?,?,?,?,?)`, ["snap1", "local-device-user", "2026-09-01", 90, 4_000_000_000, new Date().toISOString()]);
+    const file = JSON.parse(JSON.stringify(exportAllData(phone.db)));
+    expect(file.tables.CapitalSnapshot).toHaveLength(1);
+
+    const other = await createPhone();
+    other.activate();
+    const result = importAllData(other.db, file);
+    expect(result.added.CapitalSnapshot).toBe(1);
+    expect(other.db.get<{ virtualAssetValue: number }>(`SELECT "virtualAssetValue" FROM "CapitalSnapshot" WHERE "id" = 'snap1'`)!.virtualAssetValue).toBe(4_000_000_000);
   });
 });

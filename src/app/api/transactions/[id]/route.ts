@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 
 const updateSchema = z.object({
-  amount: z.number().int().positive().optional(),
+  amount: tomanInt().positive().optional(),
   date: z.string().datetime().optional(),
   description: z.string().max(500).nullable().optional(),
   categoryId: z.string().nullable().optional(),

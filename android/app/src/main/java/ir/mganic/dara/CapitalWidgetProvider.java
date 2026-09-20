@@ -6,8 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
+import android.net.Uri;
 import android.view.View;
 import android.widget.RemoteViews;
 import android.widget.Toast;
@@ -16,21 +15,22 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
-// Shows today's/lifetime invested-hours summary plus up to three one-tap shortcut buttons for the
-// user's most-used categories — "ثبت را بدون باز شدن اپ ممکن کن" (make logging possible without
-// opening the app), the widget half of that (the notification half is separate, not yet built).
+// Shows today's/lifetime invested-hours summary plus one-tap shortcut buttons for the user's
+// most-used categories (a scrollable grid — see CapitalShortcutsService) — "ثبت را بدون باز شدن
+// اپ ممکن کن" (make logging possible without opening the app), the widget half of that (the
+// notification half is separate, not yet built).
 //
 // The capital number is read-only and never computed here — see readCapitalSummary(). It's
-// whatever src/local/reportEngine.ts's recordDailyCapitalSnapshot last wrote to the
-// "widget_capital_summary" Preferences key on boot/resume/every /api/capital read, so it's always
-// at most one of those events stale, never independently wrong the way a widget-side
-// recomputation from a possibly-different formula could be.
+// whatever src/local/reportEngine.ts's writeCapitalWidgetSummary last wrote to the
+// "widget_capital_summary" Preferences key — on boot/resume, on every /api/capital read, and after
+// every save of the database (src/local/widgetRefresh.ts) — so it's always exactly what the app
+// itself computed, never independently wrong the way a widget-side recomputation from a
+// possibly-different formula could be.
 //
 // A shortcut tap queues a capture the exact same way QuickCaptureActivity/HabitsWidgetProvider's
 // checkbox do — through the @capacitor/preferences-backed hand-off queue (src/local/widgetQueue.ts
@@ -44,8 +44,9 @@ public class CapitalWidgetProvider extends AppWidgetProvider {
     static final String EXTRA_CATEGORY_ID = "categoryId";
     static final String EXTRA_CATEGORY_LABEL = "categoryLabel";
 
-    private static final String LOCAL_USER_ID = "local-device-user";
-    private static final int MAX_SHORTCUTS = 3;
+    /** The widget's own original background (WidgetTheme paints something else only when the user picked a colour). */
+    static final int DEFAULT_BACKGROUND_ARGB = 0xFFFFFFFF;
+
     // The single most common quick-log duration — same default QuickCaptureActivity's duration
     // chips start on. A one-tap shortcut has nowhere to ask for a different one; the user can
     // still edit the logged duration later from inside the app like any other record.
@@ -63,13 +64,17 @@ public class CapitalWidgetProvider extends AppWidgetProvider {
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
 
-        if (ACTION_QUICK_CAPTURE.equals(intent.getAction())) {
+        String action = intent.getAction();
+        if (ACTION_QUICK_CAPTURE.equals(action)) {
             String categoryId = intent.getStringExtra(EXTRA_CATEGORY_ID);
             String categoryLabel = intent.getStringExtra(EXTRA_CATEGORY_LABEL);
             if (categoryId != null && categoryLabel != null) {
                 enqueueCapture(context, categoryId, categoryLabel);
                 Toast.makeText(context, "«" + categoryLabel + "» ثبت شد", Toast.LENGTH_SHORT).show();
             }
+        } else if (WidgetRefresh.isClockChange(action)) {
+            // A new day started: repaint so "today" is not still showing yesterday's hours.
+            WidgetRefresh.refreshAll(context);
         }
     }
 
@@ -78,13 +83,18 @@ public class CapitalWidgetProvider extends AppWidgetProvider {
         for (int appWidgetId : appWidgetIds) {
             appWidgetManager.updateAppWidget(appWidgetId, buildViews(context, appWidgetId));
         }
+        // updateAppWidget repaints the frame; this is what makes the grid re-read its shortcuts.
+        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetIds, R.id.shortcuts_grid);
     }
 
     private RemoteViews buildViews(Context context, int appWidgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_capital);
-        views.removeAllViews(R.id.shortcuts_container);
 
-        views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, 0xFFFFFFFF));
+        views.setInt(R.id.widget_theme_overlay, "setBackgroundColor", WidgetTheme.getBackgroundArgb(context, DEFAULT_BACKGROUND_ARGB));
+        int textColor = WidgetTheme.getTextColor(context, DEFAULT_BACKGROUND_ARGB);
+        views.setTextColor(R.id.widget_title, textColor);
+        views.setTextColor(R.id.capital_summary, textColor);
+        views.setTextColor(R.id.shortcuts_empty, WidgetTheme.getSecondaryTextColor(context, DEFAULT_BACKGROUND_ARGB));
 
         String[] summary = readCapitalSummary(context);
         if (summary == null) {
@@ -96,64 +106,41 @@ public class CapitalWidgetProvider extends AppWidgetProvider {
             views.setTextViewText(R.id.capital_summary, summary[0] + " — " + summary[1]);
         }
 
-        List<String[]> categories = readTopCategories(context);
-        if (categories.isEmpty()) {
-            RemoteViews empty = new RemoteViews(context.getPackageName(), R.layout.widget_capital_shortcuts_empty);
-            views.addView(R.id.shortcuts_container, empty);
-        } else {
-            for (String[] cat : categories) {
-                String categoryId = cat[0];
-                String icon = cat[1];
-                String name = cat[2];
-                String label = (icon == null || icon.isEmpty() ? "" : icon + " ") + name;
+        // The shortcut grid is a collection widget: the rows come from CapitalShortcutsService, and
+        // one PendingIntentTemplate serves them all, each row supplying which category through its
+        // fill-in intent. FLAG_MUTABLE (not FLAG_IMMUTABLE) because the system has to merge that
+        // fill-in into this template at click time — an immutable one would silently refuse.
+        Intent serviceIntent = new Intent(context, CapitalShortcutsService.class);
+        serviceIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+        // Data (not just extras) must differ per widget instance — see HabitsWidgetProvider.
+        serviceIntent.setData(Uri.parse(serviceIntent.toUri(Intent.URI_INTENT_SCHEME)));
+        views.setRemoteAdapter(R.id.shortcuts_grid, serviceIntent);
+        views.setEmptyView(R.id.shortcuts_grid, R.id.shortcuts_empty);
 
-                RemoteViews button = new RemoteViews(context.getPackageName(), R.layout.widget_capital_shortcut_item);
-                button.setTextViewText(R.id.shortcut_button, label);
-
-                Intent captureIntent = new Intent(context, CapitalWidgetProvider.class);
-                captureIntent.setAction(ACTION_QUICK_CAPTURE);
-                captureIntent.putExtra(EXTRA_CATEGORY_ID, categoryId);
-                captureIntent.putExtra(EXTRA_CATEGORY_LABEL, name);
-                // Distinct requestCode per category — see HabitsWidgetProvider's identical note
-                // on why PendingIntent.getBroadcast would otherwise reuse/collide across rows
-                // (Intent.filterEquals() ignores extras, so two intents targeting the same
-                // component need different requestCodes to stay distinct PendingIntents).
-                PendingIntent capturePendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    categoryId.hashCode(),
-                    captureIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                );
-                button.setOnClickPendingIntent(R.id.shortcut_button, capturePendingIntent);
-
-                views.addView(R.id.shortcuts_container, button);
-            }
-        }
-
-        // Explicit MainActivity intent, not getLaunchIntentForPackage() — see the identical note
-        // on every other widget provider in this app.
-        Intent launch = new Intent(context, MainActivity.class);
-        launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent launchPendingIntent = PendingIntent.getActivity(
-            context, appWidgetId, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        Intent captureIntent = new Intent(context, CapitalWidgetProvider.class);
+        captureIntent.setAction(ACTION_QUICK_CAPTURE);
+        PendingIntent captureTemplate = PendingIntent.getBroadcast(
+            context, 0, captureIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
         );
-        // Shortcut buttons bind their own, more specific PendingIntent above; that always takes
-        // precedence for a tap that lands on a button specifically, so this only fires for taps
-        // elsewhere on the card — same "tap card to open app" pattern as the other widgets.
-        views.setOnClickPendingIntent(R.id.widget_capital_root, launchPendingIntent);
+        views.setPendingIntentTemplate(R.id.shortcuts_grid, captureTemplate);
+
+        // A tap elsewhere on the card (the title, the summary) opens the app on the home screen,
+        // where the capital is shown; a tap on a shortcut goes through the grid's template above.
+        views.setOnClickPendingIntent(R.id.widget_capital_root, WidgetLinks.open(context, appWidgetId, WidgetLinks.ROUTE_HOME, false));
 
         return views;
     }
 
     /** ["امروز N ساعت", "جمع M ساعت"] in Persian digits, or null if the JS side hasn't written
-      * the summary yet or it's malformed. */
+      * the summary yet or it's malformed. If the summary was written on an earlier day, "today" is
+      * a new day nothing has been logged on yet, so it reads 0 rather than yesterday's figure. */
     private String[] readCapitalSummary(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_GROUP, Context.MODE_PRIVATE);
         String raw = prefs.getString(CAPITAL_SUMMARY_KEY, null);
         if (raw == null) return null;
         try {
             JSONObject json = new JSONObject(raw);
-            int today = json.getInt("investedHoursToday");
+            int today = writtenToday(json.optString("updatedAt", null)) ? json.getInt("investedHoursToday") : 0;
             int total = json.getInt("investedHoursTotal");
             return new String[] {
                 "امروز " + toPersianDigits(String.valueOf(today)) + " ساعت",
@@ -164,38 +151,23 @@ public class CapitalWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    /** [id, icon, name] for the user's most-used categories, most-used first — the exact same
-      * ranking query as QuickCaptureActivity.readTopCategories() (usage = count of Activity rows
-      * per category; ties fall back to oldest-created-first so a fresh install still gets a
-      * stable, deterministic list instead of an empty one), just capped at MAX_SHORTCUTS
-      * instead of 10. */
-    private List<String[]> readTopCategories(Context context) {
-        List<String[]> result = new ArrayList<>();
-        String dbPath = context.getFilesDir().getAbsolutePath() + "/dara.sqlite3";
-        SQLiteDatabase db = null;
+    /** True when the ISO timestamp (UTC, "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'") falls on the device's
+      * current local day. An unreadable timestamp counts as "today" — better a possibly-stale
+      * figure than a wrong zero. */
+    private static boolean writtenToday(String updatedAtIso) {
+        if (updatedAtIso == null) return true;
         try {
-            db = SQLiteDatabase.openDatabase(dbPath, null, SQLiteDatabase.OPEN_READONLY);
-            Cursor cursor = db.rawQuery(
-                "SELECT c.id, c.icon, c.name " +
-                "FROM Category c " +
-                "LEFT JOIN (SELECT categoryId, COUNT(*) as cnt FROM Activity WHERE userId = ? GROUP BY categoryId) u " +
-                "ON c.id = u.categoryId " +
-                "WHERE c.userId = ? AND c.deletedAt IS NULL " +
-                "ORDER BY COALESCE(u.cnt, 0) DESC, c.createdAt ASC " +
-                "LIMIT ?",
-                new String[] { LOCAL_USER_ID, LOCAL_USER_ID, String.valueOf(MAX_SHORTCUTS) }
-            );
-            while (cursor.moveToNext()) {
-                result.add(new String[] { cursor.getString(0), cursor.getString(1), cursor.getString(2) });
-            }
-            cursor.close();
+            SimpleDateFormat isoFmt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+            isoFmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+            Date written = isoFmt.parse(updatedAtIso);
+
+            Calendar a = Calendar.getInstance();
+            a.setTime(written);
+            Calendar b = Calendar.getInstance();
+            return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR);
         } catch (Exception e) {
-            // Database not created yet, or some other read issue — an empty list renders the
-            // widget's own "no categories" row, same fallback every other widget provider uses.
-        } finally {
-            if (db != null) db.close();
+            return true;
         }
-        return result;
     }
 
     /** Appends a pending capture into the same queue QuickCaptureActivity writes to — see

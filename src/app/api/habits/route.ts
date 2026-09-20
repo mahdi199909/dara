@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
@@ -12,7 +13,7 @@ const createSchema = z.object({
   icon: z.string().max(8).nullable().optional(),
   color: z.string().max(20).optional(),
   categoryId: z.string().nullable().optional(),
-  virtualAssetValuePerCheckIn: z.number().int().min(0).optional(),
+  virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
   // BJ Fogg "Tiny Habits" trial — see the isTrial doc comment on the Habit model.
   isTrial: z.boolean().optional(),
   cue: z.string().max(300).nullable().optional(),

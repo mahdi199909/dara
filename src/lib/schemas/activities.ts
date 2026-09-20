@@ -7,6 +7,7 @@
 // Math.min/Number for limit) — so there's deliberately no schema for that here either.
 // Same for the timer start/stop routes, which have no request body.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 
 export const createActivitySchema = z.object({
   title: z.string().min(1).max(200),
@@ -14,7 +15,7 @@ export const createActivitySchema = z.object({
   categoryId: z.string().optional(),
   taskId: z.string().optional(),
   projectId: z.string().optional(),
-  directCost: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
   durationMin: z.number().int().min(0).optional(),
   startTimerNow: z.boolean().optional(),
 });
@@ -26,7 +27,7 @@ export const updateActivitySchema = z.object({
   categoryId: z.string().nullable().optional(),
   taskId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
-  directCost: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
 });
 export type UpdateActivityInput = z.infer<typeof updateActivitySchema>;
 

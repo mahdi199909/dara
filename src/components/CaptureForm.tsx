@@ -8,7 +8,7 @@ import { notifySaved } from "@/lib/savedToast";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
 import TimePicker from "@/components/ui/TimePicker";
-import { PlusIcon } from "@/components/icons";
+import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
 import { CAPTURE_TYPES, CAPTURE_TYPE_LABELS, VALUE_TYPES, VALUE_TYPE_LABELS, type CaptureEntityType, type ValueType } from "@/lib/types";
 
 function refreshAllCaches() {
@@ -54,10 +54,7 @@ export default function CaptureForm({
   initialStart?: Date;
   initialEnd?: Date;
 }) {
-  const { categories, mutate: mutateCategories } = useCategories();
-  const [addingCategory, setAddingCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [addingCategoryError, setAddingCategoryError] = useState<string | null>(null);
+  const { categories } = useCategories();
 
   const [title, setTitle] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -70,9 +67,6 @@ export default function CaptureForm({
   const [valueType, setValueType] = useState<ValueType>("EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  // Which parent category's sub-categories are currently shown as a second chip row — a
-  // sub-category is only ever reachable by first picking its parent (see pickCategory).
-  const [expandedParentId, setExpandedParentId] = useState<string | null>(null);
   const [day, setDay] = useState(initialStart ?? new Date());
   const [startTime, setStartTime] = useState(initialStart ? hhmm(initialStart) : "");
   const [endTime, setEndTime] = useState(initialEnd ? hhmm(initialEnd) : "");
@@ -84,18 +78,8 @@ export default function CaptureForm({
   // A project's auto-generated category is shown regardless of the Expense/Asset tab — a
   // project can incur both (buying a part is an expense, time spent is an asset), so tying
   // its category to only one tab would make it impossible to log the other kind against it.
-  // Defends against duplicate rows sharing a name (e.g. a double-submitted "new category")
-  // showing up twice — first-seen wins, same order the list already comes in.
-  const seenCategoryNames = new Set<string>();
-  const visibleCategories = categories
-    .filter((c: any) => c.isActive && (c.projectId || c.valueType === valueType))
-    .filter((c: any) => {
-      if (seenCategoryNames.has(c.name)) return false;
-      seenCategoryNames.add(c.name);
-      return true;
-    });
-  const topLevelCategories = visibleCategories.filter((c: any) => !c.parentCategoryId);
-  const expandedSubCategories = expandedParentId ? visibleCategories.filter((c: any) => c.parentCategoryId === expandedParentId) : [];
+  // (CategoryChipPicker also hides duplicate rows sharing a name — see selectableCategories.)
+  const visibleCategories = selectableCategories(categories, (c: any) => !!(c.projectId || c.valueType === valueType));
 
   useEffect(() => {
     // Selected category no longer matches the visible (filtered) list — clear it rather
@@ -103,10 +87,6 @@ export default function CaptureForm({
     if (categoryId && !visibleCategories.some((c: any) => c.id === categoryId)) {
       setCategoryId(null);
       setProjectId(null);
-    }
-    // Same idea for an expanded sub-category row left over from before the tab switch.
-    if (expandedParentId && !visibleCategories.some((c: any) => c.id === expandedParentId)) {
-      setExpandedParentId(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valueType, categories]);
@@ -121,34 +101,6 @@ export default function CaptureForm({
     // the entry to that project, so it shows up in the project's own cash flow / cost view
     // without a second "which project" step.
     setProjectId(cat.projectId ?? null);
-  }
-
-  // A parent category (e.g. "سرمایه‌گذاری") is itself a usable choice — tapping it selects it
-  // AND reveals its sub-categories (e.g. طلا/دلار/رمزارز) as a second row; tapping one of those
-  // then overrides the selection to that sub-category. If the user never picks a sub-category,
-  // the parent itself is what gets submitted — no forced second step.
-  function pickTopLevelCategory(cat: any) {
-    pickCategory(cat);
-    const hasSubCategories = visibleCategories.some((c: any) => c.parentCategoryId === cat.id);
-    setExpandedParentId(hasSubCategories ? cat.id : null);
-  }
-
-  async function createCategoryInline() {
-    const trimmed = newCategoryName.trim();
-    if (!trimmed) return;
-    setAddingCategoryError(null);
-    try {
-      // Defaults to EXPENSE/NEUTRAL and a generic tag icon — a category made in passing here
-      // isn't worth interrupting the capture flow with the full kind/icon/color form; the user
-      // can fully configure it afterwards in تنظیمات ← دسته‌بندی‌ها (see CategoriesTab).
-      const { category } = await apiPost<{ category: any }>("/api/categories", { name: trimmed, valueType: "EXPENSE", icon: "🏷️" });
-      await mutateCategories();
-      pickCategory(category);
-      setNewCategoryName("");
-      setAddingCategory(false);
-    } catch (err) {
-      setAddingCategoryError(err instanceof ApiClientError ? err.message : "ساخت دسته‌بندی انجام نشد.");
-    }
   }
 
   function dayIso(d: Date) {
@@ -311,84 +263,12 @@ export default function CaptureForm({
 
       <div>
         <p className="text-xs text-muted mb-1.5">دسته‌بندی</p>
-        <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-          {topLevelCategories.map((c: any) => (
-            <button
-              type="button"
-              key={c.id}
-              onClick={() => pickTopLevelCategory(c)}
-              className={`shrink-0 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition ${
-                categoryId === c.id || expandedParentId === c.id ? "bg-accent text-on-accent border-accent" : "bg-surface text-ink border-line"
-              }`}
-            >
-              <span>{c.icon}</span>
-              {c.name}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setAddingCategory(true)}
-            className="shrink-0 flex items-center gap-1 text-sm px-3 py-1.5 rounded-full border border-dashed border-line text-muted hover:border-accent hover:text-accent transition"
-          >
-            <PlusIcon className="w-3.5 h-3.5" />
-            دسته‌بندی جدید
-          </button>
-        </div>
-        {expandedSubCategories.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 mt-1.5 pr-3 border-r-2 border-line">
-            {expandedSubCategories.map((c: any) => (
-              <button
-                type="button"
-                key={c.id}
-                onClick={() => pickCategory(c)}
-                className={`shrink-0 flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition ${
-                  categoryId === c.id ? "bg-accent-soft text-accent border-accent" : "bg-canvas text-muted border-line"
-                }`}
-              >
-                <span>{c.icon}</span>
-                {c.name}
-              </button>
-            ))}
-          </div>
-        )}
-        {visibleCategories.length === 0 && !addingCategory && (
-          <p className="text-xs text-muted mt-1">دسته‌بندی‌ای برای «{VALUE_TYPE_LABELS[valueType]}» فعال نیست.</p>
-        )}
-        {addingCategory && (
-          <div className="mt-2 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <input
-                autoFocus
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    createCategoryInline();
-                  }
-                }}
-                placeholder="نام دسته‌بندی جدید"
-                className="bg-surface flex-1 rounded-xl border border-line px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
-              />
-              <button type="button" onClick={createCategoryInline} className="shrink-0 rounded-xl bg-accent text-on-accent px-3 py-2 text-xs font-medium">
-                ثبت
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingCategory(false);
-                  setNewCategoryName("");
-                  setAddingCategoryError(null);
-                }}
-                className="shrink-0 text-xs text-muted px-1"
-              >
-                انصراف
-              </button>
-            </div>
-            <p className="text-[11px] text-muted">به‌صورت پیش‌فرض «هزینه» ثبت می‌شود — تنظیمات کامل‌تر از تنظیمات ← دسته‌بندی‌ها.</p>
-            {addingCategoryError && <p className="text-xs text-waste">{addingCategoryError}</p>}
-          </div>
-        )}
+        <CategoryChipPicker
+          categories={visibleCategories}
+          selectedId={categoryId}
+          onPick={(c) => c && pickCategory(c)}
+          emptyHint={`دسته‌بندی‌ای برای «${VALUE_TYPE_LABELS[valueType]}» فعال نیست.`}
+        />
       </div>
 
       <div>

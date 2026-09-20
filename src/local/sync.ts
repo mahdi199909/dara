@@ -7,8 +7,9 @@
 // Uses raw fetch() against REMOTE_API_BASE, like src/lib/remoteAuth.ts — never apiClient.ts,
 // whose fetcher/apiPost/etc. always route to the local dispatcher on native regardless of URL.
 import { REMOTE_API_BASE } from "@/lib/remoteAuth";
-import { SYNC_TABLES, TOMBSTONE_TABLES, type SyncTableConfig } from "@/lib/syncTables";
+import { SELF_REFERENCE_COLUMN, SYNC_TABLES, TOMBSTONE_TABLES, type SyncTableConfig } from "@/lib/syncTables";
 import { toBoolean, toIsoDate } from "@/lib/syncNormalize";
+import { buildBatches } from "@/lib/syncBatching";
 import type { ProfilePayload } from "@/lib/profileSync";
 import { LOCAL_USER_ID } from "./localUser";
 import type { LocalDb } from "./db";
@@ -120,34 +121,6 @@ function collectChangedRows(db: LocalDb, config: SyncTableConfig, since: string 
   const selfRef = SELF_REFERENCE_COLUMN[config.table];
   if (selfRef) wire.sort((a, b) => Number(a[selfRef] != null) - Number(b[selfRef] != null));
   return wire;
-}
-
-const SELF_REFERENCE_COLUMN: Record<string, string> = { Category: "parentCategoryId", Event: "recurrenceParentId" };
-
-interface Batch {
-  tables: Record<string, Row[]>;
-  bytes: number;
-  rows: number;
-}
-
-function buildBatches(perTable: Array<{ table: string; rows: Row[] }>, maxBytes: number, maxRows: number): Batch[] {
-  const encoder = new TextEncoder();
-  const batches: Batch[] = [];
-  let current: Batch = { tables: {}, bytes: 0, rows: 0 };
-  for (const { table, rows } of perTable) {
-    for (const row of rows) {
-      const size = encoder.encode(JSON.stringify(row)).length + 2;
-      if (current.rows > 0 && (current.bytes + size > maxBytes || current.rows + 1 > maxRows)) {
-        batches.push(current);
-        current = { tables: {}, bytes: 0, rows: 0 };
-      }
-      (current.tables[table] ??= []).push(row);
-      current.bytes += size;
-      current.rows++;
-    }
-  }
-  if (current.rows > 0) batches.push(current);
-  return batches;
 }
 
 export interface RowIssue {
@@ -284,24 +257,45 @@ interface RowFailure {
   reason: string;
 }
 
+const isSet = (v: unknown) => v === true || v === 1 || v === "1" || v === "true";
+
+/**
+ * A reminder that already fired (`notified`) or was dismissed on this device stays that way when
+ * the server's newer copy of the SAME reminder — same time — arrives. Both flags only ever move
+ * one way; letting a stale "not fired yet" copy win would re-fire every past reminder as a fresh
+ * notification (this is exactly what the first sync after Reminder gained an updatedAt would do:
+ * the server's rows are stamped with the upgrade time, newer than anything on the phone). A
+ * changed `remindAt` means the reminder was rescheduled, so the incoming flags apply as they are
+ * — it is due again. When the merge keeps a flag the server doesn't have, the row is re-stamped
+ * so the flag travels back on the next push instead of the web firing it a second time.
+ */
+function keepFiredReminderFlags(local: Row, incoming: Row): Row {
+  if (new Date(String(local.remindAt)).getTime() !== new Date(String(incoming.remindAt)).getTime()) return incoming;
+  const notified = isSet(local.notified) || isSet(incoming.notified);
+  const dismissed = isSet(local.dismissed) || isSet(incoming.dismissed);
+  const changed = notified !== isSet(incoming.notified) || dismissed !== isSet(incoming.dismissed);
+  return { ...incoming, notified: notified ? 1 : 0, dismissed: dismissed ? 1 : 0, ...(changed ? { updatedAt: new Date().toISOString() } : {}) };
+}
+
 /** Writes one pulled row into the local table, INSERTing if it's new or UPDATEing if the
  * incoming row is strictly newer — the pull-side mirror of the push route's own upsert-if-newer
- * rule. Tables with no updatedAt (append-only: AssetTransaction/EventCompletion/Reminder) only
- * ever insert; an existing row is left alone since there's no timestamp to compare. Throws on a
- * genuine failure (most likely a not-yet-inserted FK target from later in this same batch) —
+ * rule. Tables with no updatedAt (append-only: AssetTransaction/EventCompletion/CapitalSnapshot)
+ * only ever insert; an existing row is left alone since there's no timestamp to compare. Throws
+ * on a genuine failure (most likely a not-yet-inserted FK target from later in this same batch) —
  * applyRowsWithRetry decides how to react to that. */
 function upsertRowIfNewer(db: LocalDb, table: string, row: Row, hasUpdatedAt: boolean): boolean {
-  const columns = Object.keys(row);
   const existing = hasUpdatedAt
-    ? db.get<{ updatedAt: string }>(`SELECT "updatedAt" FROM "${table}" WHERE "id" = ?`, [row.id])
+    ? db.get<Row>(`SELECT ${table === "Reminder" ? "*" : '"updatedAt"'} FROM "${table}" WHERE "id" = ?`, [row.id])
     : db.get<{ id: string }>(`SELECT "id" FROM "${table}" WHERE "id" = ?`, [row.id]);
 
   if (existing) {
     if (!hasUpdatedAt) return false;
-    if (new Date((existing as { updatedAt: string }).updatedAt) >= new Date(row.updatedAt as string)) return false;
-    const nonId = columns.filter((c) => c !== "id");
-    db.run(`UPDATE "${table}" SET ${nonId.map((c) => `"${c}" = ?`).join(",")} WHERE "id" = ?`, [...nonId.map((c) => row[c]), row.id]);
+    if (new Date((existing as Row).updatedAt as string) >= new Date(row.updatedAt as string)) return false;
+    const next = table === "Reminder" ? keepFiredReminderFlags(existing as Row, row) : row;
+    const nonId = Object.keys(next).filter((c) => c !== "id");
+    db.run(`UPDATE "${table}" SET ${nonId.map((c) => `"${c}" = ?`).join(",")} WHERE "id" = ?`, [...nonId.map((c) => next[c]), row.id]);
   } else {
+    const columns = Object.keys(row);
     db.run(`INSERT INTO "${table}" (${columns.map((c) => `"${c}"`).join(",")}) VALUES (${columns.map(() => "?").join(",")})`, columns.map((c) => row[c]));
   }
   return true;

@@ -1,9 +1,6 @@
 package ir.mganic.dara;
 
-import android.appwidget.AppWidgetManager;
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,22 +11,24 @@ import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
 
-// Home-screen widgets (TodayEventsWidgetProvider, HabitsWidgetProvider) read the app's SQLite
-// file directly and otherwise only repaint on Android's platform-enforced updatePeriodMillis
-// floor of 30 minutes (see the widget_*_info.xml files) or when first placed. That's much too
-// slow to feel "live" after the user adds an event or checks off a habit inside the app. The
-// user leaving the app (onPause) is the natural, reliable moment to force a repaint instead —
-// nothing native-side needs to know WHAT changed, just that it might have.
+// Home-screen widgets (TodayEventsWidgetProvider, HabitsWidgetProvider, CapitalWidgetProvider)
+// read the app's SQLite file directly, so they only show what has been saved to that file. They are
+// repainted (WidgetRefresh.refreshAll) in three situations:
 //
-// One subtlety: this app's on-device database (sql.js running inside the WebView — see
-// src/local/drivers/browserSqlJs.ts) debounces its flush to the real dara.sqlite3 file by
-// ~300ms after the last write, with a visibilitychange/pagehide safety-flush as backup. That JS
-// activity isn't synchronized with this Java onPause() in any hard way, so a widget refresh
-// broadcast sent the instant onPause() fires could still race a not-yet-flushed write and read
-// stale data. Broadcasting twice — once immediately (covers the common case where nothing was
-// pending, so there's nothing to wait for) and once after a short delay (covers the case where a
-// write was in flight) — is a pragmatic way to make that race very unlikely to matter in
-// practice, without wiring up a JS-to-native bridge call just to confirm a flush landed.
+// 1. The app tells us its database was just saved — the AndroidWidgets.refresh() bridge below,
+//    called from src/local/widgetRefresh.ts after every save. This is what keeps the widgets
+//    current while the app is open and when a sync pulls in changes.
+// 2. The user leaves the app (onPause) — a backstop for anything the bridge could not cover.
+// 3. The system's own timer (updatePeriodMillis, 30 minutes at the platform floor) and the
+//    date/time/time-zone changes each provider listens for.
+//
+// One subtlety for (2): the on-device database (sql.js inside the WebView — see
+// src/local/drivers/browserSqlJs.ts) debounces its flush to the real dara.sqlite3 file by ~300ms
+// after the last write, with a visibilitychange/pagehide safety-flush as backup. That JS activity is
+// not synchronized with this Java onPause() in any hard way, so a refresh broadcast sent the
+// instant onPause() fires could still race a not-yet-flushed write. Broadcasting twice — once
+// immediately and once after a short delay — makes that race very unlikely to matter, without
+// having to wait on the WebView.
 public class MainActivity extends BridgeActivity {
 
     private static final long DELAYED_WIDGET_REFRESH_MS = 800;
@@ -42,50 +41,42 @@ public class MainActivity extends BridgeActivity {
         // src/app/print/report/page.tsx), bridging to Android's real PrintManager so "چاپ /
         // ذخیره PDF" produces the system print dialog, which itself offers "Save as PDF".
         getBridge().getWebView().addJavascriptInterface(new WebPrintBridge(this), "AndroidPrint");
+        // window.AndroidWidgets.refresh(): "the database was just saved, repaint the widgets".
+        getBridge().getWebView().addJavascriptInterface(new WidgetBridge(getApplicationContext()), "AndroidWidgets");
     }
-
-    // QuickCaptureWidgetProvider used to be excluded here (a static "tap to open the capture
-    // form" button with no dynamic content) — but its background now reads WidgetTheme same as
-    // the other three, so a theme change made in Settings needs it refreshed too.
-    private static final Class<?>[] REFRESHABLE_WIDGET_PROVIDERS = {
-        TodayEventsWidgetProvider.class,
-        HabitsWidgetProvider.class,
-        CapitalWidgetProvider.class,
-        QuickCaptureWidgetProvider.class,
-    };
 
     @Override
     public void onPause() {
         super.onPause();
         final Context appContext = getApplicationContext();
-        refreshWidgets(appContext);
+        WidgetRefresh.refreshAll(appContext);
         // Plain anonymous Runnable, not a lambda — no compileOptions/sourceCompatibility block
-        // sets a Java 8+ language level anywhere in this module's Gradle files, and this is the
-        // only place in the whole native codebase a lambda was ever attempted.
+        // sets a Java 8+ language level anywhere in this module's Gradle files.
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
-                refreshWidgets(appContext);
+                WidgetRefresh.refreshAll(appContext);
             }
         }, DELAYED_WIDGET_REFRESH_MS);
     }
 
-    private static void refreshWidgets(Context context) {
-        AppWidgetManager manager = AppWidgetManager.getInstance(context);
-        for (Class<?> provider : REFRESHABLE_WIDGET_PROVIDERS) {
-            int[] ids = manager.getAppWidgetIds(new ComponentName(context, provider));
-            if (ids.length == 0) continue; // provider has no widget currently placed — nothing to do
+    // addJavascriptInterface() methods are always invoked on a WebView background thread, never
+    // the UI thread. Sending a broadcast is fine from any thread.
+    private static class WidgetBridge {
+        private final Context appContext;
 
-            Intent intent = new Intent(context, provider);
-            intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
-            context.sendBroadcast(intent);
+        WidgetBridge(Context appContext) {
+            this.appContext = appContext;
+        }
+
+        @JavascriptInterface
+        public void refresh() {
+            WidgetRefresh.refreshAll(appContext);
         }
     }
 
-    // addJavascriptInterface() methods are always invoked on a WebView background thread, never
-    // the UI thread — every real call here has to hop back via runOnUiThread() before touching
-    // PrintManager or the WebView itself.
+    // Every real call here has to hop back via runOnUiThread() before touching PrintManager or the
+    // WebView itself.
     private static class WebPrintBridge {
         private final MainActivity activity;
 

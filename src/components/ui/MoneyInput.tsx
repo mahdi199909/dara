@@ -2,7 +2,7 @@
 
 import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
-import { toAsciiDigits, toPersianDigits } from "@/lib/money";
+import { MAX_MONEY_TOMAN, toAsciiDigits, toPersianDigits } from "@/lib/money";
 import { CURRENCY_UNIT_LABELS } from "@/lib/types";
 
 function groupThousands(intPart: string): string {
@@ -122,12 +122,15 @@ export default function MoneyInput({
     const digitsBefore = countDigitsBefore(nativeValueAscii, nativeCursor);
 
     const newRaw = sanitize(el.value);
+    const displayNum = newRaw === "" || newRaw === "." ? 0 : parseFloat(newRaw);
+    // A keystroke that would push the amount past what the app stores (MAX_MONEY_TOMAN) is
+    // ignored; without this, a long enough run of digits turns into "1e+21" downstream.
+    if (toToman(displayNum) > MAX_MONEY_TOMAN) return;
     setRaw(newRaw);
 
     const newDisplay = formatTyped(newRaw);
     cursorFix.current = Math.min(positionAfterNDigits(newDisplay, digitsBefore), newDisplay.length);
 
-    const displayNum = newRaw === "" || newRaw === "." ? 0 : parseFloat(newRaw);
     onChange(displayNum ? String(toToman(displayNum)) : "");
   }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
@@ -8,7 +9,7 @@ import { TRANSACTION_TYPES } from "@/lib/types";
 
 const createSchema = z.object({
   type: z.enum(TRANSACTION_TYPES),
-  amount: z.number().int().positive(),
+  amount: tomanInt().positive(),
   date: z.string().datetime().optional(),
   description: z.string().max(500).optional(),
   accountId: z.string(),

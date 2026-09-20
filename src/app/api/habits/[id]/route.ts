@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
@@ -11,7 +12,7 @@ const updateSchema = z.object({
   icon: z.string().max(8).nullable().optional(),
   color: z.string().max(20).optional(),
   categoryId: z.string().nullable().optional(),
-  virtualAssetValuePerCheckIn: z.number().int().min(0).optional(),
+  virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
   isActive: z.boolean().optional(),
   // isTrial: false promotes a trial habit to a permanent one (see the Habit model doc).
   isTrial: z.boolean().optional(),

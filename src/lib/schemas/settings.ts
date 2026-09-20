@@ -1,6 +1,7 @@
 // Shared between src/app/api/settings/route.ts (web) and src/local/repositories/settings.ts
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { CURRENCY_UNITS } from "@/lib/types";
 
 export const updateSettingsSchema = z.object({
@@ -9,9 +10,9 @@ export const updateSettingsSchema = z.object({
   currency: z.string().max(10).optional(),
   currencyDisplayUnit: z.enum(CURRENCY_UNITS).optional(),
   calendarType: z.enum(["jalali", "gregorian"]).optional(),
-  monthlyIncome: z.number().int().min(0).nullable().optional(),
+  monthlyIncome: tomanInt().min(0).nullable().optional(),
   workingHoursMonth: z.number().int().min(1).max(744).nullable().optional(),
-  hourlyValueOverride: z.number().int().min(0).nullable().optional(),
+  hourlyValueOverride: tomanInt().min(0).nullable().optional(),
   dashboardCardPrefs: z.record(z.boolean()).optional(),
   dailyMomentEnabled: z.boolean().optional(),
   wakeHour: z.number().int().min(0).max(23).optional(),

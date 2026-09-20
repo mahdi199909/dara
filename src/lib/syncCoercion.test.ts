@@ -29,9 +29,20 @@ describe("coerceSyncRow — what a phone's SQLite rows look like to Prisma", () 
     expect(coerceSyncRow("category", { id: "c", name: "x", sortOrder: 1.5, createdAt: T, updatedAt: T }).error).toMatch(/sortOrder.*integer/);
   });
 
-  it("says plainly when an amount is larger than the server's 32-bit integer column allows", () => {
-    const { error } = coerceSyncRow("asset", { id: "a", name: "خانه", purchasePrice: 5_000_000_000, purchaseDate: T, currentValue: 1, createdAt: T, updatedAt: T });
-    expect(error).toMatch(/purchasePrice.*larger than the server allows/);
+  it("accepts amounts far beyond 2,147,483,647 Toman — money columns are double precision on the server", () => {
+    const { data, error } = coerceSyncRow("asset", { id: "a", name: "خانه", purchasePrice: 5_000_000_000, purchaseDate: T, currentValue: 12_345_678_901_234, createdAt: T, updatedAt: T });
+    expect(error).toBeUndefined();
+    expect(data.purchasePrice).toBe(5_000_000_000);
+    expect(data.currentValue).toBe(12_345_678_901_234);
+  });
+
+  it("still says plainly when a genuinely 32-bit integer column (not money) is given something larger", () => {
+    const { error } = coerceSyncRow("activity", { id: "a", title: "t", totalDurationMin: 5_000_000_000, createdAt: T, updatedAt: T });
+    expect(error).toMatch(/totalDurationMin.*larger than the server allows/);
+  });
+
+  it("refuses a money value that isn't a finite number", () => {
+    expect(coerceSyncRow("asset", { id: "a", name: "x", purchasePrice: "lots", purchaseDate: T, currentValue: 1, createdAt: T, updatedAt: T }).error).toMatch(/purchasePrice.*not a number/);
   });
 
   it("drops columns the server model doesn't have instead of failing the whole row", () => {

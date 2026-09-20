@@ -17,6 +17,10 @@ import { REMOTE_API_BASE } from "@/lib/remoteAuth";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
 import type { ParsedIcsEvent } from "@/lib/icsParser";
 import { Preferences } from "@capacitor/preferences";
+import { TABLE_LABELS_FA } from "@/lib/backupLabels";
+import WebBackupTab from "@/components/settings/WebBackupTab";
+import { pickWidgetTextTone, widgetTextColor } from "@/lib/widgetContrast";
+import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
 
 const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
@@ -25,8 +29,10 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: "system", label: "مطابق سیستم" },
 ];
 
-// Only shown once isNativePlatform() resolves true (see BackupTab) — a plain web session has
-// no on-device database to export and no OS share sheet to hand a file to.
+// "widgets" is only shown once isNativePlatform() resolves true — a plain web session has no
+// home-screen widgets. "backup" exists on both: on the phone it exports/imports the on-device
+// database through the OS share sheet (BackupTab); on the web it downloads/uploads a file of the
+// account's server-side data (WebBackupTab). Both read and write the same file format.
 const TABS = [
   { key: "personal", label: "شخصی" },
   { key: "financial", label: "مالی" },
@@ -64,7 +70,7 @@ export default function SettingsPage() {
     setNative(Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()));
   }, []);
 
-  const visibleTabs = native ? TABS : TABS.filter((t) => t.key !== "backup" && t.key !== "widgets");
+  const visibleTabs = native ? TABS : TABS.filter((t) => t.key !== "widgets");
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -88,7 +94,7 @@ export default function SettingsPage() {
       {tab === "financial" && <FinancialTab />}
       {tab === "categories" && <CategoriesTab />}
       {tab === "history" && <HistoryTab />}
-      {tab === "backup" && <BackupTab />}
+      {tab === "backup" && (native ? <BackupTab /> : <WebBackupTab />)}
       {tab === "widgets" && <WidgetsTab />}
     </div>
   );
@@ -939,30 +945,6 @@ function HistoryTab() {
 // pre-import confirmation and the post-import result summary below. Same convention as
 // AUDIT_ACTION_LABELS above — an unrecognized key (shouldn't happen, but a future table this
 // build doesn't have a label for yet) falls back to the raw table name rather than crashing.
-const TABLE_LABELS_FA: Partial<Record<DataExportTable, string>> = {
-  User: "کاربر",
-  Settings: "تنظیمات",
-  Project: "پروژه",
-  Category: "دسته‌بندی",
-  Task: "کار",
-  Habit: "عادت",
-  Activity: "فعالیت",
-  HabitCheckIn: "چک‌این عادت",
-  TimeEntry: "بازه زمانی",
-  FinanceAccount: "حساب مالی",
-  Asset: "دارایی",
-  AssetTransaction: "تراکنش دارایی",
-  InstallmentPlan: "طرح قسط",
-  Installment: "قسط",
-  Event: "رویداد",
-  EventCompletion: "تکمیل رویداد",
-  VirtualAssetEntry: "دارایی مجازی",
-  Transaction: "تراکنش مالی",
-  Reminder: "یادآور",
-  AuditLog: "سابقه فعالیت",
-  Notification: "اعلان",
-};
-
 /**
  * Native-only — the live view of the local<->server sync (src/local/syncRunner.ts): which account
  * this phone is linked to, when data last went up and came down, whether a sync is running right
@@ -1429,12 +1411,13 @@ const WIDGET_OPACITY_KEY = "widget_theme_opacity";
 const DEFAULT_WIDGET_COLOR = "#0e5f54";
 const DEFAULT_WIDGET_OPACITY = 85;
 
-// Background-only theming for the four home-screen widgets (see the four *WidgetProvider.java
-// files) — a solid color behind a bit of transparency, not a real backdrop blur: classic
-// RemoteViews (what Android widgets render through) has no API for blurring whatever sits behind
-// the widget on the launcher, only for the widget's own background color/alpha. Text/icon colors
-// inside the widgets are untouched by this — pick a light-ish color to keep them readable, the
-// same tradeoff every widget-color-customizer app leaves to the user rather than guessing at it.
+// Background theming for the four home-screen widgets (see the four *WidgetProvider.java files)
+// — a solid color behind a bit of transparency, not a real backdrop blur: classic RemoteViews
+// (what Android widgets render through) has no API for blurring whatever sits behind the widget on
+// the launcher, only for the widget's own background color/alpha. The text on top picks itself: a
+// neutral white or near-black, whichever stays readable on the chosen color (and, for a
+// see-through background, over any wallpaper) — WidgetTheme.java implements the same rule as
+// pickWidgetTextTone (src/lib/widgetContrast.ts), which also drives the preview below.
 function WidgetsTab() {
   const [color, setColor] = useState(DEFAULT_WIDGET_COLOR);
   const [opacity, setOpacity] = useState(DEFAULT_WIDGET_OPACITY);
@@ -1461,6 +1444,7 @@ function WidgetsTab() {
     setCustomized(true);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    requestWidgetRefresh(); // repaint the placed widgets now instead of at the next background/timer tick
   }
 
   async function resetToDefault() {
@@ -1468,7 +1452,12 @@ function WidgetsTab() {
     setColor(DEFAULT_WIDGET_COLOR);
     setOpacity(DEFAULT_WIDGET_OPACITY);
     setCustomized(false);
+    requestWidgetRefresh();
   }
+
+  // The phone's own light/dark mode only breaks a tie for a fully transparent widget.
+  const prefersDark = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const previewTextColor = widgetTextColor(pickWidgetTextTone(color, opacity, prefersDark));
 
   return (
     <Card className="p-5 space-y-4">
@@ -1508,11 +1497,8 @@ function WidgetsTab() {
         />
       </div>
 
-      <div
-        className="rounded-2xl border border-line h-20 flex items-center justify-center text-xs text-muted"
-        style={{ backgroundColor: color, opacity: opacity / 100 }}
-      >
-        پیش‌نمایش تقریبی
+      <div className="rounded-2xl border border-line h-20 flex items-center justify-center text-xs font-medium" style={{ backgroundColor: `${color}${Math.round((opacity / 100) * 255).toString(16).padStart(2, "0")}`, color: previewTextColor }}>
+        پیش‌نمایش تقریبی — رنگ نوشته خودکار انتخاب می‌شود
       </div>
 
       <div className="flex gap-2">

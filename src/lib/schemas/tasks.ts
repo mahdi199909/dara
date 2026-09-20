@@ -1,6 +1,7 @@
 // Shared between src/app/api/tasks/**/route.ts (web) and src/local/repositories/tasks.ts
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
 
 export const createTaskSchema = z.object({
@@ -10,10 +11,10 @@ export const createTaskSchema = z.object({
   dueDate: z.string().datetime().optional(),
   categoryId: z.string().optional(),
   projectId: z.string().optional(),
-  estimatedCost: z.number().int().min(0).optional(),
+  estimatedCost: tomanInt().min(0).optional(),
   valueType: z.enum(VALUE_TYPES).optional(),
-  directCost: z.number().int().min(0).optional(),
-  incomeAmount: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
+  incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
 });
@@ -26,10 +27,10 @@ export const updateTaskSchema = z.object({
   dueDate: z.string().datetime().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
-  estimatedCost: z.number().int().min(0).nullable().optional(),
+  estimatedCost: tomanInt().min(0).nullable().optional(),
   valueType: z.enum(VALUE_TYPES).optional(),
-  directCost: z.number().int().min(0).optional(),
-  incomeAmount: z.number().int().min(0).optional(),
+  directCost: tomanInt().min(0).optional(),
+  incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
 });

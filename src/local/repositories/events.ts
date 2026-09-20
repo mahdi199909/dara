@@ -6,10 +6,11 @@
 // dispatcher (Phase 3) can return byte-identical shapes regardless of whether it's backed by
 // this repository or the real HTTP routes.
 //
-// Deliberately NOT ported yet: syncEventDirectCostTransaction / syncEventIncomeTransaction (see
-// @/lib/directCostSync). Those need a local Transaction repository, which is separate parallel
-// work — porting them here would mean half-building another resource before this vertical
-// slice is done. See the inline "Deferred" comments in createEvent/updateEvent below.
+// Like the web routes, creating/updating an event also keeps its linked expense/income
+// Transaction in step (syncEventDirectCostTransaction / syncEventIncomeTransaction — see
+// ../directCostSync). They used to be skipped here as "deferred", long after the local Transaction
+// repository existed, so an event with a cost logged on the phone produced no expense while the
+// same event logged on the web did.
 //
 // Note on fidelity (see the web routes — these asymmetries are reproduced on purpose, not
 // fixed, matching the exact shapes the real routes return):
@@ -30,6 +31,7 @@ import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
 import { deleteRowsWithTombstones } from "../tombstones";
+import { syncEventDirectCostTransaction, syncEventIncomeTransaction } from "../directCostSync";
 import { scheduleReminderNotification, rescheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
 
 interface EventRow {
@@ -164,9 +166,9 @@ function insertReminderRow(db: LocalDb, userId: string, event: { id: string; tit
   const remindAt = new Date(new Date(event.startAt).getTime() - offsetMinutes * 60000).toISOString();
 
   db.run(
-    `INSERT INTO "Reminder" ("id","userId","targetType","eventId","installmentId","title","offsetMinutes","remindAt","notified","dismissed","createdAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, userId, "EVENT", event.id, null, `یادآوری: ${event.title}`, offsetMinutes, remindAt, 0, 0, now()]
+    `INSERT INTO "Reminder" ("id","userId","targetType","eventId","installmentId","title","offsetMinutes","remindAt","notified","dismissed","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, userId, "EVENT", event.id, null, `یادآوری: ${event.title}`, offsetMinutes, remindAt, 0, 0, now(), now()]
   );
 
   const reminder = toReminder(db.get<ReminderRow>(`SELECT * FROM "Reminder" WHERE "id" = ?`, [id])!);
@@ -276,9 +278,8 @@ export function createEvent(db: LocalDb, userId: string, input: CreateEventInput
 
   const row = db.get<EventRow>(`SELECT * FROM "Event" WHERE "id" = ?`, [id])!;
 
-  // Deferred (see file header): syncEventDirectCostTransaction(id) / syncEventIncomeTransaction(id)
-  // would run here when row.directCost > 0 / row.incomeAmount > 0 — needs the local Transaction
-  // repository (parallel work).
+  if (row.directCost > 0) syncEventDirectCostTransaction(db, id);
+  if (row.incomeAmount > 0) syncEventIncomeTransaction(db, id);
 
   if (input.reminderOffsets?.length) {
     for (const offsetMinutes of input.reminderOffsets) {
@@ -324,16 +325,15 @@ export function updateEvent(db: LocalDb, userId: string, id: string, input: Upda
 
   const row = db.get<EventRow>(`SELECT * FROM "Event" WHERE "id" = ?`, [id])!;
 
-  // Deferred (see file header): syncEventDirectCostTransaction(id) / syncEventIncomeTransaction(id)
-  // would run here when input.directCost / input.incomeAmount !== undefined — needs the local
-  // Transaction repository (parallel work).
+  if (input.directCost !== undefined) syncEventDirectCostTransaction(db, id);
+  if (input.incomeAmount !== undefined) syncEventIncomeTransaction(db, id);
 
   if (input.startAt !== undefined) {
     const reminders = db.all<ReminderRow>(`SELECT * FROM "Reminder" WHERE "eventId" = ?`, [id]);
     const newStartMs = new Date(row.startAt).getTime();
     for (const r of reminders) {
       const remindAt = new Date(newStartMs - r.offsetMinutes * 60000).toISOString();
-      db.run(`UPDATE "Reminder" SET "remindAt" = ?, "notified" = 0 WHERE "id" = ?`, [remindAt, r.id]);
+      db.run(`UPDATE "Reminder" SET "remindAt" = ?, "notified" = 0, "updatedAt" = ? WHERE "id" = ?`, [remindAt, now(), r.id]);
       // The already-scheduled native notification is still sitting at the OLD time — Android's
       // own alarm scheduler has no idea the row changed, so it must be explicitly moved too.
       rescheduleReminderNotification({

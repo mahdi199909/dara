@@ -2,11 +2,9 @@
 // verbatim from there — only the data access changes (raw SQL instead of Prisma), plus the
 // `db` handle every function now needs as its first parameter.
 //
-// Deliberately NOT ported: syncActivityDirectCostTransaction (re-exported from there as
-// syncDirectCostTransaction). It needs a local Transaction repository — src/local/repositories/
-// transactions.ts now covers plain Transaction CRUD, but the sync side-effect itself is out of
-// scope for this pass; see the deferral comments in src/local/repositories/activities.ts at the
-// two call sites (create/update) the web routes would have made it from.
+// syncActivityDirectCostTransaction (re-exported from there as syncDirectCostTransaction) lives
+// in ./directCostSync and is called from src/local/repositories/activities.ts at the two places
+// (create/update) the web routes call it from.
 //
 // Porting note on startTimer: the web version force-stops running timers in two passes
 // (an updateMany, then a re-query for rows still missing a durationMin) because Prisma's

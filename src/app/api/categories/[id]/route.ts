@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
@@ -14,7 +15,7 @@ const updateSchema = z.object({
   valueType: z.enum(VALUE_TYPES).optional(),
   isActive: z.boolean().optional(),
   generatesVirtualAsset: z.boolean().optional(),
-  virtualAssetValuePerHour: z.number().int().min(0).nullable().optional(),
+  virtualAssetValuePerHour: tomanInt().min(0).nullable().optional(),
   parentCategoryId: z.string().min(1).nullable().optional(),
 });
 

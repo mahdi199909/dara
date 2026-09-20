@@ -1,6 +1,7 @@
 // Shared between src/app/api/categories/**/route.ts (web) and src/local/repositories/categories.ts
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { CATEGORY_KINDS, VALUE_TYPES } from "@/lib/types";
 
 export const createCategorySchema = z.object({
@@ -10,7 +11,7 @@ export const createCategorySchema = z.object({
   kind: z.enum(CATEGORY_KINDS).optional(),
   valueType: z.enum(VALUE_TYPES).optional(),
   generatesVirtualAsset: z.boolean().optional(),
-  virtualAssetValuePerHour: z.number().int().min(0).optional(),
+  virtualAssetValuePerHour: tomanInt().min(0).optional(),
   // Must already exist and belong to the same user — checked server/repository-side, since a
   // Zod schema can't reach the database. One level only: a sub-category can't itself be given a
   // parentCategoryId that already has a parent (also checked there, not here).
@@ -26,7 +27,7 @@ export const updateCategorySchema = z.object({
   valueType: z.enum(VALUE_TYPES).optional(),
   isActive: z.boolean().optional(),
   generatesVirtualAsset: z.boolean().optional(),
-  virtualAssetValuePerHour: z.number().int().min(0).nullable().optional(),
+  virtualAssetValuePerHour: tomanInt().min(0).nullable().optional(),
   parentCategoryId: z.string().min(1).nullable().optional(),
 });
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

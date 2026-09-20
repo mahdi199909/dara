@@ -117,7 +117,13 @@ export interface LoadedBrowserSqliteDriver {
   recoveredFromBackup: boolean;
 }
 
-export async function loadBrowserSqliteDriver(): Promise<LoadedBrowserSqliteDriver> {
+export interface BrowserSqliteDriverOptions {
+  /** Called each time the database has been written to disk. The home-screen widgets read that
+   * file, so this is the moment they can show what just changed (see src/local/widgetRefresh.ts). */
+  onFlushed?: () => void;
+}
+
+export async function loadBrowserSqliteDriver(options: BrowserSqliteDriverOptions = {}): Promise<LoadedBrowserSqliteDriver> {
   const wasmBinary = await fetchWasmBinary();
   const SQL: SqlJsStatic = await initSqlJs({ wasmBinary });
 
@@ -168,7 +174,22 @@ export async function loadBrowserSqliteDriver(): Promise<LoadedBrowserSqliteDriv
     }
     if (!dirty) return pendingWrite;
     dirty = false;
-    pendingWrite = pendingWrite.then(() => writePersistedBytes(db.export()));
+    // An earlier write that failed must not stop every later one: chaining straight onto a
+    // rejected promise would skip this write silently, forever.
+    const write = pendingWrite.catch(() => undefined).then(() => writePersistedBytes(db.export()));
+    pendingWrite = write.then(
+      () => {
+        try {
+          options.onFlushed?.();
+        } catch (err) {
+          console.error("onFlushed handler failed", err);
+        }
+      },
+      (err) => {
+        dirty = true; // try again with the next flush
+        throw err;
+      }
+    );
     return pendingWrite;
   }
 

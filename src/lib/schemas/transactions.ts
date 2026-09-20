@@ -2,11 +2,12 @@
 // src/local/repositories/transactions.ts (on-device) so both validate identically — see the
 // Android local-data-layer plan.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { TRANSACTION_TYPES } from "@/lib/types";
 
 export const createTransactionSchema = z.object({
   type: z.enum(TRANSACTION_TYPES),
-  amount: z.number().int().positive(),
+  amount: tomanInt().positive(),
   date: z.string().datetime().optional(),
   description: z.string().max(500).optional(),
   accountId: z.string(),
@@ -20,7 +21,7 @@ export const createTransactionSchema = z.object({
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 
 export const updateTransactionSchema = z.object({
-  amount: z.number().int().positive().optional(),
+  amount: tomanInt().positive().optional(),
   date: z.string().datetime().optional(),
   description: z.string().max(500).nullable().optional(),
   categoryId: z.string().nullable().optional(),

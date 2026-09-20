@@ -19,12 +19,16 @@
         android:orientation="vertical"
         android:padding="14dp">
 
+        <!-- Text colours here are only the first-paint defaults; the provider sets them from the
+             theme (WidgetTheme.getTextColor) on every update so they always contrast with the
+             background. -->
         <TextView
+            android:id="@+id/widget_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/widget_today_events_title"
             android:textDirection="rtl"
-            android:textColor="#1A1D29"
+            android:textColor="#111111"
             android:textSize="13sp"
             android:textStyle="bold"
             android:fontFamily="sans-serif"
@@ -32,7 +36,8 @@
 
         <!-- ListView (not the plain LinearLayout this used to be) is what actually gets
              touch-scrolling inside a widget — see TodayEventsWidgetService for the
-             RemoteViewsFactory backing it. -->
+             RemoteViewsFactory backing it. The thin thumb stays visible so it is clear there is
+             more to scroll to. -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -45,7 +50,10 @@
                 android:layoutDirection="rtl"
                 android:divider="@null"
                 android:dividerHeight="0dp"
-                android:scrollbars="none" />
+                android:scrollbars="vertical"
+                android:scrollbarThumbVertical="@drawable/widget_scrollbar_thumb"
+                android:scrollbarSize="3dp"
+                android:fadeScrollbars="false" />
 
             <TextView
                 android:id="@+id/events_empty_view"
@@ -54,7 +62,7 @@
                 android:text="@string/widget_today_events_empty"
                 android:textDirection="rtl"
                 android:textAlignment="viewStart"
-                android:textColor="#9CA3AF"
+                android:textColor="#B3111111"
                 android:textSize="12sp"
                 android:fontFamily="sans-serif"
                 android:paddingTop="4dp" />

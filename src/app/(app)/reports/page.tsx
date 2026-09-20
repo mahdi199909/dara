@@ -15,6 +15,8 @@ import { useCurrencyUnit } from "@/lib/currencyUnit";
 import DeltaChip, { type DeltaPolarity } from "@/components/DeltaChip";
 import { phraseDeltaPride, phraseSamePeriodTasksCompleted, phraseSamePeriodVirtualAsset } from "@/lib/phrasing";
 import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
+import JalaliDateInput from "@/components/ui/JalaliDateInput";
+import { customRangeQuery, validateCustomRange } from "@/lib/reportRange";
 
 // The only comparison this product ever shows (its own past period — see comparePeriods). Each
 // entry's polarity says which direction is "good"; totalMinutes carries no polarity — logging
@@ -68,6 +70,9 @@ const PRESETS = [
   { key: "year", label: "امسال" },
 ];
 
+/** The chip that switches the presets over to a range the person picks themselves. */
+const CUSTOM_PRESET = "custom";
+
 const REPORT_TABS = [
   { key: "summary", label: "خلاصه" },
   { key: "time", label: "زمان" },
@@ -83,7 +88,17 @@ export default function ReportsPage() {
   const router = useRouter();
   const [preset, setPreset] = useState("month");
   const [tab, setTab] = useState<(typeof REPORT_TABS)[number]["key"]>("summary");
-  const { data } = useSWR<any>(`/api/reports?preset=${preset}`, fetcher);
+  // A range of the person's own choosing: whole days, from the first to the last picked (both included).
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return d;
+  });
+  const [customTo, setCustomTo] = useState(() => new Date());
+  const customError = preset === CUSTOM_PRESET ? validateCustomRange(customFrom, customTo) : null;
+  const reportUrl =
+    preset !== CUSTOM_PRESET ? `/api/reports?preset=${preset}` : customError ? null : `/api/reports?${customRangeQuery(customFrom, customTo)}`;
+  const { data } = useSWR<any>(reportUrl, fetcher);
 
   // window.open(..., "_blank") — the old approach — targets a real browser tab, which doesn't
   // exist inside the Capacitor WebView; there it silently fails to navigate anywhere useful and
@@ -133,7 +148,7 @@ export default function ReportsPage() {
     // print-to-PDF renders Persian perfectly since it's genuine text layout, not a
     // font-embedding workaround. See src/app/print/report/page.tsx. Plain in-app navigation
     // (not window.open) since there's no separate browser tab inside the Capacitor WebView.
-    router.push(`/print/report?preset=${preset}`);
+    router.push(preset === CUSTOM_PRESET ? `/print/report?${customRangeQuery(customFrom, customTo)}` : `/print/report?preset=${preset}`);
   }
 
   return (
@@ -161,6 +176,14 @@ export default function ReportsPage() {
                 {p.label}
               </button>
             ))}
+            <button
+              onClick={() => setPreset(CUSTOM_PRESET)}
+              className={`shrink-0 text-sm px-3.5 py-1.5 rounded-full transition ${
+                preset === CUSTOM_PRESET ? "bg-accent text-on-accent" : "bg-surface border border-dashed border-line text-muted"
+              }`}
+            >
+              بازه دلخواه
+            </button>
           </div>
         )}
         <div className="flex gap-4 overflow-x-auto scrollbar-none border-b border-line">
@@ -177,9 +200,26 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {tab !== "categoryCalendar" && preset === CUSTOM_PRESET && (
+        <Card className="p-4 space-y-2">
+          <p className="text-xs text-muted">بازه‌ی گزارش (هر دو روز شامل می‌شوند)</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted mb-1 block">از تاریخ</label>
+              <JalaliDateInput value={customFrom} onChange={setCustomFrom} />
+            </div>
+            <div>
+              <label className="text-xs text-muted mb-1 block">تا تاریخ</label>
+              <JalaliDateInput value={customTo} onChange={setCustomTo} />
+            </div>
+          </div>
+          {customError && <p className="text-xs text-waste">{customError}</p>}
+        </Card>
+      )}
+
       {tab === "categoryCalendar" ? (
         <CategoryCalendarTab />
-      ) : !data ? (
+      ) : preset === CUSTOM_PRESET && customError ? null : !data ? (
         <p className="text-sm text-muted text-center py-10">در حال بارگذاری...</p>
       ) : tab === "summary" ? (
         <SummaryTab data={data} />

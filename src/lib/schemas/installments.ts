@@ -5,11 +5,12 @@
 // The web routes are intentionally left untouched, so this file must be kept in sync by eye if
 // those inline schemas ever change.
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 
 export const createInstallmentPlanSchema = z.object({
   title: z.string().min(1).max(150),
-  totalAmount: z.number().int().positive(),
-  installmentAmount: z.number().int().positive(),
+  totalAmount: tomanInt().positive(),
+  installmentAmount: tomanInt().positive(),
   numberOfInstallments: z.number().int().positive().max(360),
   dueDay: z.number().int().min(1).max(31),
   startDate: z.string().datetime().optional(),

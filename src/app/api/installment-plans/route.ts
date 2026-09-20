@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
@@ -8,8 +9,8 @@ import { generateInstallmentSchedule, summarizeInstallments } from "@/lib/instal
 
 const createSchema = z.object({
   title: z.string().min(1).max(150),
-  totalAmount: z.number().int().positive(),
-  installmentAmount: z.number().int().positive(),
+  totalAmount: tomanInt().positive(),
+  installmentAmount: tomanInt().positive(),
   numberOfInstallments: z.number().int().positive().max(360),
   dueDay: z.number().int().min(1).max(31),
   startDate: z.string().datetime().optional(),

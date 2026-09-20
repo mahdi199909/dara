@@ -32,7 +32,10 @@
             android:layout_marginStart="10dp"
             android:orientation="vertical">
 
+            <!-- Text colours are first-paint defaults for the widget's original teal background;
+                 QuickCaptureWidgetProvider sets them from the theme on every update. -->
             <TextView
+                android:id="@+id/capture_title_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/widget_capture_title"
@@ -42,15 +45,17 @@
                 android:fontFamily="sans-serif" />
 
             <TextView
+                android:id="@+id/capture_subtitle_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/widget_capture_subtitle"
-                android:textColor="#D9DEFA"
+                android:textColor="#B3FFFFFF"
                 android:textSize="11sp"
                 android:fontFamily="sans-serif" />
         </LinearLayout>
 
         <TextView
+            android:id="@+id/capture_plus_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="+"

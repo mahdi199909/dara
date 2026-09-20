@@ -2,7 +2,9 @@
 // PostgreSQL variant of prisma/schema.prisma, for production deployment (see
 // DEPLOYMENT.md). Keep the two files' models in sync when making schema changes.
 //
-// Database schema. Money is stored as integer Toman (no floating point).
+// Database schema. Money is whole Toman, stored in a Float (double precision) column: exact for every
+// integer up to 2^53 (~9 quadrillion) — an Int column is 32-bit in PostgreSQL and topped out at
+// 2,147,483,647 Toman, which a house or a car exceeds. Prisma still hands these back as plain JS numbers.
 // Time durations are stored as integer minutes.
 // Dates are stored as UTC DateTime; Jalali/Persian presentation happens in the app layer.
 //
@@ -67,21 +69,21 @@ model Settings {
   // it's formatted and how typed input is converted back to Toman.
   currencyDisplayUnit String  @default("TOMAN")
   calendarType        String  @default("jalali") // jalali | gregorian
-  monthlyIncome       Int?
+  monthlyIncome       Float?
   workingHoursMonth   Int?
-  hourlyValueOverride Int?
+  hourlyValueOverride Float?
   dashboardCardPrefs  String? // JSON: which dashboard cards are hidden
   // Renamed from dailyQuoteEnabled to dailyMomentEnabled (DailyQuoteCard -> DailyMomentCard) at
   // the application level only — @map keeps the actual column untouched, deliberately avoiding
   // a real rename via `db push` (which has no way to tell "rename" from "drop + add" and would
   // reset every user's stored preference back to the default; see the updatedAt outage earlier).
-  dailyMomentEnabled Boolean @default(true) @map("dailyQuoteEnabled") // Home page's daily-moment card (server-sourced, license-gated)
+  dailyMomentEnabled  Boolean @default(true) @map("dailyQuoteEnabled") // Home page's daily-moment card (server-sourced, license-gated)
   // Waking-hours window for the Home page's DayBattery — literal same-day hour markers (0-23),
   // no overnight/night-shift support (sleepHour <= wakeHour just yields a degenerate empty
   // battery, see computeDaySegments). Plain Int with a literal default, unlike updatedAt's
   // now() default — a numeric literal is always safely db-push-able onto an existing table.
-  wakeHour  Int @default(7)
-  sleepHour Int @default(23)
+  wakeHour            Int     @default(7)
+  sleepHour           Int     @default(23)
 
   // Companion mood engine (src/lib/companion.ts) — see schema.prisma's copy of this comment.
   dailyProductiveTargetMin Int     @default(360)
@@ -119,8 +121,8 @@ model Category {
   sortOrder Int     @default(0)
 
   // Virtual asset generation rule for this category (section 10)
-  generatesVirtualAsset   Boolean @default(false)
-  virtualAssetValuePerHour Int?
+  generatesVirtualAsset    Boolean @default(false)
+  virtualAssetValuePerHour Float?
 
   // Auto-created alongside a Project (same name, valueType defaults to ASSET) so project
   // work naturally categorizes without the user managing two parallel lists — see
@@ -132,8 +134,8 @@ model Category {
   // becomes a parent. onDelete: SetNull so deleting a parent demotes its children to top-level
   // categories instead of cascading their deletion (they may still have real logged history).
   parentCategoryId String?
-  parentCategory    Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: SetNull)
-  subCategories     Category[] @relation("CategoryHierarchy")
+  parentCategory   Category?  @relation("CategoryHierarchy", fields: [parentCategoryId], references: [id], onDelete: SetNull)
+  subCategories    Category[] @relation("CategoryHierarchy")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -189,7 +191,7 @@ model Task {
 
   title       String
   description String?
-  status      String  @default("TODO") // TODO | DONE | CANCELLED
+  status      String    @default("TODO") // TODO | DONE | CANCELLED
   dueDate     DateTime?
 
   categoryId String?
@@ -197,15 +199,15 @@ model Task {
   projectId  String?
   project    Project?  @relation(fields: [projectId], references: [id])
 
-  estimatedCost Int?
+  estimatedCost Float?
   completedAt   DateTime?
 
   // Lightweight "when did I actually do this" logging from the unified Quick Capture
   // form (§ Home redesign) — a simpler alternative to the full Activity/TimeEntry model
   // for a task that doesn't need multi-segment timer tracking.
   valueType    String    @default("EXPENSE") // EXPENSE | ASSET
-  directCost   Int       @default(0) // Toman, synced to a linked EXPENSE Transaction — see lib/directCostSync.ts
-  incomeAmount Int       @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
+  directCost   Float     @default(0) // Toman, synced to a linked EXPENSE Transaction — see lib/directCostSync.ts
+  incomeAmount Float     @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
   startAt      DateTime?
   endAt        DateTime?
 
@@ -241,8 +243,8 @@ model Activity {
   projectId  String?
   project    Project?  @relation(fields: [projectId], references: [id])
 
-  totalDurationMin Int @default(0) // denormalized sum of timeEntries
-  directCost       Int @default(0) // Toman, optional direct expense tied to this activity
+  totalDurationMin Int   @default(0) // denormalized sum of timeEntries
+  directCost       Float @default(0) // Toman, optional direct expense tied to this activity
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -266,7 +268,7 @@ model TimeEntry {
   startAt     DateTime
   endAt       DateTime?
   durationMin Int?
-  isRunning   Boolean  @default(false)
+  isRunning   Boolean   @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -297,17 +299,17 @@ model Event {
   project    Project?  @relation(fields: [projectId], references: [id])
 
   valueType    String @default("EXPENSE") // EXPENSE | ASSET
-  directCost   Int    @default(0) // Toman, synced to a linked EXPENSE Transaction — see lib/directCostSync.ts
-  incomeAmount Int    @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
+  directCost   Float  @default(0) // Toman, synced to a linked EXPENSE Transaction — see lib/directCostSync.ts
+  incomeAmount Float  @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
 
-  recurrenceFreq     String   @default("NONE") // NONE | DAILY | WEEKLY | MONTHLY | YEARLY
-  recurrenceInterval Int      @default(1)
+  recurrenceFreq     String    @default("NONE") // NONE | DAILY | WEEKLY | MONTHLY | YEARLY
+  recurrenceInterval Int       @default(1)
   recurrenceUntil    DateTime? // end condition A: stop after this date
   recurrenceCount    Int? // end condition B: stop after N occurrences (mutually exclusive with recurrenceUntil; UI only offers one)
   recurrenceParentId String?
-  recurrenceParent   Event?   @relation("Recurrence", fields: [recurrenceParentId], references: [id], onDelete: Cascade)
-  recurrenceChildren Event[]  @relation("Recurrence")
-  isCancelled        Boolean  @default(false) // for a single cancelled occurrence
+  recurrenceParent   Event?    @relation("Recurrence", fields: [recurrenceParentId], references: [id], onDelete: Cascade)
+  recurrenceChildren Event[]   @relation("Recurrence")
+  isCancelled        Boolean   @default(false) // for a single cancelled occurrence
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -356,6 +358,10 @@ model Reminder {
   dismissed     Boolean  @default(false)
 
   createdAt DateTime @default(now())
+  // @default(now()) as well as @updatedAt — see VirtualAssetEntry.updatedAt's comment. Added so that a
+  // change to a reminder (its time when the event moves, notified/dismissed) syncs between devices
+  // instead of only ever being inserted once.
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId])
   @@index([remindAt])
@@ -372,7 +378,7 @@ model FinanceAccount {
 
   name           String
   type           String  @default("BANK_ACCOUNT") // BANK_CARD | BANK_ACCOUNT | CASH | WALLET | INVESTMENT
-  initialBalance Int     @default(0)
+  initialBalance Float   @default(0)
   isActive       Boolean @default(true)
 
   createdAt DateTime  @default(now())
@@ -391,7 +397,7 @@ model Transaction {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   type        String // INCOME | EXPENSE | TRANSFER
-  amount      Int // always positive; sign determined by type
+  amount      Float // always positive; sign determined by type
   date        DateTime
   description String?
 
@@ -436,8 +442,8 @@ model InstallmentPlan {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title                String
-  totalAmount          Int
-  installmentAmount    Int
+  totalAmount          Float
+  installmentAmount    Float
   numberOfInstallments Int
   dueDay               Int // day of month, 1-28 to avoid month-length issues
   startDate            DateTime
@@ -459,7 +465,7 @@ model Installment {
 
   index   Int
   dueDate DateTime
-  amount  Int
+  amount  Float
   status  String    @default("PENDING") // PENDING | PAID | OVERDUE
   paidAt  DateTime?
 
@@ -485,9 +491,9 @@ model Asset {
 
   name          String
   category      String?
-  purchasePrice Int
+  purchasePrice Float
   purchaseDate  DateTime
-  currentValue  Int
+  currentValue  Float
   notes         String?
 
   createdAt DateTime  @default(now())
@@ -506,7 +512,7 @@ model AssetTransaction {
   asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   type   String // VALUE_UPDATE | EXPENSE | SALE
-  amount Int
+  amount Float
   date   DateTime
   notes  String?
 
@@ -532,11 +538,11 @@ model VirtualAssetEntry {
   project        Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   habitCheckInId String?       @unique
   habitCheckIn   HabitCheckIn? @relation(fields: [habitCheckInId], references: [id], onDelete: Cascade)
-  categoryId   String?
-  durationMin  Int
-  valuePerHour Int
-  totalValue   Int
-  date         DateTime
+  categoryId     String?
+  durationMin    Int
+  valuePerHour   Float
+  totalValue     Float
+  date           DateTime
 
   createdAt DateTime @default(now())
   // @default(now()) is required here, not just @updatedAt: without it, `prisma db push`
@@ -570,9 +576,9 @@ model Habit {
 
   // Toman value credited toward the "digital asset" total for each day this habit is
   // checked in — the habit-tracker equivalent of an Activity/Task's virtual asset value.
-  virtualAssetValuePerCheckIn Int @default(0)
+  virtualAssetValuePerCheckIn Float @default(0)
 
-  isActive  Boolean   @default(true)
+  isActive        Boolean   @default(true)
   // Guards the "come back to this habit" nudge notification from re-firing every time
   // /api/notifications is polled — see lib/habitStreak.ts / the notifications route.
   lastNudgeSentAt DateTime?
@@ -720,7 +726,7 @@ model CapitalSnapshot {
 
   date              String
   investedMinutes   Int
-  virtualAssetValue Int
+  virtualAssetValue Float
 
   createdAt DateTime @default(now())
 
