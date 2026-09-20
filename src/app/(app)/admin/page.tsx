@@ -5,6 +5,7 @@
 // action fail with "دسترسی ندارید", nothing sensitive rendered client-side. See src/lib/admin.ts.
 import { useState } from "react";
 import { apiPatch, ApiClientError } from "@/lib/apiClient";
+import { APK_STATIC_URL } from "@/lib/appVersion";
 import { Card } from "@/components/ui/Card";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -132,14 +133,32 @@ interface ReleaseInfo {
   downloadUrl: string;
 }
 
+// What the apps are being told right now (see resolveAppRelease in src/lib/appVersion.ts).
+interface EffectiveRelease {
+  latestVersionName: string | null;
+  latestVersionCode: number;
+  minSupportedVersionCode: number;
+  downloadUrl: string;
+}
+
 function ReleaseSection() {
   const [loaded, setLoaded] = useState(false);
+  const [effective, setEffective] = useState<EffectiveRelease | null>(null);
   const [latest, setLatest] = useState("");
   const [min, setMin] = useState("");
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function apply(release: ReleaseInfo, current: EffectiveRelease) {
+    // The form starts from what apps are told now, so saving without touching the number can
+    // never lower it (the server takes the larger of this and the release that ships in code).
+    setLatest(String(current.latestVersionCode));
+    setMin(String(release.minSupportedVersionCode));
+    setUrl(release.downloadUrl);
+    setEffective(current);
+  }
 
   async function load() {
     setLoading(true);
@@ -148,10 +167,7 @@ function ReleaseSection() {
       const res = await fetch("/api/admin/release");
       const body = await res.json();
       if (!res.ok) throw new ApiClientError(body.error ?? "خطا", res.status);
-      const release: ReleaseInfo = body.release;
-      setLatest(String(release.latestVersionCode));
-      setMin(String(release.minSupportedVersionCode));
-      setUrl(release.downloadUrl);
+      apply(body.release, body.effective);
       setLoaded(true);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "خطایی رخ داد.");
@@ -165,11 +181,12 @@ function ReleaseSection() {
     setError(null);
     setMessage(null);
     try {
-      await apiPatch("/api/admin/release", {
+      const body = await apiPatch<{ release: ReleaseInfo; effective: EffectiveRelease }>("/api/admin/release", {
         latestVersionCode: Number(latest),
         minSupportedVersionCode: Number(min),
         downloadUrl: url,
       });
+      apply(body.release, body.effective);
       setMessage("ذخیره شد.");
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "خطایی رخ داد.");
@@ -180,11 +197,12 @@ function ReleaseSection() {
 
   return (
     <Card className="p-5 space-y-4">
-      <h2 className="font-bold text-ink text-sm">نسخه اپ اندروید و بروزرسانی اجباری</h2>
+      <h2 className="font-bold text-ink text-sm">کنترل نسخه اپ اندروید</h2>
       <p className="text-xs text-muted leading-relaxed">
-        «نسخه فعلی» همون شماره‌ی build گیت‌هاب اکشنه (مثلاً اگه لینک ران #69 رو گرفتید، همون ۶۹ رو بذارید). هر کاربری که
-        نسخه‌ی نصب‌شده‌اش کمتر از «حداقل نسخه مجاز» باشه، کلاً نمی‌تونه وارد اپ بشه تا آپدیت کنه؛ بین این عدد و «نسخه فعلی»
-        فقط یه پیام غیرمزاحم می‌بینه.
+        آخرین نسخه و لینک دانلودش همراه خودِ سرور اعلام می‌شود و اپ‌ها هر بار که باز می‌شوند (حتی بدون ورود به حساب) از
+        همین‌جا می‌پرسند؛ اگر نسخه‌ی نصب‌شده قدیمی‌تر باشد پیام «نسخه جدید» با دکمه‌ی دانلود می‌بینند. شماره‌ی نسخه از خودِ
+        نسخه ساخته می‌شود (۱.۱.۰ ← ۱۰۱۰۰). این بخش فقط برای موارد استثناست: هر کاربری که نسخه‌اش کمتر از «حداقل نسخه مجاز»
+        باشد تا آپدیت نکند وارد اپ نمی‌شود؛ بین این عدد و آخرین نسخه فقط یک پیام غیرمزاحم می‌بیند.
       </p>
 
       {!loaded ? (
@@ -193,8 +211,14 @@ function ReleaseSection() {
         </button>
       ) : (
         <div className="space-y-3">
+          {effective && (
+            <p className="text-xs text-ink leading-relaxed bg-canvas rounded-xl p-3" dir="rtl">
+              الان به اپ‌ها گفته می‌شود: آخرین نسخه {effective.latestVersionName ?? "—"} (شماره‌ی {effective.latestVersionCode}) — لینک:{" "}
+              <span dir="ltr" className="break-all">{effective.downloadUrl}</span>
+            </p>
+          )}
           <div>
-            <label className="block text-xs text-muted mb-1">نسخه فعلی (شماره build)</label>
+            <label className="block text-xs text-muted mb-1">شماره‌ی آخرین نسخه (فقط برای اعلام عدد بزرگ‌تر از نسخه‌ی خودِ سرور)</label>
             <input
               type="number"
               value={latest}
@@ -204,7 +228,7 @@ function ReleaseSection() {
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">حداقل نسخه مجاز (پایین‌تر از این = ورود بسته می‌شود)</label>
+            <label className="block text-xs text-muted mb-1">حداقل نسخه مجاز (پایین‌تر از این = ورود بسته می‌شود؛ ۱ یعنی هیچ‌کس اجباری نیست)</label>
             <input
               type="number"
               value={min}
@@ -214,13 +238,13 @@ function ReleaseSection() {
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">لینک دانلود نسخه جدید</label>
+            <label className="block text-xs text-muted mb-1">لینک دانلود (خالی = لینک ثابت خودِ پروژه)</label>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="w-full bg-surface rounded-xl border border-line px-3 py-2 text-sm"
               dir="ltr"
-              placeholder="https://..."
+              placeholder={APK_STATIC_URL}
             />
           </div>
           {error && <p className="text-xs text-waste">{error}</p>}

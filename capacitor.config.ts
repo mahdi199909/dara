@@ -6,7 +6,9 @@ const config: CapacitorConfig = {
   // session) rather than updating them — see this rebrand's own discussion for why that's a
   // one-way door best pulled right before a real public launch, not casually now.
   appId: "ir.mganic.dara",
-  appName: "پروا",
+  // Same name as the download file (parvaapp.apk) and the UI copy — see APP_NAME in
+  // src/lib/appVersion.ts — so nobody meets two different names for one app.
+  appName: "parvaapp",
   // Next.js's static export (see next.config.mjs's BUILD_TARGET=capacitor branch) writes here.
   webDir: "out",
 };

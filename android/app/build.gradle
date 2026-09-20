@@ -7,11 +7,13 @@ android {
         applicationId "ir.mganic.dara"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Driven by CI (ANDROID_VERSION_CODE = the GitHub Actions run number, always increasing)
-        // so every build Android sees as strictly newer than the last — a fixed versionCode
-        // meant every build looked like a same-or-older version, which some install paths
-        // refuse even when the signing key already matches. Falls back to 1/"1.0" for a plain
-        // local `./gradlew assembleDebug` where no CI env var is set.
+        // Driven by CI from package.json's version (scripts/app-version.ts): ANDROID_VERSION_NAME
+        // is the version itself ("1.1.0") and ANDROID_VERSION_CODE is derived from it
+        // (1.1.0 -> 10100, see src/lib/appVersion.ts), so every new version installs as an update
+        // over the last and the number the server announces is known before the APK is built.
+        // (Builds before 1.1.0 used the GitHub Actions run number, always far below 10000, so
+        // they still read as older.) Falls back to 1/"1.0" for a plain local
+        // `./gradlew assembleDebug` where no CI env var is set.
         versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInteger()
         versionName = System.getenv("ANDROID_VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

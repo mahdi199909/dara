@@ -3,17 +3,18 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import { handleApiError } from "@/lib/apiError";
+import { RELEASE_SINGLETON_ID } from "@/lib/appRelease";
+import { resolveAppRelease } from "@/lib/appVersion";
 
-const SINGLETON_ID = "singleton";
-
-// Same shape as android/app/build.gradle's default before any release has been configured —
-// every installed build reads as both "latest" and "always allowed" until an admin sets real
-// values here, so this feature is a no-op out of the box rather than blocking everyone on day one.
+// The row is an OVERRIDE on top of the release that ships in code (see resolveAppRelease): the
+// newest version and its download link are announced without anyone touching this screen, and
+// what is saved here only adds a minimum-version lock-out, a higher version number or a
+// different link. A fresh row is therefore a no-op — it changes nothing for any installed build.
 async function getOrInitRelease() {
-  const existing = await prisma.appRelease.findUnique({ where: { id: SINGLETON_ID } });
+  const existing = await prisma.appRelease.findUnique({ where: { id: RELEASE_SINGLETON_ID } });
   if (existing) return existing;
   return prisma.appRelease.create({
-    data: { id: SINGLETON_ID, latestVersionCode: 1, minSupportedVersionCode: 1, downloadUrl: "" },
+    data: { id: RELEASE_SINGLETON_ID, latestVersionCode: 1, minSupportedVersionCode: 1, downloadUrl: "" },
   });
 }
 
@@ -21,7 +22,8 @@ export async function GET() {
   try {
     await requireAdmin();
     const release = await getOrInitRelease();
-    return NextResponse.json({ release });
+    // `effective` is exactly what the apps are told right now.
+    return NextResponse.json({ release, effective: resolveAppRelease(release) });
   } catch (err) {
     return handleApiError(err);
   }
@@ -30,7 +32,8 @@ export async function GET() {
 const updateSchema = z.object({
   latestVersionCode: z.number().int().min(1),
   minSupportedVersionCode: z.number().int().min(1),
-  downloadUrl: z.string().min(1),
+  // Empty means "use the permanent static link" (see APK_STATIC_URL).
+  downloadUrl: z.string().trim().refine((url) => url === "" || /^https?:\/\//i.test(url), "لینک دانلود باید با http یا https شروع شود."),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -41,8 +44,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "حداقل نسخه مجاز نمی‌تواند بیشتر از نسخه فعلی باشد." }, { status: 422 });
     }
     await getOrInitRelease();
-    const release = await prisma.appRelease.update({ where: { id: SINGLETON_ID }, data: body });
-    return NextResponse.json({ release });
+    const release = await prisma.appRelease.update({ where: { id: RELEASE_SINGLETON_ID }, data: body });
+    return NextResponse.json({ release, effective: resolveAppRelease(release) });
   } catch (err) {
     return handleApiError(err);
   }

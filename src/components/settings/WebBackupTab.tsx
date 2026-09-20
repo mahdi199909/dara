@@ -9,6 +9,7 @@ import { TABLE_LABELS_FA } from "@/lib/backupLabels";
 import { parseIcs, type ParsedIcsEvent } from "@/lib/icsParser";
 import { formatJalali } from "@/lib/jalali";
 import { toPersianDigits } from "@/lib/money";
+import { APP_NAME } from "@/lib/appVersion";
 
 const CSV_EXPORTS: Array<{ entity: string; label: string }> = [
   { entity: "tasks", label: "کارها" },
@@ -188,7 +189,7 @@ export default function WebBackupTab() {
       <Card className="p-5 space-y-2">
         <h2 className="font-bold text-ink text-sm">اطلاعات شما کجا نگهداری می‌شود؟</h2>
         <p className="text-xs text-muted leading-relaxed">
-          هر چیزی که اینجا ثبت می‌کنید روی سرور پروا ذخیره می‌شود و با همین حساب، خودکار با اپلیکیشن اندروید همگام می‌شود. فایل پشتیبان یک نسخه‌ی
+          هر چیزی که اینجا ثبت می‌کنید روی سرور {APP_NAME} ذخیره می‌شود و با همین حساب، خودکار با اپلیکیشن اندروید همگام می‌شود. فایل پشتیبان یک نسخه‌ی
           جداگانه روی دستگاه خودتان است — برای اطمینان بیشتر، یا برای انتقال به یک حساب دیگر.
         </p>
       </Card>

@@ -142,6 +142,44 @@ above ~2.1 billion Toman are refused by an old server, one row at a time, with t
 The web app's *backup* tab (download / restore a backup file) needs no server change: it is built on the same
 `/api/sync/pull` and `/api/sync/push` endpoints the phone syncs through.
 
+## 5c. Releasing a new Android APK
+
+The app is called **parvaapp** wherever a person sees a name — the launcher label, the download file `parvaapp.apk` and
+the UI copy (`APP_NAME` in `src/lib/appVersion.ts`) — and there is one permanent download link:
+
+    https://my.parvaapp.ir/parvaapp.apk
+
+`next.config.mjs` redirects it to `https://github.com/mahdi199909/dara/releases/latest/download/parvaapp.apk`, which
+GitHub points at the newest **release**'s `parvaapp.apk`. The link itself never changes; publishing a release is what
+changes what it downloads (and it works without logging in).
+
+**Versions.** `package.json`'s version is the only source. The APK's `versionName` is that version and its `versionCode`
+is derived from it (`1.1.0` → `10100`, i.e. major·10000 + minor·100 + patch, with minor and patch below 100), so it
+always grows with the version and is known before the APK exists. Builds made before 1.1.0 used the CI run number
+(always far below 10000), so they read as older. Never change the application id (`ir.mganic.dara`) or the signing key
+(`android/app/debug.keystore`): Android would treat the result as a different app and refuse to install it over the old one.
+
+**To release X.Y.Z**
+
+1. Bump the version in `package.json` (`npm version X.Y.Z --no-git-tag-version`) **and** `LATEST_APP_RELEASE.versionName`
+   in `src/lib/appVersion.ts`. A test, and the CI, fail if the two disagree.
+2. Commit and push to `master`, then tag and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`. CI
+   (`.github/workflows/build-android.yml`) builds the APK, fails if the file does not carry the right version,
+   application id and name, and publishes it as the release asset `parvaapp.apk`. (Pushes to `master` without a tag
+   only produce a test build, kept as the `parvaapp-apk` workflow artifact — nobody is told about those.)
+3. **After** the tag's run is green and the release exists, deploy the server (section 5b). From then on every install
+   older than X.Y.Z shows "نسخه جدید … آماده‌ی دانلود است" with a download button that opens the permanent link. Deploying
+   first would announce a version nobody can download yet.
+4. Check: `curl -s https://my.parvaapp.ir/api/app/version` reports the new `latestVersionName`, and
+   `curl -sIL https://my.parvaapp.ir/parvaapp.apk` ends in a `200` whose `content-disposition` names `parvaapp.apk`.
+
+**How installed apps find out.** On every launch and every resume the app asks the public `GET /api/app/version` (no
+login needed — it also reaches phones that only ever worked offline) and compares its own `versionCode` with
+`latestVersionCode`. Older → the update notice with the download link; below `minSupportedVersionCode` → the
+blocking "به‌روزرسانی لازم است" screen. The minimum is `1` (nobody is ever forced) unless an admin raises it at
+`/admin` → «کنترل نسخه اپ اندروید», which also lets the owner announce a higher number or use another download link;
+what is saved there only overrides the release shipped in code, so a stale row can never hide a newer release.
+
 ## 6. Migrations going forward
 
 SQLite (dev/simple deployment):

@@ -66,9 +66,11 @@ export interface RemoteLicenseStatus {
   trialDaysRemaining: number | null;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
-  // Null until an admin configures a release via /admin — see src/lib/versionGate.ts, the only
-  // consumer of these three fields.
+  // Null only when talking to a server build that predates the built-in release (it needed an
+  // admin to configure one via /admin first) — see src/lib/versionGate.ts, the only consumer of
+  // these fields. latestVersionName is absent on that same older server.
   latestVersionCode: number | null;
+  latestVersionName?: string | null;
   minSupportedVersionCode: number | null;
   downloadUrl: string | null;
 }
@@ -77,4 +79,25 @@ export function fetchRemoteLicenseStatus(token: string): Promise<RemoteLicenseSt
   return fetch(`${REMOTE_API_BASE}/api/license/status`, {
     headers: { Authorization: `Bearer ${token}` },
   }).then((res) => handle<RemoteLicenseStatus>(res));
+}
+
+// The public update check (GET /api/app/version): no login needed, so it also reaches phones that
+// only ever worked offline. Bounded by a timeout because it runs on every launch and resume —
+// a slow network must never make the app feel stuck.
+export interface RemoteAppVersion {
+  latestVersionName: string | null;
+  latestVersionCode: number;
+  minSupportedVersionCode: number;
+  downloadUrl: string;
+}
+
+export async function fetchRemoteAppVersion(timeoutMs = 8000): Promise<RemoteAppVersion> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${REMOTE_API_BASE}/api/app/version`, { signal: controller.signal, cache: "no-store" });
+    return await handle<RemoteAppVersion>(res);
+  } finally {
+    clearTimeout(timer);
+  }
 }

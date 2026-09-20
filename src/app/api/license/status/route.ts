@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
+import { getAppRelease } from "@/lib/appRelease";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
@@ -27,17 +28,14 @@ export async function OPTIONS() {
   return corsPreflight();
 }
 
-const RELEASE_SINGLETON_ID = "singleton";
-
 export async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId(req);
 
     let license = await prisma.license.findUnique({ where: { userId } });
-    // Absent until an admin configures one via /admin (see requireAdmin()) — every installed
-    // build reads back as both "latest" and "always allowed" until then, so this check is a
-    // no-op by default rather than blocking everyone before a release has ever been set.
-    const release = await prisma.appRelease.findUnique({ where: { id: RELEASE_SINGLETON_ID } });
+    // The release that ships in code, overridden by whatever an admin saved via /admin — the
+    // same answer GET /api/app/version gives (see src/lib/appRelease.ts).
+    const release = await getAppRelease();
     if (!license) {
       const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 86_400_000);
       license = await prisma.license.create({ data: { userId, status: "TRIAL", trialEndsAt } });
@@ -75,9 +73,10 @@ export async function GET(req: NextRequest) {
         trialDaysRemaining,
         trialEndsAt: license.trialEndsAt,
         currentPeriodEnd: license.currentPeriodEnd,
-        latestVersionCode: release?.latestVersionCode ?? null,
-        minSupportedVersionCode: release?.minSupportedVersionCode ?? null,
-        downloadUrl: release?.downloadUrl ?? null,
+        latestVersionCode: release.latestVersionCode,
+        latestVersionName: release.latestVersionName,
+        minSupportedVersionCode: release.minSupportedVersionCode,
+        downloadUrl: release.downloadUrl,
       })
     );
   } catch (err) {

@@ -14,6 +14,7 @@ import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
 import { getSyncStatus, subscribeSyncStatus } from "@/lib/syncStatus";
 import { REMOTE_API_BASE } from "@/lib/remoteAuth";
+import { APP_NAME, BUNDLE_APP_VERSION, formatVersionLabel, versionCodeFromName } from "@/lib/appVersion";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
 import type { ParsedIcsEvent } from "@/lib/icsParser";
 import { Preferences } from "@capacitor/preferences";
@@ -96,7 +97,42 @@ export default function SettingsPage() {
       {tab === "history" && <HistoryTab />}
       {tab === "backup" && (native ? <BackupTab /> : <WebBackupTab />)}
       {tab === "widgets" && <WidgetsTab />}
+
+      <AppVersionFooter native={native} />
     </div>
+  );
+}
+
+// Which build is running: the installed APK's own versionName/versionCode on Android (exactly what
+// the update check compares against), the bundle's package.json version on the web.
+function AppVersionFooter({ native }: { native: boolean }) {
+  const [label, setLabel] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (native) {
+          const { App } = await import("@capacitor/app");
+          const info = await App.getInfo();
+          if (!cancelled) setLabel(formatVersionLabel(info.version || null, parseInt(info.build, 10) || null));
+        } else if (BUNDLE_APP_VERSION) {
+          setLabel(formatVersionLabel(BUNDLE_APP_VERSION, versionCodeFromName(BUNDLE_APP_VERSION)));
+        }
+      } catch {
+        // the version line is a courtesy — never worth an error on the settings screen
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [native]);
+
+  if (!label) return null;
+  return (
+    <p className="text-center text-[11px] text-muted pt-2" dir="rtl">
+      {APP_NAME} · {label}
+    </p>
   );
 }
 
@@ -1110,7 +1146,7 @@ function BackupTab() {
       // `files` (not `url`) is @capacitor/share's option for a local file:// attachment — see
       // node_modules/@capacitor/share's ShareOptions — so Telegram/email/etc. in the resulting
       // share sheet receive the actual file, not just a path string.
-      await Share.share({ title: "پشتیبان اطلاعات پروا", dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
+      await Share.share({ title: `پشتیبان اطلاعات ${APP_NAME}`, dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
 
       setExportMessage(`فایل پشتیبان ساخته شد (${filename}) — از صفحه‌ی اشتراک‌گذاری، مقصد را انتخاب کنید.`);
     } catch (err) {

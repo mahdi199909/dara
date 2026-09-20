@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
+import { APP_NAME } from "@/lib/appVersion";
 import AppTopBar from "@/components/nav/AppTopBar";
 import BottomNav from "@/components/nav/BottomNav";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
@@ -25,7 +26,7 @@ function AndroidChrome({ children }: { children: React.ReactNode }) {
   // Same SWR key Settings' own name field reads/writes — a name change there calls this
   // hook's shared mutate("/api/settings"), so the header picks it up without a reload.
   const { data } = useSWR<{ user: { name: string } | null }>("/api/settings", fetcher);
-  const userName = data?.user?.name ?? "کاربر پروا";
+  const userName = data?.user?.name ?? `کاربر ${APP_NAME}`;
 
   return (
     <div className="min-h-screen bg-canvas" dir="rtl">

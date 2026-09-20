@@ -15,7 +15,8 @@
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
-import { checkVersionGate, type VersionGateResult } from "@/lib/versionGate";
+import { checkVersionGate, refreshVersionGate, type VersionGateResult } from "@/lib/versionGate";
+import { APP_NAME } from "@/lib/appVersion";
 import { ApiClientError } from "@/lib/apiClient";
 import type { LocalDb } from "@/local/db";
 
@@ -164,7 +165,9 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       // doc comment for why a failure here is silent rather than surfaced. Same reasoning for
       // syncWithServer — WidgetQueueDrainer's resume handler is the trigger that awaits sync
       // before revalidating visible data; this boot-time one just gets the cursors moving.
-      void refreshLicenseStatus().then(recheckVersionGate);
+      // refreshVersionGate is the public update check (no login needed), so a phone that only ever
+      // worked offline is locked out of an unsupported build just like a signed-in one.
+      void Promise.all([refreshLicenseStatus(), refreshVersionGate()]).then(recheckVersionGate);
       void syncWithServer({ deep: true }).then(async (outcome) => {
         // The UI may already be showing the previous state by the time this lands.
         if (outcome.pulledCount > 0 || outcome.deletionsPulled > 0) {
@@ -191,7 +194,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     let remove: (() => void) | undefined;
     import("@capacitor/app").then(({ App }) => {
       App.addListener("resume", () => {
-        void refreshLicenseStatus().then(recheckVersionGate);
+        void Promise.all([refreshLicenseStatus(), refreshVersionGate()]).then(recheckVersionGate);
       }).then((handle) => {
         remove = () => handle.remove();
       });
@@ -250,10 +253,10 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">
         <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon.png" alt="پروا" className="h-14 w-14 rounded-2xl mx-auto" />
+          <img src="/icon.png" alt={APP_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
           <h1 className="text-lg font-bold text-ink">به‌روزرسانی لازم است</h1>
           <p className="text-sm text-muted leading-relaxed">
-            این نسخه از پروا دیگر پشتیبانی نمی‌شود و شامل یک تغییر مهم بوده. برای ادامه، نسخه جدید را نصب کنید.
+            این نسخه از {APP_NAME} دیگر پشتیبانی نمی‌شود و شامل یک تغییر مهم بوده. برای ادامه، نسخه جدید را نصب کنید.
           </p>
           {versionBlock.downloadUrl && (
             <a
@@ -292,8 +295,8 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">
       <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.png" alt="پروا" className="h-14 w-14 rounded-2xl mx-auto" />
-        <h1 className="text-lg font-bold text-ink text-center">{mode === "login" ? "ورود به پروا" : "ساخت حساب در پروا"}</h1>
+        <img src="/icon.png" alt={APP_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
+        <h1 className="text-lg font-bold text-ink text-center">{mode === "login" ? `ورود به ${APP_NAME}` : `ساخت حساب در ${APP_NAME}`}</h1>
         <p className="text-xs text-muted text-center leading-relaxed">
           این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>
