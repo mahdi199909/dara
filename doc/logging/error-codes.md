@@ -38,8 +38,8 @@
 | `NOTIF-002` | PERMISSION_DENIED | — | no | yes | Notification permission was not granted. |
 | `WIDGET-001` | QUEUE_ITEM_FAILED | — | yes | yes | A queued widget action could not be applied; it stays queued for the next drain. |
 | `WIDGET-002` | REFRESH_FAILED | — | yes | yes | A home-screen widget could not be repainted. |
-| `BACKUP-001` | EXPORT_FAILED | — | yes | reserved | A backup file could not be produced. |
-| `BACKUP-002` | IMPORT_FAILED | — | no | reserved | A backup file could not be restored. |
+| `BACKUP-001` | EXPORT_FAILED | — | yes | yes | A backup file could not be produced. |
+| `BACKUP-002` | IMPORT_FAILED | — | no | yes | A backup file could not be restored. |
 | `BACKUP-003` | IMPORT_PARTIAL | — | no | reserved | A backup was restored, but some rows were refused. |
 | `REPORT-001` | GENERATION_FAILED | — | yes | reserved | A report could not be generated. |
 | `REPORT-002` | RANGE_INVALID | 400 | no | reserved | The requested report range is invalid. |

@@ -78,6 +78,9 @@ Everywhere (phase 0):
 | Event | Level | Meaning | Where |
 | --- | --- | --- | --- |
 | `AUDIT_WRITE_FAILED` | ERROR | an audit entry could not be written; the operation itself was unaffected (`AUDIT-001`); ids only, never the audited values | `writeAuditLog`, `writeLocalAuditLog` |
+| `TASK_UPDATE_SUCCESS` and the other `*_SUCCESS` operation events | INFO | a write committed and was recorded in the history: `entity_type`, `entity_id`, `operation`, `changedFields` (names only), `auditId` / `local_event_id` — one per audited write, server and phone | `writeAuditLog`, `writeLocalAuditLog` |
+| `JOB_COMPLETED` / `JOB_FAILED` (`job: audit-retention`) | INFO / ERROR | the daily prune of old audit entries (`deleted`, `retentionDays`); DEBUG when nothing was old enough | `auditRetention` |
+| `BACKUP_COMPLETED` / `RESTORE_COMPLETED` / `RESTORE_PARTIAL` / `BACKUP_FAILED` / `RESTORE_FAILED` | INFO / INFO / WARN / ERROR | a backup file was made / restored (counts only) — on the phone and, reported by the browser, on the server | `backupAudit`, `/api/backup/record` |
 | `SYNC_FAILED` | WARN/ERROR | a sync cycle did not finish; `metadata.kind` = network / auth / too-large / server / unknown, `error_code` `SYNC-001…009` | `runSync`, `syncScheduler` |
 | `SYNC_PULL_ROW_FAILED` | WARN | a row from the server could not be stored on the device (`SYNC-008`); table + id only | `pullRemoteChanges` |
 | `DB_LOCAL_RECOVERED` | ERROR | the on-device database file was corrupt and its backup copy was loaded (`DB-008`) | `browserSqlJs` |
@@ -115,7 +118,11 @@ the server, `SYNC_PARTIAL_SUCCESS` says how many rows a push had refused and why
 account. `AUTH_RATE_LIMITED` means ten failures in ten minutes from one address for one account.
 
 **Something changed and nobody knows why.** The audit trail is the source: Settings → History (or
-`GET /api/audit-logs`). Application logs explain *system* behaviour, not user actions.
+`GET /api/audit-logs`). Each entry says which fact it records (`event`), which request wrote it
+(`requestId` — the same id the application log carries, so `jq 'select(.request_id == "req_…")'` gives the
+rest of the story) and, for an update, what exactly changed (`changes`). On the phone the join key is
+`localEventId` ↔ `local_event_id`. Application logs explain *system* behaviour, not user actions; queries
+for both are in [audit.md](audit.md).
 
 **The server is slow.** `API_SLOW_REQUEST` shows `dbQueries` and `dbMs`: a request with a large `dbMs` is
 waiting on the database (look at `DB_SLOW_QUERY` with the same `request_id` for the model and

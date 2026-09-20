@@ -13,12 +13,13 @@ of the rollout below). Nothing marked planned is claimed to exist.
 | Layer | Question it answers | Where it lives | Retention |
 | --- | --- | --- | --- |
 | **Application log** | What is the system doing, and what went wrong? (technical, for developers) | server: stdout JSON lines → Docker's rotated `json-file` log **[done]**; on the phone a rotated local file **[planned 4]**. Never in PostgreSQL. | server: a ~100 MB ring in Docker; a 14-day file/shipper is **[planned 5]** |
-| **Audit log** | What did the *person* change, and when? (part of the product: Settings → History) | the existing `AuditLog` table, on the server and on the device | long (default 2 years), independent, configurable **[planned 2]** |
+| **Audit log** | What did the *person* change, and when? (part of the product: Settings → History) | the existing `AuditLog` table, on the server and on the device | long (default 2 years), independent, configurable **[done, phase 2]** |
 | **Observability data** | How is the system behaving? (rates, latency, failures) | in-process metrics registry, `/api/admin/metrics` **[planned 5]**; trace/span ids on every record | live |
 
 The audit log is **not** replaced or changed by the application log: `writeAuditLog` and
-`writeLocalAuditLog` keep their signatures, tables and the History screen. They only gained a
-structured way to report their *own* failure (`AUDIT_WRITE_FAILED`).
+`writeLocalAuditLog` keep their signatures, tables and the History screen. Phase 2 *extended* it —
+additive columns, the canonical event, the request that wrote each row, a field-level diff for updates,
+retention, and the routes that used to leave no trace — see [audit.md](audit.md).
 
 ## 2. What exists now (phase 0) **[done]**
 
@@ -232,7 +233,7 @@ Client bundles only see `NEXT_PUBLIC_*` variables (inlined at build time).
 | --- | --- | --- |
 | 0 | core library, registries, redaction, sinks, tests, the 31 `console.*` calls replaced, docs | **done** |
 | 1 | server pipeline: request context (`request_id`, trace), `withApiLogging`, Prisma timing/slow/error classification, auth events, sync summaries, error codes in API responses, Docker log rotation | **done** in the code; takes effect on the server after a deploy |
-| 2 | audit evolution: additive columns, field-level diffs, `audit.log()` facade over `writeAuditLog`, closing the unaudited routes, retention | planned |
+| 2 | audit evolution: additive columns, field-level diffs, the `audit.log()` facade beside `writeAuditLog`, closing the unaudited routes, backups, retention (see [audit.md](audit.md)) | **done** in the code; the server part takes effect after a deploy, the phone part with the next APK |
 | 3 | atomic money paths: real database transactions; log/audit only after commit | planned (needs its own approval: it changes behaviour) |
 | 4 | Android/web client: device file sink, sync correlation headers, local event ids, widget/notification events, global error capture, diagnostics export | planned (ships with a new APK) |
 | 5 | retention jobs, admin log-level/metrics endpoints, dashboards, benchmarks | planned |
@@ -242,5 +243,6 @@ Client bundles only see `NEXT_PUBLIC_*` variables (inlined at build time).
 The following were proposed and are assumed until changed: unified event names across platforms with
 a `layer=local|server` field (instead of `*_LOCAL` suffixes); money fields masked in application logs
 always; application-log retention 14 days (phone 7 days, ~2 MB); audit retention 2 years; docs in
-`doc/logging/`. Decisions that only matter later (audit shows real amounts to its owner, phone log
-upload policy, syncing the audit log between devices) are settled when their phase starts.
+`doc/logging/`. Decisions that only matter later (phone log upload policy, syncing the audit log
+between devices) are settled when their phase starts. Phase 2 applied the audit default — real amounts
+in the owner's own history, with `AUDIT_MONEY_MODE` to change it — and kept the audit per platform.

@@ -14,6 +14,13 @@ interface AuditLogRow {
   ipAddress: string | null;
   userAgent: string | null;
   metadata: string | null;
+  event: string | null;
+  source: string | null;
+  requestId: string | null;
+  traceId: string | null;
+  deviceId: string | null;
+  localEventId: string | null;
+  changes: string | null;
   createdAt: string;
 }
 

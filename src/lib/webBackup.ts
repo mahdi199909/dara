@@ -85,6 +85,35 @@ export function restorableCounts(tables: DataExportFile["tables"]): Array<{ tabl
   return out;
 }
 
+/**
+ * Tells the server a backup was just made or restored, so it can leave the trace one deserves (an audit
+ * entry and the BACKUP_* / RESTORE_* log lines — see src/app/api/backup/record/route.ts). Counts only.
+ * Best effort by design: a failure here must never turn a finished backup into an error.
+ */
+export async function reportBackupToServer(api: BackupApi, report: { kind: "export"; tables: DataExportFile["tables"] } | { kind: "import"; result: WebImportResult }): Promise<void> {
+  try {
+    if (report.kind === "export") {
+      const counts = restorableCounts(report.tables);
+      await api.post("/api/backup/record", {
+        kind: "export",
+        rows: counts.reduce((sum, item) => sum + item.count, 0),
+        tables: Object.fromEntries(counts.map((item) => [item.table, item.count])),
+      });
+      return;
+    }
+    const { stored, unchanged, rejected } = report.result;
+    await api.post("/api/backup/record", {
+      kind: "import",
+      rows: Object.values(stored).reduce((sum, count) => sum + count, 0),
+      tables: stored,
+      unchanged,
+      rejected: rejected.length,
+    });
+  } catch {
+    // the backup itself already succeeded
+  }
+}
+
 const CATEGORY_REFERENCE_COLUMNS = ["categoryId", "parentCategoryId"] as const;
 
 /**

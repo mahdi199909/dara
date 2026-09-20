@@ -85,13 +85,15 @@ describe("handleApiError", () => {
 });
 
 describe("audit writers", () => {
-  it("writeAuditLog hands Prisma exactly the same row as before", async () => {
-    prismaMock.auditLog.create.mockResolvedValue({});
+  it("writeAuditLog keeps every legacy column exactly as before (History depends on them) and adds the new ones", async () => {
+    prismaMock.auditLog.create.mockResolvedValue({ id: "aud_1" });
     await writeAuditLog({ userId: "usr_1", action: "CREATE", entityType: "Task", entityId: "t1", newValue: { title: "x" }, ipAddress: "1.2.3.4", userAgent: "UA" });
-    expect(prismaMock.auditLog.create).toHaveBeenCalledWith({
-      data: { userId: "usr_1", action: "CREATE", entityType: "Task", entityId: "t1", oldValue: null, newValue: '{"title":"x"}', ipAddress: "1.2.3.4", userAgent: "UA", metadata: null },
-    });
-    expect(memory.sink.records).toEqual([]);
+    const { data } = prismaMock.auditLog.create.mock.calls[0][0];
+    expect(data).toMatchObject({ userId: "usr_1", action: "CREATE", entityType: "Task", entityId: "t1", oldValue: null, newValue: '{"title":"x"}', ipAddress: "1.2.3.4", userAgent: "UA", metadata: null });
+    expect(data).toMatchObject({ event: "TASK_CREATED", source: "api", requestId: null, traceId: null, deviceId: null, changes: null });
+    // The write had committed before the audit call, so its success is in the application log — ids only.
+    expect(record("TASK_CREATE_SUCCESS")).toMatchObject({ level: "INFO", entity_type: "Task", entity_id: "t1", operation: "CREATE", layer: "server", metadata: { auditId: "aud_1" } });
+    expect(JSON.stringify(memory.sink.records)).not.toContain('"title"');
   });
 
   it("writeAuditLog never throws; it reports AUDIT_WRITE_FAILED with ids only — not the audited values", async () => {
@@ -109,7 +111,7 @@ describe("audit writers", () => {
     writeLocalAuditLog(fakeDb, { userId: "local", action: "CREATE", entityType: "Task", entityId: "t1", newValue: { title: "x" } });
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toContain('INSERT INTO "AuditLog"');
-    expect(run.mock.calls[0][1]).toHaveLength(9);
+    expect(run.mock.calls[0][1]).toHaveLength(13); // the nine legacy columns + event, source, localEventId, changes
 
     run.mockImplementation(() => {
       throw new Error("database or disk is full");

@@ -96,11 +96,12 @@ could throw or explode.
 | --- | --- | --- |
 | Purpose | debugging the system | the person's own history of changes |
 | Contains | ids, counts, durations, codes | who/what/when + a field-level diff |
-| Money | always masked | real values for the owner (their own data, returned only to them); masked/flag-only mode available |
-| Lifetime | days | long, independent retention |
+| Money | always masked | real values for the owner by default — their own data, returned only to them, in the same database as the transaction it describes; `AUDIT_MONEY_MODE=redacted\|flag` masks it in the diff and the snapshots alike |
+| Lifetime | days | long, independent retention (`AUDIT_RETENTION_DAYS`, two years by default) |
 | Who reads it | developers (via logs) | the owner (Settings → History) |
 
-Developer-facing tools (support timeline, diagnostics export) only ever show the redacted view.
+Developer-facing tools (support timeline, diagnostics export) only ever show the redacted view. The audit
+trail's own design — columns, the diff, the vocabulary, retention — is in [audit.md](audit.md).
 
 ## IP addresses and users
 

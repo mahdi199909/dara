@@ -17,6 +17,8 @@ Copy `.env.example` to `.env` and fill in real values:
 | `LOG_LEVEL` | no | Logging threshold, default `info` in production. Accepts overrides: `info,SYNC=debug`. See section 5d. |
 | `LOG_SLOW_REQUEST_MS`, `LOG_SLOW_QUERY_MS` | no | A request / a database call at least this slow is logged as a warning (defaults 1000 / 300 ms) |
 | `LOG_HASH_SECRET` | no | Key for the e-mail pseudonyms in login-failure log lines; defaults to `JWT_SECRET` |
+| `AUDIT_RETENTION_DAYS` | no | How long Settings → History entries are kept on the server: 730 days by default; `0`, `off` or `never` keeps everything. Old entries are pruned daily. See doc/logging/audit.md. |
+| `AUDIT_MONEY_MODE` | no | `values` (default), `redacted` or `flag`: whether audit entries keep real amounts, mask them, or only record that they changed |
 | `AI_PROVIDER`, `AI_API_KEY` | no | Leave empty — the app runs fully rule-based without them (see README §9/§10) |
 
 **Never commit `.env` to git.** `.gitignore` already excludes it.
@@ -170,6 +172,11 @@ afterwards (successful reads are only written at debug level).
 
 Changing the compose file's `logging:` section, like any compose change, takes effect when the containers are
 recreated (`docker compose up -d`).
+
+The **audit trail** (Settings → History) is a different thing from these logs: it lives in the database and is
+kept for two years by default. A release that changes its table (the audit columns added in the logging work) adds
+nullable columns with `prisma db push` at container start — no row is touched, but back up first as always. Query
+recipes and retention are in [doc/logging/audit.md](doc/logging/audit.md).
 
 ## 5c. Releasing a new Android APK
 

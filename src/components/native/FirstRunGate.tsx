@@ -150,6 +150,16 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         log.warn("CATEGORY_DEFAULTS_FAILED", { error: err, layer: "local", trigger: "boot" });
       }
 
+      // Best-effort: the history kept on this phone is pruned to two years on every launch (see
+      // src/local/auditRetention.ts); a failure here never blocks getting into the app.
+      try {
+        const { purgeExpiredLocalAuditLogs } = await import("@/local/auditRetention");
+        const deleted = purgeExpiredLocalAuditLogs(driver);
+        if (deleted > 0) log.info("JOB_COMPLETED", { job: "audit-retention", deleted, layer: "local", trigger: "boot" });
+      } catch (err) {
+        log.error("JOB_FAILED", { job: "audit-retention", error: err, layer: "local", trigger: "boot" });
+      }
+
       // Best-effort, fire-and-forget: ask for notification permission up front (Android 13+)
       // so the OS prompt happens here on first boot rather than surprising the user the first
       // time they add a task/event/installment reminder later.

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { mutate as mutateGlobal } from "swr";
 import { Card } from "@/components/ui/Card";
 import { validateExportFile, type DataExportFile } from "@/local/dataExport";
-import { backupFileName, browserBackupApi, exportServerBackup, importBackupToServer, restorableCounts, type WebImportResult } from "@/lib/webBackup";
+import { backupFileName, browserBackupApi, exportServerBackup, importBackupToServer, reportBackupToServer, restorableCounts, type WebImportResult } from "@/lib/webBackup";
 import { TABLE_LABELS_FA } from "@/lib/backupLabels";
 import { parseIcs, type ParsedIcsEvent } from "@/lib/icsParser";
 import { formatJalali } from "@/lib/jalali";
@@ -67,6 +67,7 @@ export default function WebBackupTab() {
       const file = await exportServerBackup(api);
       const name = backupFileName();
       downloadJson(name, file);
+      void reportBackupToServer(api, { kind: "export", tables: file.tables });
       const total = restorableCounts(file.tables).reduce((sum, t) => sum + t.count, 0);
       setExportMessage(`فایل پشتیبان ساخته شد (${name}) — ${toPersianDigits(total)} مورد. آن را جای امنی نگه دارید؛ روی وب و اپلیکیشن اندروید قابل بازیابی است.`);
     } catch (err) {
@@ -114,6 +115,7 @@ export default function WebBackupTab() {
     setProgress({ done: 0, total: 0 });
     try {
       const outcome = await importBackupToServer(api, pending.file, { onProgress: (done, total) => setProgress({ done, total }) });
+      void reportBackupToServer(api, { kind: "import", result: outcome });
       setResult(outcome);
       setPending(null);
       refreshEverything();

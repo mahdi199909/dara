@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import { handleApiError } from "@/lib/apiError";
+import { audit } from "@/lib/audit";
 import { RELEASE_SINGLETON_ID } from "@/lib/appRelease";
 import { resolveAppRelease } from "@/lib/appVersion";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
@@ -44,8 +45,10 @@ async function PATCH(req: NextRequest) {
     if (body.minSupportedVersionCode > body.latestVersionCode) {
       return NextResponse.json({ error: "حداقل نسخه مجاز نمی‌تواند بیشتر از نسخه فعلی باشد." }, { status: 422 });
     }
-    await getOrInitRelease();
+    const before = await getOrInitRelease();
     const release = await prisma.appRelease.update({ where: { id: RELEASE_SINGLETON_ID }, data: body });
+    // What every installed app is told about updates just changed (a forced-update lock-out included).
+    await audit.log({ event: "RELEASE_ADMIN_UPDATED", entityType: "AppRelease", entityId: RELEASE_SINGLETON_ID, before, after: release, source: "admin", req });
     return NextResponse.json({ release, effective: resolveAppRelease(release) });
   } catch (err) {
     return handleApiError(err);

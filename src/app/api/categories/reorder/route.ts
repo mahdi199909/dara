@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
+import { audit } from "@/lib/audit";
 import { reorderCategoriesSchema } from "@/lib/schemas/categories";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
@@ -23,6 +24,8 @@ async function PATCH(req: NextRequest) {
       await prisma.category.update({ where: { id }, data: { sortOrder } });
       sortOrder++;
     }
+
+    await audit.log({ event: "CATEGORIES_REORDERED", entityType: "Category", metadata: { count: sortOrder }, req });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

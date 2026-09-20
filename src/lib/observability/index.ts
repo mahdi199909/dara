@@ -41,3 +41,8 @@ export { computeChanges, valuesEqual } from "./core/diff";
 export type { Changes, FieldChange, FieldPolicy, MoneyMode } from "./core/diff";
 
 export type { LogRecord, LogContext, LogFields, Platform, Environment, Layer, SyncStatus, SerializedError } from "./core/schema";
+
+export { AUDIT_VOCABULARY, auditEntryFor, auditEntryForEvent, auditEventFor, resolveAuditIdentity } from "./core/auditVocabulary";
+export type { AuditVocabularyEntry, ResolvedAuditIdentity } from "./core/auditVocabulary";
+export { buildAuditChanges, serializeChanges, maskMoneyInSnapshot, parseAuditMoneyMode, MAX_CHANGES_CHARS } from "./core/auditEntry";
+export type { AuditChanges, AuditMoneyMode } from "./core/auditEntry";

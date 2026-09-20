@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LOCAL_USER_ID } from "@/local/localUser";
 import { DATA_EXPORT_VERSION, validateExportFile } from "@/local/dataExport";
-import { backupFileName, buildBackupFile, importBackupToServer, remapDuplicateCategories, restorableCounts, type BackupApi } from "./webBackup";
+import { backupFileName, buildBackupFile, importBackupToServer, remapDuplicateCategories, reportBackupToServer, restorableCounts, type BackupApi } from "./webBackup";
 
 const T = "2026-09-01T00:00:00.000Z";
 
@@ -174,5 +174,46 @@ describe("importBackupToServer", () => {
     const rows = Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, title: "x" }));
     await importBackupToServer(api, buildBackupFile({ Task: rows }), { maxBatchRows: 2, onProgress: (d, t) => seen.push([d, t]) });
     expect(seen[seen.length - 1]).toEqual([3, 3]);
+  });
+});
+
+describe("reportBackupToServer", () => {
+  function recordingApi(fail = false) {
+    const posts: Array<{ url: string; body: unknown }> = [];
+    const api: BackupApi = {
+      async get() {
+        throw new Error("unexpected GET");
+      },
+      async post(url, body) {
+        posts.push({ url, body });
+        if (fail) throw new Error("server unreachable");
+        return { ok: true };
+      },
+    };
+    return { api, posts };
+  }
+
+  it("reports an export as counts per table — never the rows", async () => {
+    const { api, posts } = recordingApi();
+    const file = buildBackupFile({ Task: [{ id: "t1", title: "کار خیلی خصوصی" }, { id: "t2", title: "x" }], Habit: [{ id: "h1" }], Reminder: [] });
+    await reportBackupToServer(api, { kind: "export", tables: file.tables });
+    expect(posts).toEqual([{ url: "/api/backup/record", body: { kind: "export", rows: 3, tables: { Task: 2, Habit: 1 } } }]);
+    expect(JSON.stringify(posts)).not.toContain("خصوصی");
+  });
+
+  it("reports an import as what the server stored, what it already had and how many it refused", async () => {
+    const { api, posts } = recordingApi();
+    await reportBackupToServer(api, {
+      kind: "import",
+      result: { stored: { Task: 4, Category: 1 }, unchanged: 7, rejected: [{ table: "Task", id: "t9", reason: "amount: not a number" }], requests: 2 },
+    });
+    expect(posts).toEqual([{ url: "/api/backup/record", body: { kind: "import", rows: 5, tables: { Task: 4, Category: 1 }, unchanged: 7, rejected: 1 } }]);
+    expect(JSON.stringify(posts)).not.toContain("t9");
+  });
+
+  it("never lets a failed report turn a finished backup into an error", async () => {
+    const { api } = recordingApi(true);
+    await expect(reportBackupToServer(api, { kind: "export", tables: { Task: [{ id: "t1" }] } })).resolves.toBeUndefined();
+    await expect(reportBackupToServer(api, { kind: "import", result: { stored: {}, unchanged: 0, rejected: [], requests: 0 } })).resolves.toBeUndefined();
   });
 });

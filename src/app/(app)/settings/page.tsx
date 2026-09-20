@@ -58,6 +58,11 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   CREATE_TRANSFER: "انتقال وجه",
   PAYMENT: "پرداخت",
   CHANGE_SETTINGS: "تغییر تنظیمات",
+  REORDER: "مرتب‌سازی",
+  BACKUP_EXPORT: "ساخت فایل پشتیبان",
+  BACKUP_IMPORT: "بازیابی پشتیبان",
+  ADMIN_LICENSE_UPDATE: "تغییر اشتراک کاربر",
+  ADMIN_RELEASE_UPDATE: "تغییر تنظیم نسخه‌ی برنامه",
 };
 
 export default function SettingsPage() {
@@ -1142,6 +1147,13 @@ function BackupTab() {
       // dance) and that's all this needs — the file's real destination is wherever the user picks
       // in the share sheet right below, not "visible in a file manager".
       await Filesystem.writeFile({ path: filename, data: json, directory: Directory.Cache, encoding: Encoding.UTF8 });
+      // The file exists now — leave the trace (history entry + log line). Best effort: it must never turn a made backup into an error.
+      try {
+        const [{ recordBackupExported }, { getLocalUserId }] = await Promise.all([import("@/local/backupAudit"), import("@/local/localUser")]);
+        recordBackupExported(db, getLocalUserId(db), data);
+      } catch {
+        // already reported by the recorder itself where it could be
+      }
       const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
       // `files` (not `url`) is @capacitor/share's option for a local file:// attachment — see
       // node_modules/@capacitor/share's ShareOptions — so Telegram/email/etc. in the resulting
@@ -1150,6 +1162,7 @@ function BackupTab() {
 
       setExportMessage(`فایل پشتیبان ساخته شد (${filename}) — از صفحه‌ی اشتراک‌گذاری، مقصد را انتخاب کنید.`);
     } catch (err) {
+      void import("@/local/backupAudit").then(({ recordBackupFailed }) => recordBackupFailed("export", err));
       setExportError(err instanceof Error ? err.message : "ساخت فایل پشتیبان با خطا مواجه شد.");
     } finally {
       setExporting(false);
@@ -1201,9 +1214,17 @@ function BackupTab() {
       const db = getLocalDbInstance();
       if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
       const result = importAllData(db, pendingImport.file);
+      // The import has returned — leave the trace (history entry + log line). Best effort, as above.
+      try {
+        const [{ recordBackupImported }, { getLocalUserId }] = await Promise.all([import("@/local/backupAudit"), import("@/local/localUser")]);
+        recordBackupImported(db, getLocalUserId(db), result);
+      } catch {
+        // already reported by the recorder itself where it could be
+      }
       setImportResult(result);
       setPendingImport(null);
     } catch (err) {
+      void import("@/local/backupAudit").then(({ recordBackupFailed }) => recordBackupFailed("import", err));
       setImportError(err instanceof Error ? err.message : "وارد کردن اطلاعات با خطا مواجه شد.");
     } finally {
       setImporting(false);

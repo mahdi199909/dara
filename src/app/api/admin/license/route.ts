@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import { handleApiError, ApiError } from "@/lib/apiError";
+import { audit } from "@/lib/audit";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 async function findUserByEmail(email: string) {
@@ -51,10 +52,24 @@ async function PATCH(req: NextRequest) {
     // started on first login — admin-granted trials should feel identical to an organic one.
     const trialEndsAt = body.status === "TRIAL" ? new Date(Date.now() + 30 * 86_400_000) : null;
 
+    const before = await prisma.license.findUnique({ where: { userId: user.id } });
     const license = await prisma.license.upsert({
       where: { userId: user.id },
       create: { userId: user.id, status: body.status, currentPeriodEnd, trialEndsAt },
       update: { status: body.status, currentPeriodEnd, trialEndsAt },
+    });
+
+    // Someone else's subscription changed: the owner's history records who did what to whom (the
+    // target only as an opaque id — never the address). The audit row belongs to the acting owner.
+    await audit.log({
+      event: "LICENSE_ADMIN_UPDATED",
+      entityType: "License",
+      entityId: license.id,
+      before: before ?? undefined,
+      after: license,
+      metadata: { targetUserId: user.id },
+      source: "admin",
+      req,
     });
 
     return NextResponse.json({ user, license });

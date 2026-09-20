@@ -655,6 +655,16 @@ model AuditLog {
   userAgent  String?
   metadata   String? // JSON
 
+  // Audit v2 — every column below is optional, so every older row and every older writer stays valid.
+  // See doc/logging/audit.md.
+  event        String? // canonical fact in the shared vocabulary, e.g. TASK_UPDATED
+  source       String? // api | admin | local
+  requestId    String? // the API request that wrote the row; the server's application log carries the same id
+  traceId      String?
+  deviceId     String? // the phone the change came from, when known
+  localEventId String? // the phone's own id for the write (ties the row to its application-log line)
+  changes      String? // JSON { changedFields, changes: { field: { from, to } } } — set for updates
+
   createdAt DateTime @default(now())
 
   @@index([userId])

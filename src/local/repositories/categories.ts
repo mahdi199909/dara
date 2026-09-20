@@ -163,6 +163,7 @@ export function reorderCategories(db: LocalDb, userId: string, orderedIds: strin
     db.run(`UPDATE "Category" SET "sortOrder" = ?, "updatedAt" = ? WHERE "id" = ?`, [sortOrder, now_, id]);
     sortOrder++;
   }
+  writeLocalAuditLog(db, { userId, action: "REORDER", entityType: "Category", metadata: { count: sortOrder } });
   return { ok: true };
 }
 

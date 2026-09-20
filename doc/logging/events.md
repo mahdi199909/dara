@@ -37,16 +37,16 @@ Default module: `tasks`
 | --- | --- | --- | --- | --- |
 | `TASK_COMPLETE_FAILED` | ERROR | protected | reserved | Task complete failed. |
 | `TASK_COMPLETE_STARTED` | DEBUG | — | reserved | Task complete started. |
-| `TASK_COMPLETE_SUCCESS` | INFO | — | reserved | Task complete success. |
+| `TASK_COMPLETE_SUCCESS` | INFO | — | yes | Task complete success. |
 | `TASK_CREATE_FAILED` | ERROR | protected | reserved | Task create failed. |
 | `TASK_CREATE_STARTED` | DEBUG | — | reserved | Task create started. |
 | `TASK_CREATE_SUCCESS` | INFO | — | yes | Task create success. |
 | `TASK_DELETE_FAILED` | ERROR | protected | reserved | Task delete failed. |
 | `TASK_DELETE_STARTED` | DEBUG | — | reserved | Task delete started. |
-| `TASK_DELETE_SUCCESS` | INFO | — | reserved | Task delete success. |
+| `TASK_DELETE_SUCCESS` | INFO | — | yes | Task delete success. |
 | `TASK_UPDATE_FAILED` | ERROR | protected | reserved | Task update failed. |
 | `TASK_UPDATE_STARTED` | DEBUG | — | reserved | Task update started. |
-| `TASK_UPDATE_SUCCESS` | INFO | — | reserved | Task update success. |
+| `TASK_UPDATE_SUCCESS` | INFO | — | yes | Task update success. |
 
 ## PROJECT
 
@@ -56,16 +56,16 @@ Default module: `projects`
 | --- | --- | --- | --- | --- |
 | `PROJECT_COMPLETE_FAILED` | ERROR | protected | reserved | Project complete failed. |
 | `PROJECT_COMPLETE_STARTED` | DEBUG | — | reserved | Project complete started. |
-| `PROJECT_COMPLETE_SUCCESS` | INFO | — | reserved | Project complete success. |
+| `PROJECT_COMPLETE_SUCCESS` | INFO | — | yes | Project complete success. |
 | `PROJECT_CREATE_FAILED` | ERROR | protected | reserved | Project create failed. |
 | `PROJECT_CREATE_STARTED` | DEBUG | — | reserved | Project create started. |
-| `PROJECT_CREATE_SUCCESS` | INFO | — | reserved | Project create success. |
+| `PROJECT_CREATE_SUCCESS` | INFO | — | yes | Project create success. |
 | `PROJECT_DELETE_FAILED` | ERROR | protected | reserved | Project delete failed. |
 | `PROJECT_DELETE_STARTED` | DEBUG | — | reserved | Project delete started. |
-| `PROJECT_DELETE_SUCCESS` | INFO | — | reserved | Project delete success. |
+| `PROJECT_DELETE_SUCCESS` | INFO | — | yes | Project delete success. |
 | `PROJECT_UPDATE_FAILED` | ERROR | protected | reserved | Project update failed. |
 | `PROJECT_UPDATE_STARTED` | DEBUG | — | reserved | Project update started. |
-| `PROJECT_UPDATE_SUCCESS` | INFO | — | reserved | Project update success. |
+| `PROJECT_UPDATE_SUCCESS` | INFO | — | yes | Project update success. |
 
 ## ACTIVITY
 
@@ -75,13 +75,13 @@ Default module: `activities`
 | --- | --- | --- | --- | --- |
 | `ACTIVITY_CREATE_FAILED` | ERROR | protected | reserved | Activity create failed. |
 | `ACTIVITY_CREATE_STARTED` | DEBUG | — | reserved | Activity create started. |
-| `ACTIVITY_CREATE_SUCCESS` | INFO | — | reserved | Activity create success. |
+| `ACTIVITY_CREATE_SUCCESS` | INFO | — | yes | Activity create success. |
 | `ACTIVITY_DELETE_FAILED` | ERROR | protected | reserved | Activity delete failed. |
 | `ACTIVITY_DELETE_STARTED` | DEBUG | — | reserved | Activity delete started. |
-| `ACTIVITY_DELETE_SUCCESS` | INFO | — | reserved | Activity delete success. |
+| `ACTIVITY_DELETE_SUCCESS` | INFO | — | yes | Activity delete success. |
 | `ACTIVITY_UPDATE_FAILED` | ERROR | protected | reserved | Activity update failed. |
 | `ACTIVITY_UPDATE_STARTED` | DEBUG | — | reserved | Activity update started. |
-| `ACTIVITY_UPDATE_SUCCESS` | INFO | — | reserved | Activity update success. |
+| `ACTIVITY_UPDATE_SUCCESS` | INFO | — | yes | Activity update success. |
 
 ## TIME
 
@@ -91,13 +91,13 @@ Default module: `activities`
 | --- | --- | --- | --- | --- |
 | `TIME_ENTRY_CREATE_FAILED` | ERROR | protected | reserved | Time entry create failed. |
 | `TIME_ENTRY_CREATE_STARTED` | DEBUG | — | reserved | Time entry create started. |
-| `TIME_ENTRY_CREATE_SUCCESS` | INFO | — | reserved | Time entry create success. |
+| `TIME_ENTRY_CREATE_SUCCESS` | INFO | — | yes | Time entry create success. |
 | `TIME_TIMER_START_FAILED` | ERROR | protected | reserved | Time timer start failed. |
 | `TIME_TIMER_START_STARTED` | DEBUG | — | reserved | Time timer start started. |
-| `TIME_TIMER_START_SUCCESS` | INFO | — | reserved | Time timer start success. |
+| `TIME_TIMER_START_SUCCESS` | INFO | — | yes | Time timer start success. |
 | `TIME_TIMER_STOP_FAILED` | ERROR | protected | reserved | Time timer stop failed. |
 | `TIME_TIMER_STOP_STARTED` | DEBUG | — | reserved | Time timer stop started. |
-| `TIME_TIMER_STOP_SUCCESS` | INFO | — | reserved | Time timer stop success. |
+| `TIME_TIMER_STOP_SUCCESS` | INFO | — | yes | Time timer stop success. |
 
 ## CATEGORY
 
@@ -107,17 +107,17 @@ Default module: `categories`
 | --- | --- | --- | --- | --- |
 | `CATEGORY_CREATE_FAILED` | ERROR | protected | reserved | Category create failed. |
 | `CATEGORY_CREATE_STARTED` | DEBUG | — | reserved | Category create started. |
-| `CATEGORY_CREATE_SUCCESS` | INFO | — | reserved | Category create success. |
+| `CATEGORY_CREATE_SUCCESS` | INFO | — | yes | Category create success. |
 | `CATEGORY_DEFAULTS_FAILED` | WARN | — | yes | Default categories could not be created or merged. |
 | `CATEGORY_DELETE_FAILED` | ERROR | protected | reserved | Category delete failed. |
 | `CATEGORY_DELETE_STARTED` | DEBUG | — | reserved | Category delete started. |
-| `CATEGORY_DELETE_SUCCESS` | INFO | — | reserved | Category delete success. |
+| `CATEGORY_DELETE_SUCCESS` | INFO | — | yes | Category delete success. |
 | `CATEGORY_REORDER_FAILED` | ERROR | protected | reserved | Category reorder failed. |
 | `CATEGORY_REORDER_STARTED` | DEBUG | — | reserved | Category reorder started. |
-| `CATEGORY_REORDER_SUCCESS` | INFO | — | reserved | Category reorder success. |
+| `CATEGORY_REORDER_SUCCESS` | INFO | — | yes | Category reorder success. |
 | `CATEGORY_UPDATE_FAILED` | ERROR | protected | reserved | Category update failed. |
 | `CATEGORY_UPDATE_STARTED` | DEBUG | — | reserved | Category update started. |
-| `CATEGORY_UPDATE_SUCCESS` | INFO | — | reserved | Category update success. |
+| `CATEGORY_UPDATE_SUCCESS` | INFO | — | yes | Category update success. |
 
 ## EVENT
 
@@ -127,16 +127,16 @@ Default module: `calendar`
 | --- | --- | --- | --- | --- |
 | `EVENT_COMPLETE_FAILED` | ERROR | protected | reserved | Event complete failed. |
 | `EVENT_COMPLETE_STARTED` | DEBUG | — | reserved | Event complete started. |
-| `EVENT_COMPLETE_SUCCESS` | INFO | — | reserved | Event complete success. |
+| `EVENT_COMPLETE_SUCCESS` | INFO | — | yes | Event complete success. |
 | `EVENT_CREATE_FAILED` | ERROR | protected | reserved | Event create failed. |
 | `EVENT_CREATE_STARTED` | DEBUG | — | reserved | Event create started. |
-| `EVENT_CREATE_SUCCESS` | INFO | — | reserved | Event create success. |
+| `EVENT_CREATE_SUCCESS` | INFO | — | yes | Event create success. |
 | `EVENT_DELETE_FAILED` | ERROR | protected | reserved | Event delete failed. |
 | `EVENT_DELETE_STARTED` | DEBUG | — | reserved | Event delete started. |
-| `EVENT_DELETE_SUCCESS` | INFO | — | reserved | Event delete success. |
+| `EVENT_DELETE_SUCCESS` | INFO | — | yes | Event delete success. |
 | `EVENT_UPDATE_FAILED` | ERROR | protected | reserved | Event update failed. |
 | `EVENT_UPDATE_STARTED` | DEBUG | — | reserved | Event update started. |
-| `EVENT_UPDATE_SUCCESS` | INFO | — | reserved | Event update success. |
+| `EVENT_UPDATE_SUCCESS` | INFO | — | yes | Event update success. |
 
 ## HABIT
 
@@ -146,19 +146,19 @@ Default module: `habits`
 | --- | --- | --- | --- | --- |
 | `HABIT_CHECKIN_FAILED` | ERROR | protected | reserved | Habit checkin failed. |
 | `HABIT_CHECKIN_STARTED` | DEBUG | — | reserved | Habit checkin started. |
-| `HABIT_CHECKIN_SUCCESS` | INFO | — | reserved | Habit checkin success. |
+| `HABIT_CHECKIN_SUCCESS` | INFO | — | yes | Habit checkin success. |
 | `HABIT_CREATE_FAILED` | ERROR | protected | reserved | Habit create failed. |
 | `HABIT_CREATE_STARTED` | DEBUG | — | reserved | Habit create started. |
-| `HABIT_CREATE_SUCCESS` | INFO | — | reserved | Habit create success. |
+| `HABIT_CREATE_SUCCESS` | INFO | — | yes | Habit create success. |
 | `HABIT_DELETE_FAILED` | ERROR | protected | reserved | Habit delete failed. |
 | `HABIT_DELETE_STARTED` | DEBUG | — | reserved | Habit delete started. |
-| `HABIT_DELETE_SUCCESS` | INFO | — | reserved | Habit delete success. |
+| `HABIT_DELETE_SUCCESS` | INFO | — | yes | Habit delete success. |
 | `HABIT_UNDO_FAILED` | ERROR | protected | reserved | Habit undo failed. |
 | `HABIT_UNDO_STARTED` | DEBUG | — | reserved | Habit undo started. |
-| `HABIT_UNDO_SUCCESS` | INFO | — | reserved | Habit undo success. |
+| `HABIT_UNDO_SUCCESS` | INFO | — | yes | Habit undo success. |
 | `HABIT_UPDATE_FAILED` | ERROR | protected | reserved | Habit update failed. |
 | `HABIT_UPDATE_STARTED` | DEBUG | — | reserved | Habit update started. |
-| `HABIT_UPDATE_SUCCESS` | INFO | — | reserved | Habit update success. |
+| `HABIT_UPDATE_SUCCESS` | INFO | — | yes | Habit update success. |
 
 ## ACCOUNT
 
@@ -168,16 +168,16 @@ Default module: `finance`
 | --- | --- | --- | --- | --- |
 | `ACCOUNT_CREATE_FAILED` | ERROR | protected | reserved | Account create failed. |
 | `ACCOUNT_CREATE_STARTED` | DEBUG | — | reserved | Account create started. |
-| `ACCOUNT_CREATE_SUCCESS` | INFO | — | reserved | Account create success. |
+| `ACCOUNT_CREATE_SUCCESS` | INFO | — | yes | Account create success. |
 | `ACCOUNT_DELETE_FAILED` | ERROR | protected | reserved | Account delete failed. |
 | `ACCOUNT_DELETE_STARTED` | DEBUG | — | reserved | Account delete started. |
-| `ACCOUNT_DELETE_SUCCESS` | INFO | — | reserved | Account delete success. |
+| `ACCOUNT_DELETE_SUCCESS` | INFO | — | yes | Account delete success. |
 | `ACCOUNT_TRANSFER_FAILED` | ERROR | protected | reserved | Account transfer failed. |
 | `ACCOUNT_TRANSFER_STARTED` | DEBUG | — | reserved | Account transfer started. |
-| `ACCOUNT_TRANSFER_SUCCESS` | INFO | — | reserved | Account transfer success. |
+| `ACCOUNT_TRANSFER_SUCCESS` | INFO | — | yes | Account transfer success. |
 | `ACCOUNT_UPDATE_FAILED` | ERROR | protected | reserved | Account update failed. |
 | `ACCOUNT_UPDATE_STARTED` | DEBUG | — | reserved | Account update started. |
-| `ACCOUNT_UPDATE_SUCCESS` | INFO | — | reserved | Account update success. |
+| `ACCOUNT_UPDATE_SUCCESS` | INFO | — | yes | Account update success. |
 
 ## TRANSACTION
 
@@ -190,10 +190,10 @@ Default module: `finance`
 | `TRANSACTION_CREATE_SUCCESS` | INFO | — | reserved | Transaction create success. |
 | `TRANSACTION_DELETE_FAILED` | ERROR | protected | reserved | Transaction delete failed. |
 | `TRANSACTION_DELETE_STARTED` | DEBUG | — | reserved | Transaction delete started. |
-| `TRANSACTION_DELETE_SUCCESS` | INFO | — | reserved | Transaction delete success. |
+| `TRANSACTION_DELETE_SUCCESS` | INFO | — | yes | Transaction delete success. |
 | `TRANSACTION_UPDATE_FAILED` | ERROR | protected | reserved | Transaction update failed. |
 | `TRANSACTION_UPDATE_STARTED` | DEBUG | — | reserved | Transaction update started. |
-| `TRANSACTION_UPDATE_SUCCESS` | INFO | — | reserved | Transaction update success. |
+| `TRANSACTION_UPDATE_SUCCESS` | INFO | — | yes | Transaction update success. |
 
 ## EXPENSE
 
@@ -203,7 +203,7 @@ Default module: `finance`
 | --- | --- | --- | --- | --- |
 | `EXPENSE_CREATE_FAILED` | ERROR | protected | reserved | Expense create failed. |
 | `EXPENSE_CREATE_STARTED` | DEBUG | — | reserved | Expense create started. |
-| `EXPENSE_CREATE_SUCCESS` | INFO | — | reserved | Expense create success. |
+| `EXPENSE_CREATE_SUCCESS` | INFO | — | yes | Expense create success. |
 | `EXPENSE_DELETE_FAILED` | ERROR | protected | reserved | Expense delete failed. |
 | `EXPENSE_DELETE_STARTED` | DEBUG | — | reserved | Expense delete started. |
 | `EXPENSE_DELETE_SUCCESS` | INFO | — | reserved | Expense delete success. |
@@ -219,7 +219,7 @@ Default module: `finance`
 | --- | --- | --- | --- | --- |
 | `INCOME_CREATE_FAILED` | ERROR | protected | reserved | Income create failed. |
 | `INCOME_CREATE_STARTED` | DEBUG | — | reserved | Income create started. |
-| `INCOME_CREATE_SUCCESS` | INFO | — | reserved | Income create success. |
+| `INCOME_CREATE_SUCCESS` | INFO | — | yes | Income create success. |
 | `INCOME_DELETE_FAILED` | ERROR | protected | reserved | Income delete failed. |
 | `INCOME_DELETE_STARTED` | DEBUG | — | reserved | Income delete started. |
 | `INCOME_DELETE_SUCCESS` | INFO | — | reserved | Income delete success. |
@@ -235,16 +235,16 @@ Default module: `finance`
 | --- | --- | --- | --- | --- |
 | `INSTALLMENT_CREATE_FAILED` | ERROR | protected | reserved | Installment create failed. |
 | `INSTALLMENT_CREATE_STARTED` | DEBUG | — | reserved | Installment create started. |
-| `INSTALLMENT_CREATE_SUCCESS` | INFO | — | reserved | Installment create success. |
+| `INSTALLMENT_CREATE_SUCCESS` | INFO | — | yes | Installment create success. |
 | `INSTALLMENT_DELETE_FAILED` | ERROR | protected | reserved | Installment delete failed. |
 | `INSTALLMENT_DELETE_STARTED` | DEBUG | — | reserved | Installment delete started. |
-| `INSTALLMENT_DELETE_SUCCESS` | INFO | — | reserved | Installment delete success. |
+| `INSTALLMENT_DELETE_SUCCESS` | INFO | — | yes | Installment delete success. |
 | `INSTALLMENT_PAY_FAILED` | ERROR | protected | reserved | Installment pay failed. |
 | `INSTALLMENT_PAY_STARTED` | DEBUG | — | reserved | Installment pay started. |
-| `INSTALLMENT_PAY_SUCCESS` | INFO | — | reserved | Installment pay success. |
+| `INSTALLMENT_PAY_SUCCESS` | INFO | — | yes | Installment pay success. |
 | `INSTALLMENT_UPDATE_FAILED` | ERROR | protected | reserved | Installment update failed. |
 | `INSTALLMENT_UPDATE_STARTED` | DEBUG | — | reserved | Installment update started. |
-| `INSTALLMENT_UPDATE_SUCCESS` | INFO | — | reserved | Installment update success. |
+| `INSTALLMENT_UPDATE_SUCCESS` | INFO | — | yes | Installment update success. |
 
 ## DEBT
 
@@ -267,13 +267,13 @@ Default module: `assets`
 | --- | --- | --- | --- | --- |
 | `ASSET_CREATE_FAILED` | ERROR | protected | reserved | Asset create failed. |
 | `ASSET_CREATE_STARTED` | DEBUG | — | reserved | Asset create started. |
-| `ASSET_CREATE_SUCCESS` | INFO | — | reserved | Asset create success. |
+| `ASSET_CREATE_SUCCESS` | INFO | — | yes | Asset create success. |
 | `ASSET_DELETE_FAILED` | ERROR | protected | reserved | Asset delete failed. |
 | `ASSET_DELETE_STARTED` | DEBUG | — | reserved | Asset delete started. |
-| `ASSET_DELETE_SUCCESS` | INFO | — | reserved | Asset delete success. |
+| `ASSET_DELETE_SUCCESS` | INFO | — | yes | Asset delete success. |
 | `ASSET_UPDATE_FAILED` | ERROR | protected | reserved | Asset update failed. |
 | `ASSET_UPDATE_STARTED` | DEBUG | — | reserved | Asset update started. |
-| `ASSET_UPDATE_SUCCESS` | INFO | — | reserved | Asset update success. |
+| `ASSET_UPDATE_SUCCESS` | INFO | — | yes | Asset update success. |
 
 ## REPORT
 
@@ -375,8 +375,8 @@ Default module: `backup`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `BACKUP_COMPLETED` | INFO | — | reserved | A backup export finished (record count, file size, duration). |
-| `BACKUP_FAILED` | ERROR | protected | reserved | A backup export failed. |
+| `BACKUP_COMPLETED` | INFO | — | yes | A backup export finished (record count, file size, duration). |
+| `BACKUP_FAILED` | ERROR | protected | yes | A backup export failed. |
 | `BACKUP_STARTED` | INFO | — | reserved | A backup export started. |
 
 ## EXPORT
@@ -409,7 +409,7 @@ Default module: `settings`
 | `SETTINGS_THEME_SYNC_FAILED` | WARN | — | yes | The status-bar colour could not follow the theme. |
 | `SETTINGS_UPDATE_FAILED` | ERROR | protected | reserved | Settings update failed. |
 | `SETTINGS_UPDATE_STARTED` | DEBUG | — | reserved | Settings update started. |
-| `SETTINGS_UPDATE_SUCCESS` | INFO | — | reserved | Settings update success. |
+| `SETTINGS_UPDATE_SUCCESS` | INFO | — | yes | Settings update success. |
 
 ## HTTP
 
@@ -439,9 +439,9 @@ Default module: `backup`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `RESTORE_COMPLETED` | INFO | — | reserved | A backup restore finished. |
-| `RESTORE_FAILED` | ERROR | protected | reserved | A backup restore failed. |
-| `RESTORE_PARTIAL` | WARN | protected | reserved | A backup was restored, but some rows were refused. |
+| `RESTORE_COMPLETED` | INFO | — | yes | A backup restore finished. |
+| `RESTORE_FAILED` | ERROR | protected | yes | A backup restore failed. |
+| `RESTORE_PARTIAL` | WARN | protected | yes | A backup was restored, but some rows were refused. |
 | `RESTORE_STARTED` | INFO | — | reserved | A backup restore started. |
 
 ## LOCAL_NOTIFICATION
@@ -480,7 +480,7 @@ Default module: `release`
 | `LICENSE_STATUS_CHECK_SUCCESS` | INFO | — | reserved | License status check success. |
 | `LICENSE_TRIAL_START_FAILED` | ERROR | protected | reserved | License trial start failed. |
 | `LICENSE_TRIAL_START_STARTED` | DEBUG | — | reserved | License trial start started. |
-| `LICENSE_TRIAL_START_SUCCESS` | INFO | — | reserved | License trial start success. |
+| `LICENSE_TRIAL_START_SUCCESS` | INFO | — | yes | License trial start success. |
 
 ## RELEASE
 
@@ -498,10 +498,10 @@ Default module: `system`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `JOB_COMPLETED` | INFO | — | reserved | A background job finished. |
-| `JOB_FAILED` | ERROR | protected | reserved | A background job failed. |
-| `JOB_SKIPPED` | DEBUG | — | reserved | A background job had nothing to do. |
-| `JOB_STARTED` | DEBUG | — | reserved | A background job started. |
+| `JOB_COMPLETED` | INFO | — | yes | A background job finished. |
+| `JOB_FAILED` | ERROR | protected | yes | A background job failed. |
+| `JOB_SKIPPED` | DEBUG | — | yes | A background job had nothing to do. |
+| `JOB_STARTED` | DEBUG | — | yes | A background job started. |
 
 ## LOG
 
