@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
 import { formatDuration, truncateLabel, toPersianDigits, compactDuration } from "@/lib/money";
 import { formatJalali, formatJalaliMonthYear, toJalali, formatTime } from "@/lib/jalali";
-import { getJalaliMonthGrid, addJalaliMonths, dayKeyIso } from "@/lib/calendarGrid";
+import { getJalaliMonthGrid, addJalaliMonths, dayKeyIso, parseDayKey } from "@/lib/calendarGrid";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import { ChevronRightIcon, ChevronLeftIcon } from "@/components/icons";
@@ -84,10 +84,22 @@ const REPORT_TABS = [
 
 const timeColors = ["#2c7166", "#57a89c", "#b0a24a", "#c95a4c", "#8a7ac9", "#8a8a8a"];
 
+// useSearchParams needs a Suspense boundary for the static (Android) export.
 export default function ReportsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ReportsPageInner />
+    </Suspense>
+  );
+}
+
+function ReportsPageInner() {
   const router = useRouter();
   const [preset, setPreset] = useState("month");
-  const [tab, setTab] = useState<(typeof REPORT_TABS)[number]["key"]>("summary");
+  // A search result for a habit or category lands here as /reports?tab=categoryCalendar&category=<id>&day=YYYY-MM-DD.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<(typeof REPORT_TABS)[number]["key"]>(REPORT_TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof REPORT_TABS)[number]["key"]) : "summary");
   // A range of the person's own choosing: whole days, from the first to the last picked (both included).
   const [customFrom, setCustomFrom] = useState(() => {
     const d = new Date();
@@ -218,7 +230,7 @@ export default function ReportsPage() {
       )}
 
       {tab === "categoryCalendar" ? (
-        <CategoryCalendarTab />
+        <CategoryCalendarTab initialCategoryId={searchParams.get("category")} initialDay={searchParams.get("day")} />
       ) : preset === CUSTOM_PRESET && customError ? null : !data ? (
         <p className="text-sm text-muted text-center py-10">در حال بارگذاری...</p>
       ) : tab === "summary" ? (
@@ -667,10 +679,11 @@ function HiddenCostTab({ hiddenCost }: { hiddenCost: any }) {
 
 const WEEKDAY_HEADERS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
 
-function CategoryCalendarTab() {
-  const [cursor, setCursor] = useState(new Date());
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+function CategoryCalendarTab({ initialCategoryId, initialDay }: { initialCategoryId?: string | null; initialDay?: string | null }) {
+  // Opened from a search result: that category preselected, on the month of the last day something was done in it.
+  const [cursor, setCursor] = useState(() => (initialDay ? parseDayKey(initialDay) : null) ?? new Date());
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(initialCategoryId ?? null);
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(initialDay && initialCategoryId ? initialDay : null);
   const { jy, jm } = toJalali(cursor);
   const { data } = useSWR<{ categories: any[]; jy: number; jm: number }>(
     `/api/reports/category-calendar?jy=${jy}&jm=${jm}`,

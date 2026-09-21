@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories, useAccounts } from "@/lib/hooks";
@@ -10,10 +11,10 @@ import { toPersianDigits } from "@/lib/money";
 import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type AccountType } from "@/lib/types";
-import { computeLoanInterest, computeEffectiveAnnualRate } from "@/lib/installments";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { notifySaved } from "@/lib/savedToast";
+import { InstallmentPlanCard, NewInstallmentPlanForm } from "@/components/finance/InstallmentPlans";
 
 const TABS = [
   { key: "transactions", label: "تراکنش‌ها" },
@@ -21,8 +22,20 @@ const TABS = [
   { key: "installments", label: "اقساط" },
 ] as const;
 
+// useSearchParams needs a Suspense boundary for the static (Android) export.
 export default function FinancePage() {
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("transactions");
+  return (
+    <Suspense fallback={null}>
+      <FinancePageInner />
+    </Suspense>
+  );
+}
+
+function FinancePageInner() {
+  // A search result for an installment plan lands here as /finance?tab=installments&plan=<id>.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>(TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof TABS)[number]["key"]) : "transactions");
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -46,7 +59,7 @@ export default function FinancePage() {
 
       {tab === "transactions" && <TransactionsTab />}
       {tab === "accounts" && <AccountsTab />}
-      {tab === "installments" && <InstallmentsTab />}
+      {tab === "installments" && <InstallmentsTab highlightPlanId={searchParams.get("plan")} />}
     </div>
   );
 }
@@ -534,7 +547,7 @@ function MonthInstallmentRing({ paid, total }: { paid: number; total: number }) 
   );
 }
 
-function InstallmentsTab() {
+function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null }) {
   const { data, mutate } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
   const { accounts } = useAccounts();
   const [showForm, setShowForm] = useState(false);
@@ -643,375 +656,8 @@ function InstallmentsTab() {
           return new Date(a.summary.nextDueDate).getTime() - new Date(b.summary.nextDueDate).getTime();
         })
         .map((plan) => (
-          <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} />
+          <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} highlighted={plan.id === highlightPlanId} />
         ))}
     </div>
-  );
-}
-
-const INSTALLMENT_STATUS_LABELS: Record<string, string> = { PENDING: "در انتظار", PAID: "پرداخت‌شده", OVERDUE: "دیرکرد" };
-
-function InstallmentPlanCard({ plan, accounts, onChanged }: { plan: any; accounts: any[]; onChanged: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [payAccountId, setPayAccountId] = useState(accounts[0]?.id ?? "");
-  const [payingId, setPayingId] = useState<string | null>(null);
-  const { format } = useCurrencyUnit();
-
-  const interest = computeLoanInterest({
-    totalAmount: plan.totalAmount,
-    installmentAmount: plan.installmentAmount,
-    numberOfInstallments: plan.numberOfInstallments,
-  });
-  const annualRate = computeEffectiveAnnualRate({
-    totalAmount: plan.totalAmount,
-    installmentAmount: plan.installmentAmount,
-    numberOfInstallments: plan.numberOfInstallments,
-  });
-
-  async function pay(installmentId: string) {
-    if (!payAccountId) return;
-    setPayingId(installmentId);
-    try {
-      await apiPost(`/api/installments/${installmentId}/pay`, { accountId: payAccountId });
-      onChanged();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "پرداخت ناموفق بود.");
-    } finally {
-      setPayingId(null);
-    }
-  }
-
-  async function remove() {
-    if (!confirm("این طرح قسط حذف شود؟")) return;
-
-    // A plan with real payment history gets one more, explicit choice: cascade-delete the
-    // EXPENSE transactions those payments created too, or leave them exactly as they are (the
-    // plan itself is removed from اقساط either way — this used to hard-block deletion entirely
-    // whenever any installment was paid, which was more restrictive than what's actually needed).
-    let deleteTransactions = false;
-    if (plan.summary.paidCount > 0) {
-      deleteTransactions = confirm(
-        "این طرح پرداخت‌های ثبت‌شده دارد. تراکنش‌های مرتبط با آن‌ها هم حذف شوند؟\n(در غیر این صورت فقط طرح از این بخش حذف می‌شود و تراکنش‌ها در گزارش‌ها باقی می‌مانند.)"
-      );
-    }
-
-    try {
-      await apiDelete(`/api/installment-plans/${plan.id}?deleteTransactions=${deleteTransactions}`);
-      onChanged();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "حذف طرح ناموفق بود.");
-    }
-  }
-
-  if (editing) {
-    return <EditInstallmentPlanForm plan={plan} onDone={() => { setEditing(false); onChanged(); }} onCancel={() => setEditing(false)} />;
-  }
-
-  return (
-    <Card className="p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-bold text-ink">{plan.title}</h3>
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button onClick={() => setEditing(true)} aria-label="ویرایش" className="p-1.5 rounded-lg text-muted hover:bg-canvas">
-            <EditIcon className="w-4 h-4" />
-          </button>
-          <button onClick={remove} aria-label="حذف" className="p-1.5 rounded-lg text-waste hover:bg-canvas">
-            <TrashIcon className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <StatItem label="کل بدهی" value={format(plan.summary.totalAmount, { withSuffix: true })} />
-        <StatItem label="پرداخت‌شده" value={format(plan.summary.paidAmount, { withSuffix: true })} tone="positive" />
-        <StatItem label="باقی‌مانده" value={format(plan.summary.remainingAmount, { withSuffix: true })} tone="negative" />
-        <StatItem
-          label="سررسید بعدی"
-          value={plan.summary.nextDueDate ? formatJalali(new Date(plan.summary.nextDueDate)) : "—"}
-        />
-      </div>
-      {interest.interest > 0 && (
-        <div className="mt-3 rounded-xl bg-waste-50 px-3 py-2 space-y-1 text-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-muted">
-              مبلغ اصل: {format(plan.totalAmount, { withSuffix: true })} · مجموع بازپرداخت: {format(interest.totalPayable, { withSuffix: true })}
-            </span>
-            <span className="text-waste font-bold shrink-0">
-              سود واقعی: {format(interest.interest, { withSuffix: true })} ({interest.interestPercent.toFixed(1)}٪)
-            </span>
-          </div>
-          {annualRate.effectiveAnnualRate > 0 && (
-            <div className="flex items-center justify-between border-t border-waste/10 pt-1">
-              <span className="text-muted">نرخ سود واقعی سالانه (با احتساب مرکب ماهانه)</span>
-              <span className="text-waste font-bold shrink-0">{annualRate.effectiveAnnualRatePercent.toFixed(1)}٪</span>
-            </div>
-          )}
-        </div>
-      )}
-      <p className="text-xs text-muted mt-3 mb-1.5">
-        {plan.summary.paidCount} از {plan.summary.totalCount} قسط پرداخت‌شده
-      </p>
-
-      {plan.summary.remainingCount > 0 && (
-        <div className="flex items-center justify-between mb-1.5">
-          <p className="text-xs text-muted">پرداخت از حساب</p>
-          <select value={payAccountId} onChange={(e) => setPayAccountId(e.target.value)} className="text-xs bg-surface rounded-lg border border-line px-2 py-1">
-            {accounts.length === 0 && <option value="">حسابی ثبت نشده</option>}
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <ul className="rounded-xl border border-line divide-y divide-line overflow-y-auto scrollbar-thin max-h-[7.5rem]">
-        {plan.installments.map((inst: any) => (
-          <li key={inst.id} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-            <span className="text-muted shrink-0">قسط {inst.index}</span>
-            <span className="text-ink flex-1 truncate">{formatJalali(new Date(inst.dueDate))}</span>
-            <span className="font-medium shrink-0">{format(inst.amount, { withSuffix: true })}</span>
-            {inst.status === "PAID" ? (
-              <span className="text-accent shrink-0">{INSTALLMENT_STATUS_LABELS.PAID}</span>
-            ) : (
-              <button
-                onClick={() => pay(inst.id)}
-                disabled={!payAccountId || payingId === inst.id}
-                className={`shrink-0 px-2.5 py-1 rounded-lg font-medium disabled:opacity-40 ${
-                  inst.status === "OVERDUE" ? "bg-waste-soft text-waste" : "bg-accent-soft text-accent"
-                }`}
-              >
-                {payingId === inst.id ? "..." : "پرداخت"}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-}
-
-function EditInstallmentPlanForm({ plan, onDone, onCancel }: { plan: any; onDone: () => void; onCancel: () => void }) {
-  const [title, setTitle] = useState(plan.title);
-  const [dueDay, setDueDay] = useState(String(plan.dueDay));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || !dueDay) return;
-    setLoading(true);
-    setError("");
-    try {
-      await apiPatch(`/api/installment-plans/${plan.id}`, { title, dueDay: Number(dueDay) });
-      onDone();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "ذخیره تغییرات ناموفق بود.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Card className="p-4">
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          autoFocus
-          required
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="عنوان"
-          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
-        />
-        <div>
-          <input
-            type="number"
-            dir="ltr"
-            required
-            min={1}
-            max={31}
-            value={dueDay}
-            onChange={(e) => setDueDay(e.target.value)}
-            placeholder="روز سررسید (۱ تا ۳۱)"
-            className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right"
-          />
-          <p className="text-xs text-muted mt-1">فقط اقساط پرداخت‌نشده با روز سررسید جدید تنظیم می‌شوند؛ اقساط پرداخت‌شده تغییر نمی‌کنند.</p>
-        </div>
-        {error && <p className="text-xs text-waste">{error}</p>}
-        <div className="flex gap-2">
-          <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
-            ذخیره تغییرات
-          </button>
-          <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
-            انصراف
-          </button>
-        </div>
-      </form>
-    </Card>
-  );
-}
-
-function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
-  const [mode, setMode] = useState<"PLAN" | "SIMPLE">("PLAN");
-  const [title, setTitle] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
-  const [installmentAmount, setInstallmentAmount] = useState("");
-  const [numberOfInstallments, setNumberOfInstallments] = useState("");
-  const [simpleAmount, setSimpleAmount] = useState("");
-  const [simpleCount, setSimpleCount] = useState("1");
-  const [dueDay, setDueDay] = useState("");
-  const [reminderOffsets, setReminderOffsets] = useState<number[]>([60 * 24]);
-  const [loading, setLoading] = useState(false);
-  const { format } = useCurrencyUnit();
-
-  const preview =
-    mode === "PLAN" && totalAmount && installmentAmount && numberOfInstallments
-      ? computeLoanInterest({
-          totalAmount: Number(totalAmount),
-          installmentAmount: Number(installmentAmount),
-          numberOfInstallments: Number(numberOfInstallments),
-        })
-      : null;
-  const previewAnnualRate =
-    mode === "PLAN" && totalAmount && installmentAmount && numberOfInstallments
-      ? computeEffectiveAnnualRate({
-          totalAmount: Number(totalAmount),
-          installmentAmount: Number(installmentAmount),
-          numberOfInstallments: Number(numberOfInstallments),
-        })
-      : null;
-  // بدهی ساده has no interest — splitting it across months just divides the same total, so the
-  // per-payment amount is rounded UP (never down) to make sure the sum collected across all
-  // payments never falls short of the actual debt by even a Toman.
-  const simplePerPaymentAmount =
-    mode === "SIMPLE" && simpleAmount && Number(simpleCount) > 1 ? Math.ceil(Number(simpleAmount) / Number(simpleCount)) : null;
-
-  function toggleOffset(minutes: number) {
-    setReminderOffsets((prev) => (prev.includes(minutes) ? prev.filter((m) => m !== minutes) : [...prev, minutes]));
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      // "بدهی ساده" is just an N-installment plan with no interest — same backend, same
-      // pay/edit/delete UI as a real loan plan, just without asking for a totalAmount separate
-      // from the debt itself. count defaults to 1 (a single lump payment, the original behavior);
-      // choosing a bigger count splits the same debt into that many equal monthly payments.
-      const simpleTotal = Number(simpleAmount);
-      const simpleCountNum = Number(simpleCount);
-      const amount = mode === "SIMPLE" ? simplePerPaymentAmount ?? simpleTotal : Number(installmentAmount);
-      const count = mode === "SIMPLE" ? simpleCountNum : Number(numberOfInstallments);
-      await apiPost("/api/installment-plans", {
-        title,
-        totalAmount: mode === "SIMPLE" ? simpleTotal : Number(totalAmount),
-        installmentAmount: amount,
-        numberOfInstallments: count,
-        dueDay: Number(dueDay),
-        reminderOffsets,
-      });
-      notifySaved();
-      onDone();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Card className="p-4">
-      <form onSubmit={submit} className="space-y-3">
-        <div className="flex gap-2">
-          {(
-            [
-              { key: "PLAN", label: "طرح قسط‌دار" },
-              { key: "SIMPLE", label: "بدهی ساده" },
-            ] as const
-          ).map((m) => (
-            <button
-              type="button"
-              key={m.key}
-              onClick={() => setMode(m.key)}
-              className={`flex-1 text-sm py-1.5 rounded-lg ${mode === m.key ? "bg-accent text-on-accent" : "bg-canvas text-muted"}`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <input required value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "SIMPLE" ? "عنوان (مثلاً قرض از رضا)" : "عنوان (مثلاً وام خودرو)"} className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
-        {mode === "SIMPLE" ? (
-          <>
-            <MoneyInput value={simpleAmount} onChange={setSimpleAmount} placeholder="مبلغ کل بدهی" required />
-            <div>
-              <input
-                type="number"
-                dir="ltr"
-                required
-                min={1}
-                max={360}
-                value={simpleCount}
-                onChange={(e) => setSimpleCount(e.target.value)}
-                placeholder="تعداد پرداخت ماهانه"
-                className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right"
-              />
-              <p className="text-xs text-muted mt-1">
-                {simplePerPaymentAmount
-                  ? `${toPersianDigits(Number(simpleCount))} پرداخت ماهانه، هرکدام ${format(simplePerPaymentAmount, { withSuffix: true })}`
-                  : "برای پرداخت یکجا ۱ بذار؛ برای تقسیم به چند قسط ماهانه مساوی، عدد بزرگ‌تر بذار."}
-              </p>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2">
-              <MoneyInput value={totalAmount} onChange={setTotalAmount} placeholder="مبلغ کل وام (اصل)" required />
-              <MoneyInput value={installmentAmount} onChange={setInstallmentAmount} placeholder="مبلغ هر قسط" required />
-            </div>
-            <input type="number" dir="ltr" required value={numberOfInstallments} onChange={(e) => setNumberOfInstallments(e.target.value)} placeholder="تعداد اقساط" className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right" />
-          </>
-        )}
-        <input type="number" dir="ltr" required min={1} max={31} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="روز سررسید (۱ تا ۳۱)" className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm text-right" />
-
-        {preview && (
-          <div className="rounded-xl bg-canvas p-3 text-xs space-y-1">
-            <div className="flex justify-between">
-              <span className="text-muted">مجموع بازپرداخت</span>
-              <span className="text-ink font-medium">{format(preview.totalPayable, { withSuffix: true })}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">سود واقعی</span>
-              <span className={`font-bold ${preview.interest > 0 ? "text-waste" : "text-accent"}`}>
-                {format(preview.interest, { withSuffix: true })} ({preview.interestPercent.toFixed(1)}٪)
-              </span>
-            </div>
-            {previewAnnualRate && previewAnnualRate.effectiveAnnualRate > 0 && (
-              <div className="flex justify-between border-t border-line pt-1">
-                <span className="text-muted">نرخ سود واقعی سالانه (مرکب)</span>
-                <span className="font-bold text-waste">{previewAnnualRate.effectiveAnnualRatePercent.toFixed(1)}٪</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div>
-          <p className="text-xs text-muted mb-1.5">یادآوری هر قسط</p>
-          <div className="flex flex-wrap gap-1.5">
-            {REMINDER_OFFSET_PRESETS.map((p) => (
-              <button
-                type="button"
-                key={p.minutes}
-                onClick={() => toggleOffset(p.minutes)}
-                className={`text-xs px-2.5 py-1 rounded-full ${
-                  reminderOffsets.includes(p.minutes) ? "bg-accent text-on-accent" : "bg-canvas text-muted"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">
-          ثبت طرح قسط
-        </button>
-      </form>
-    </Card>
   );
 }

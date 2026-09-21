@@ -1,24 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
-import { generateInstallmentSchedule, summarizeInstallments } from "@/lib/installments";
+import { planInstallments, summarizeInstallments } from "@/lib/installments";
+import { createInstallmentPlanSchema } from "@/lib/schemas/installments";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
-
-const createSchema = z.object({
-  title: z.string().min(1).max(150),
-  totalAmount: tomanInt().positive(),
-  installmentAmount: tomanInt().positive(),
-  numberOfInstallments: z.number().int().positive().max(360),
-  dueDay: z.number().int().min(1).max(31),
-  startDate: z.string().datetime().optional(),
-  notes: z.string().max(1000).optional(),
-  reminderOffsets: z.array(z.number().int().min(0)).optional(),
-});
 
 async function GET() {
   try {
@@ -43,15 +31,10 @@ async function GET() {
 async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
-    const body = createSchema.parse(await req.json());
-    const startDate = body.startDate ? new Date(body.startDate) : new Date();
-
-    const schedule = generateInstallmentSchedule({
-      startDate,
-      dueDay: body.dueDay,
-      numberOfInstallments: body.numberOfInstallments,
-      installmentAmount: body.installmentAmount,
-    });
+    const body = createInstallmentPlanSchema.parse(await req.json());
+    // Due dates are worked out on the Jalali calendar (see @/lib/installments); the phone runs the
+    // very same function, so a plan reads the same wherever it was created.
+    const { startDate, dueDay, schedule } = planInstallments(body);
 
     // The plan, all of its installments and their reminders are created together.
     const plan = await withTransaction(
@@ -63,7 +46,7 @@ async function POST(req: NextRequest) {
             totalAmount: body.totalAmount,
             installmentAmount: body.installmentAmount,
             numberOfInstallments: body.numberOfInstallments,
-            dueDay: body.dueDay,
+            dueDay,
             startDate,
             notes: body.notes,
             installments: { create: schedule },

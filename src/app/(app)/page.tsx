@@ -3,96 +3,29 @@
 import { useState, useEffect } from "react";
 import useSWR, { mutate as mutateGlobal } from "swr";
 import Link from "next/link";
-import { fetcher, apiPost, apiPatch } from "@/lib/apiClient";
+import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureFormModal from "@/components/CaptureFormModal";
 import type { CaptureSummary } from "@/components/CaptureForm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import DayBattery from "@/components/DayBattery";
+import DayItemsList from "@/components/day/DayItemsList";
+import { buildDayItems } from "@/lib/dayItems";
 import { EmptyState } from "@/components/ui/Card";
-import { formatTime, formatJalali } from "@/lib/jalali";
+import { formatJalali } from "@/lib/jalali";
 import { formatDuration } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
-import { phraseCaptureReaction, type CaptureReactionKind } from "@/lib/phrasing";
-import { useCompanion } from "@/components/companion/useCompanion";
-import { MOOD_FA_LABEL } from "@/components/companion/moodTokens";
+import LogWorkCard, { type CaptureReaction } from "@/components/companion/LogWorkCard";
 import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
 
-type TodayFeedItem = {
-  key: string;
-  time: string;
-  kind: "EVENT" | "TASK" | "HABIT" | "TRANSACTION" | "TIME_ENTRY";
-  title: string;
-  isDone?: boolean;
-  onToggleDone?: () => void;
-  amount?: number;
-  isIncome?: boolean;
-  minutes?: number;
-};
-
-type CaptureReaction = { kind: CaptureReactionKind; minutes?: number; amount?: number };
-
 /**
- * The Companion section — mood message on its own line, then the achieved/target time at the
- * left edge and the capture button at the right edge below it. The face itself now lives in
- * AppTopBar's header (center slot), not here — see that file — so this row is purely text + one
- * bigger, explicit tap target. The button's own label/action still follows the companion's mood
- * (see computeCompanionState): "پر کردن بازه" during BLINDFOLDED, pre-filling the day's biggest
- * unlogged gap instead of opening a blank form (DayBattery.tsx's own onLogGap shape, reused
- * rather than inventing a second convention) — but it's never hidden outright even in ASLEEP,
- * since this is Home's only capture entry point (GlobalCaptureFab is deliberately absent from Home).
- */
-function CompanionRow({
-  reaction,
-  onOpenCapture,
-  onLogGap,
-}: {
-  reaction: CaptureReaction | null;
-  onOpenCapture: () => void;
-  onLogGap: (start: Date, end: Date) => void;
-}) {
-  const { state, enabled, largestUnloggedGap } = useCompanion();
-  if (!enabled || !state) return null;
-
-  const message = reaction ? phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state.remainingMinutes }) : state.message;
-  const ariaLabel = `آدمک: ${MOOD_FA_LABEL[state.mood]}، ${formatDuration(state.achievedMinutes)} از ${formatDuration(state.targetMinutes)}`;
-  const buttonLabel = state.action.label || "ثبت کار";
-
-  function handleClick() {
-    if (state!.mood === "BLINDFOLDED" && largestUnloggedGap) {
-      onLogGap(largestUnloggedGap.start, largestUnloggedGap.end);
-    } else {
-      onOpenCapture();
-    }
-  }
-
-  return (
-    <div className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card px-3 py-2 space-y-1.5" aria-label={ariaLabel}>
-      <p className="text-xs text-ink leading-snug line-clamp-2 text-right">{message}</p>
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={handleClick}
-          className="shrink-0 rounded-xl bg-accent text-on-accent px-6 py-3 text-sm font-bold active:scale-[0.98] transition"
-        >
-          {buttonLabel}
-        </button>
-        <p className="text-[11px] text-muted">
-          {formatDuration(state.achievedMinutes)} از {formatDuration(state.targetMinutes)}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Sits beside CompanionRow, same size, on Home's top row — the nearest unpaid installment
+ * Sits beside LogWorkCard, same size, on Home's top row — the nearest unpaid installment
  * across every plan, one page-snapped card per swipe so scrolling the strip reveals the next
  * few without needing its own dedicated page visit. Always renders (even with nothing due) so
- * the two-column row stays a stable, equal split rather than CompanionRow silently going full
+ * the two-column row stays a stable, equal split rather than LogWorkCard silently going full
  * width whenever there's nothing to show here.
  */
 function UpcomingInstallmentsCard() {
@@ -219,46 +152,11 @@ export default function HomePage() {
   );
   const { habits, series, currentStreak, mutate: mutateHabits } = useHabits();
 
-  async function toggleEventDone(occ: any) {
-    await apiPost(`/api/events/${occ.event.id}/complete`, { occurrenceDate: occ.startAt });
-    mutate();
-  }
-
-  async function toggleTaskDone(task: any) {
-    await apiPatch(`/api/tasks/${task.id}`, { status: task.status === "DONE" ? "TODO" : "DONE" });
-    mutate();
-  }
-
   // Everything logged or scheduled for today, from every source the app has — events and tasks
   // come from /api/events (already recurrence-expanded; see that route's own comment), the rest
-  // from /api/day-activity (habits, transactions, quick-capture time entries).
-  const todayFeed: TodayFeedItem[] = [
-    ...(data?.occurrences ?? []).map((occ: any) => ({
-      key: `event-${occ.occurrenceId}`,
-      time: occ.startAt,
-      kind: "EVENT" as const,
-      title: occ.event.title,
-      isDone: occ.isDone,
-      onToggleDone: () => toggleEventDone(occ),
-    })),
-    ...(data?.taskOccurrences ?? []).map((t: any) => ({
-      key: `task-${t.id}`,
-      time: t.startAt ?? t.dueDate,
-      kind: "TASK" as const,
-      title: t.title,
-      isDone: t.status === "DONE",
-      onToggleDone: () => toggleTaskDone(t),
-    })),
-    ...(dayActivity?.items ?? []).map((it: any) => ({
-      key: `${it.type}-${it.id}`,
-      time: it.timeOfDay,
-      kind: it.type as "HABIT" | "TRANSACTION" | "TIME_ENTRY",
-      title: it.title,
-      amount: it.amount ?? undefined,
-      isIncome: it.isIncome ?? undefined,
-      minutes: it.minutes ?? undefined,
-    })),
-  ].sort((a, b) => a.time.localeCompare(b.time));
+  // from /api/day-activity (habits, transactions, quick-capture time entries). The calendar's day
+  // view builds its list from the same function, so the two can never disagree about a day.
+  const todayFeed = buildDayItems(data, dayActivity);
 
   async function toggleHabitCheckIn(habitId: string) {
     await apiPost(`/api/habits/${habitId}/checkin`);
@@ -298,7 +196,7 @@ export default function HomePage() {
       <DailyMomentCard />
 
       <div className="shrink-0 flex items-stretch gap-2">
-        <CompanionRow
+        <LogWorkCard
           reaction={reaction}
           onOpenCapture={() => openCapture()}
           onLogGap={(start, end) => openCapture({ start, end })}
@@ -316,37 +214,15 @@ export default function HomePage() {
           ) : todayFeed.length === 0 ? (
             <EmptyState message="هنوز چیزی برای امروز ثبت نشده." />
           ) : (
-            <ul className="space-y-2">
-              {todayFeed.map((item) => (
-                <li key={item.key} className="flex items-center gap-3 text-sm">
-                  {item.kind === "EVENT" || item.kind === "TASK" ? (
-                    <button
-                      onClick={item.onToggleDone}
-                      aria-label="تکمیل"
-                      className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition ${
-                        item.isDone ? "bg-accent border-accent text-on-accent" : "border-line text-transparent"
-                      }`}
-                    >
-                      <CheckSquareIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
-                    </button>
-                  ) : (
-                    <span className="shrink-0 w-5 h-5 flex items-center justify-center text-accent">
-                      {item.kind === "HABIT" ? "🔥" : item.kind === "TRANSACTION" ? (item.isIncome ? "+" : "-") : "⏱"}
-                    </span>
-                  )}
-                  <ClockIcon className="w-4 h-4 text-muted shrink-0" />
-                  <span className="text-muted w-12 shrink-0">{formatTime(new Date(item.time))}</span>
-                  <span className={`flex-1 truncate ${item.isDone ? "text-muted line-through" : "text-ink"}`}>{item.title}</span>
-                  {item.amount !== undefined && (
-                    <span className={`shrink-0 text-xs font-bold ${item.isIncome ? "text-accent" : "text-waste"}`}>
-                      {item.isIncome ? "+" : "-"}
-                      {format(item.amount, { withSuffix: true })}
-                    </span>
-                  )}
-                  {item.minutes !== undefined && <span className="shrink-0 text-xs text-muted">{formatDuration(item.minutes)}</span>}
-                </li>
-              ))}
-            </ul>
+            <DayItemsList
+              items={todayFeed}
+              day={new Date()}
+              onChanged={() => {
+                mutate();
+                mutateDayActivity();
+                mutateHabits();
+              }}
+            />
           )}
         </div>
       </div>

@@ -54,6 +54,7 @@ model User {
   capitalSnapshots    CapitalSnapshot[]
   shownInsights       ShownInsight[]
   syncTombstones      SyncTombstone[]
+  dailyNotes          DailyNote[]
 }
 
 model Settings {
@@ -717,6 +718,30 @@ model AppRelease {
   downloadUrl             String
 
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Daily notes
+// ---------------------------------------------------------------------------
+
+// A free-text note attached to one calendar day ("نوت روزانه"), written in the calendar's day view and
+// searchable from the search box. Several notes can share a day: each is its own row, so two devices that
+// both write a note for the same day merge on sync instead of one of them being refused by a unique key.
+model DailyNote {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The day as "YYYY-MM-DD" (Gregorian digits, the local calendar day) — the same key the calendar
+  // grid buckets by (dayKeyIso in src/lib/calendarGrid.ts).
+  day     String
+  content String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, day])
 }
 
 // ---------------------------------------------------------------------------

@@ -613,6 +613,8 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
 export interface DayActivityItem {
   type: "HABIT" | "TRANSACTION" | "TIME_ENTRY";
   id: string;
+  /** HABIT only: the habit the check-in belongs to (id is the check-in's own) — what un-checking or logging its time needs. */
+  habitId?: string | null;
   title: string;
   timeOfDay: string;
   isIncome: boolean | null;
@@ -656,6 +658,7 @@ export async function computeDayActivity(userId: string, from: Date, to: Date): 
     items.push({
       type: "HABIT",
       id: h.id,
+      habitId: h.habitId,
       title: h.habit.title,
       timeOfDay: h.createdAt.toISOString(),
       isIncome: null,

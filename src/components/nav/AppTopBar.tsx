@@ -10,16 +10,16 @@ import { useCompanion } from "@/components/companion/useCompanion";
 import CompanionFace from "@/components/companion/CompanionFace";
 import { MOOD_FA_LABEL } from "@/components/companion/moodTokens";
 import { formatDuration } from "@/lib/money";
+import { SearchIcon } from "@/components/icons";
 
 interface CapitalBadgeData {
   capital: { investedMinutes: number; firstRecordAt: string | null };
 }
 
 // Fixed height (not padding-based) so Home's own calc(100vh - ...) no-scroll layout can rely on
-// an exact number — see TOP_BAR_HEIGHT_PX. Search and notifications used to live in the right
-// slot here; both moved into BottomNav's "بیشتر" sheet instead, freeing this header up to just
-// show state: total invested hours on the left (every page), the companion's face in the
-// center (Home only — it needs Home's own day-battery/habit data).
+// an exact number — see TOP_BAR_HEIGHT_PX. Notifications live in BottomNav's "بیشتر" sheet; the
+// header shows state — total invested hours on the left (every page), the companion's face in the
+// center (Home only — it needs Home's own day-battery/habit data) — plus the one-tap search entry.
 export default function AppTopBar({ userName }: { userName: string }) {
   const pathname = usePathname();
   const isHome = pathname === "/";
@@ -50,7 +50,10 @@ export default function AppTopBar({ userName }: { userName: string }) {
           )}
         </div>
 
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1.5">
+          <Link href="/search" aria-label="جستجو" className="p-2 rounded-full text-muted hover:bg-canvas hover:text-ink transition">
+            <SearchIcon className="w-5 h-5" />
+          </Link>
           {hours !== null && (
             <Link href="/capital" className="bg-accent-soft rounded-2xl px-3 py-1 text-sm font-bold text-accent leading-none">
               {toPersianDigits(hours)} ساعت

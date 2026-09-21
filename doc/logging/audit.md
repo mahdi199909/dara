@@ -124,6 +124,9 @@ derived name such as `NOTE_ARCHIVE`, so a forgotten row never loses an entry.)
 | `EVENT_CREATED` | Event | `CREATE` | `EVENT_CREATE_SUCCESS` |
 | `EVENT_UPDATED` | Event | `UPDATE` | `EVENT_UPDATE_SUCCESS` |
 | `EVENT_DELETED` | Event | `DELETE` | `EVENT_DELETE_SUCCESS` |
+| `NOTE_CREATED` | DailyNote | `CREATE` | `NOTE_CREATE_SUCCESS` |
+| `NOTE_UPDATED` | DailyNote | `UPDATE` | `NOTE_UPDATE_SUCCESS` |
+| `NOTE_DELETED` | DailyNote | `DELETE` | `NOTE_DELETE_SUCCESS` |
 | `EVENT_COMPLETED` | EventCompletion | `EVENT_COMPLETE` | `EVENT_COMPLETE_SUCCESS` |
 | `EVENT_UNCOMPLETED` | EventCompletion | `EVENT_UNCOMPLETE` | — |
 | `REMINDER_CREATED` | Reminder | `CREATE` | — |

@@ -14,11 +14,12 @@
 //   - POST /api/installments/[id]/pay creates a linked EXPENSE Transaction row directly (not
 //     through a Transaction repository — that's separate, parallel work not available here).
 import { ApiError } from "@/lib/apiErrorBase";
-import { generateInstallmentSchedule, recomputeInstallmentDueDate, summarizeInstallments, type InstallmentSummary } from "@/lib/installments";
+import { planInstallments, redateInstallments, summarizeInstallments, type InstallmentSummary } from "@/lib/installments";
+import { parseDayKey } from "@/lib/calendarGrid";
 import type { CreateInstallmentPlanInput, PayInstallmentInput, UpdateInstallmentPlanInput } from "@/lib/schemas/installments";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
-import { scheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
+import { scheduleReminderNotification, rescheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
 
 export interface InstallmentPlanRow {
   id: string;
@@ -114,14 +115,9 @@ export function getInstallmentPlan(db: LocalDb, userId: string, id: string): Ins
 export function createInstallmentPlan(db: LocalDb, userId: string, input: CreateInstallmentPlanInput): InstallmentPlanWithInstallments {
   const id = crypto.randomUUID();
   const ts = now();
-  const startDate = input.startDate ? new Date(input.startDate) : new Date();
-
-  const schedule = generateInstallmentSchedule({
-    startDate,
-    dueDay: input.dueDay,
-    numberOfInstallments: input.numberOfInstallments,
-    installmentAmount: input.installmentAmount,
-  });
+  // Due dates are worked out on the Jalali calendar in @/lib/installments — the very function the
+  // web route calls, so a plan reads the same wherever it was created.
+  const { startDate, dueDay, schedule } = planInstallments(input);
 
   db.run(
     `INSERT INTO "InstallmentPlan"
@@ -134,7 +130,7 @@ export function createInstallmentPlan(db: LocalDb, userId: string, input: Create
       input.totalAmount,
       input.installmentAmount,
       input.numberOfInstallments,
-      input.dueDay,
+      dueDay,
       startDate.toISOString(),
       input.notes ?? null,
       ts,
@@ -195,21 +191,45 @@ export function updateInstallmentPlan(
     params.push(value);
   };
 
+  // A new first date moves the whole schedule, which would rewrite dates that real payments were
+  // made against — so it is only accepted while nothing is paid yet.
+  if (input.firstDueDate !== undefined && existing.installments.some((i) => i.status === "PAID")) {
+    throw new ApiError("بعد از پرداخت یک قسط، تاریخ اولین قسط قابل تغییر نیست. فقط روز سررسید اقساط باقی‌مانده را می‌توانید تغییر دهید.", 409);
+  }
+  const redating = redateInstallments({
+    installments: existing.installments.map((i) => ({ id: i.id, index: i.index, status: i.status, dueDate: new Date(i.dueDate) })),
+    dueDay: input.dueDay,
+    firstDueDate: input.firstDueDate,
+  });
+
   if (input.title !== undefined) set("title", input.title);
-  if (input.dueDay !== undefined) set("dueDay", input.dueDay);
+  if (redating) set("dueDay", redating.dueDay);
+  if (input.firstDueDate !== undefined) set("startDate", (parseDayKey(input.firstDueDate) ?? new Date(existing.startDate)).toISOString());
   if (input.notes !== undefined) set("notes", input.notes);
   set("updatedAt", ts);
 
   db.run(`UPDATE "InstallmentPlan" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, id]);
 
-  // Re-date only installments that haven't been paid yet — PAID ones keep their real historical
-  // due date so past reports/receipts stay accurate.
-  if (input.dueDay !== undefined && input.dueDay !== existing.dueDay) {
-    const startDate = new Date(existing.startDate);
-    for (const installment of existing.installments) {
-      if (installment.status === "PAID") continue;
-      const dueDate = recomputeInstallmentDueDate(startDate, input.dueDay, installment.index);
-      db.run(`UPDATE "Installment" SET "dueDate" = ?, "updatedAt" = ? WHERE "id" = ?`, [dueDate.toISOString(), ts, installment.id]);
+  // Only installments that haven't been paid yet are re-dated — PAID ones keep their real
+  // historical due date so past reports/receipts stay accurate.
+  for (const change of redating?.changes ?? []) {
+    db.run(`UPDATE "Installment" SET "dueDate" = ?, "updatedAt" = ? WHERE "id" = ?`, [change.dueDate.toISOString(), ts, change.id]);
+    // The reminders were set for the old date; move them (and Android's own alarms, which know
+    // nothing about the row changing) with it — same as moving an event.
+    const installment = existing.installments.find((i) => i.id === change.id)!;
+    const reminders = db.all<{ id: string; title: string; offsetMinutes: number }>(
+      `SELECT "id","title","offsetMinutes" FROM "Reminder" WHERE "installmentId" = ?`,
+      [change.id]
+    );
+    for (const r of reminders) {
+      const remindAt = new Date(change.dueDate.getTime() - r.offsetMinutes * 60000).toISOString();
+      db.run(`UPDATE "Reminder" SET "remindAt" = ?, "notified" = 0, "updatedAt" = ? WHERE "id" = ?`, [remindAt, ts, r.id]);
+      rescheduleReminderNotification({
+        id: r.id,
+        title: r.title,
+        body: `قسط ${installment.amount.toLocaleString("en-US")} تومانی «${input.title ?? existing.title}» به زودی سررسید می‌شود.`,
+        remindAt,
+      });
     }
   }
 

@@ -33,6 +33,16 @@ export function dayKeyIso(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** The inverse of dayKeyIso: "YYYY-MM-DD" → that day's local midnight, or null when the text is
+ * not a real calendar day (so "2026-02-31" is rejected instead of rolling into March). */
+export function parseDayKey(key: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(y, mo - 1, d);
+  return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d ? date : null;
+}
+
 export function addJalaliMonths(jy: number, jm: number, delta: number): { jy: number; jm: number } {
   let total = jm - 1 + delta;
   let newJy = jy + Math.floor(total / 12);

@@ -568,6 +568,7 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
 export interface DayActivityItem {
   type: "HABIT" | "TRANSACTION" | "TIME_ENTRY";
   id: string;
+  habitId?: string | null; // HABIT only: the habit the check-in belongs to (id is the check-in's own)
   title: string;
   timeOfDay: string; // ISO — a real logged moment for all three sources (HabitCheckIn.createdAt included)
   isIncome: boolean | null; // TRANSACTION only
@@ -594,8 +595,8 @@ export function computeDayActivity(db: LocalDb, userId: string, from: Date, to: 
      WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" <= ? AND te."durationMin" IS NOT NULL`,
     [userId, fromIso, toIso]
   );
-  const habitCheckIns = db.all<{ id: string; title: string; categoryId: string | null; createdAt: string; durationMin: number | null }>(
-    `SELECT hc."id" as "id", h."title", h."categoryId", hc."createdAt", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+  const habitCheckIns = db.all<{ id: string; habitId: string; title: string; categoryId: string | null; createdAt: string; durationMin: number | null }>(
+    `SELECT hc."id" as "id", hc."habitId" as "habitId", h."title", h."categoryId", hc."createdAt", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
      WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."date" >= ? AND hc."date" <= ?`,
     [userId, fromIso, toIso]
   );
@@ -619,7 +620,7 @@ export function computeDayActivity(db: LocalDb, userId: string, from: Date, to: 
   for (const h of habitCheckIns) {
     const cat = h.categoryId ? categoryById.get(h.categoryId) : undefined;
     items.push({
-      type: "HABIT", id: h.id, title: h.title, timeOfDay: h.createdAt,
+      type: "HABIT", id: h.id, habitId: h.habitId, title: h.title, timeOfDay: h.createdAt,
       isIncome: null, amount: null, minutes: h.durationMin, categoryIcon: cat?.icon ?? null, categoryColor: cat?.color ?? null,
     });
   }

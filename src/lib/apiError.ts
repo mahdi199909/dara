@@ -40,7 +40,7 @@ export function handleApiError(err: unknown): NextResponse {
   if (err instanceof ApiError) {
     const code = err.code ?? codeForHttpStatus(err.status);
     if (code) setRequestErrorCode(code);
-    return NextResponse.json(errorBody(err.message, code), { status: err.status });
+    return NextResponse.json(errorBody(err.message, code, err.details !== undefined ? { details: err.details } : undefined), { status: err.status });
   }
   // The one place an unexpected exception is recorded (its stack stays in the server log; the
   // person only ever sees the generic message below, plus the code and request id to quote).

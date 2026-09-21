@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-263 events in 39 domains.
+272 events in 40 domains.
 
 ## AUTH
 
@@ -118,6 +118,22 @@ Default module: `categories`
 | `CATEGORY_UPDATE_FAILED` | ERROR | protected | yes | Category update failed. |
 | `CATEGORY_UPDATE_STARTED` | DEBUG | — | reserved | Category update started. |
 | `CATEGORY_UPDATE_SUCCESS` | INFO | — | yes | Category update success. |
+
+## NOTE
+
+Default module: `calendar`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `NOTE_CREATE_FAILED` | ERROR | protected | yes | Note create failed. |
+| `NOTE_CREATE_STARTED` | DEBUG | — | reserved | Note create started. |
+| `NOTE_CREATE_SUCCESS` | INFO | — | yes | Note create success. |
+| `NOTE_DELETE_FAILED` | ERROR | protected | yes | Note delete failed. |
+| `NOTE_DELETE_STARTED` | DEBUG | — | reserved | Note delete started. |
+| `NOTE_DELETE_SUCCESS` | INFO | — | yes | Note delete success. |
+| `NOTE_UPDATE_FAILED` | ERROR | protected | yes | Note update failed. |
+| `NOTE_UPDATE_STARTED` | DEBUG | — | reserved | Note update started. |
+| `NOTE_UPDATE_SUCCESS` | INFO | — | yes | Note update success. |
 
 ## EVENT
 

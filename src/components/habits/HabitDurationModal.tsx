@@ -13,10 +13,13 @@ import { XIcon } from "@/components/icons";
  */
 export default function HabitDurationModal({
   habit,
+  date,
   onClose,
   onSaved,
 }: {
   habit: any;
+  /** The day the check-in belongs to; today when left out. */
+  date?: Date;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -26,7 +29,7 @@ export default function HabitDurationModal({
   async function save() {
     setLoading(true);
     try {
-      await apiPatch(`/api/habits/${habit.id}/checkin`, { durationMin: minutes ? Number(minutes) : 0 });
+      await apiPatch(`/api/habits/${habit.id}/checkin`, { durationMin: minutes ? Number(minutes) : 0, ...(date ? { date: date.toISOString() } : {}) });
       onSaved();
     } finally {
       setLoading(false);

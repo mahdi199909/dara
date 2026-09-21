@@ -68,7 +68,7 @@ function localCount(phone: Phone, table: string, where = "1=1", params: unknown[
   return phone.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM "${table}" WHERE ${where}`, params)!.n;
 }
 
-const LIST_ENDPOINTS = ["/api/categories", "/api/projects", "/api/tasks", "/api/accounts", "/api/transactions", "/api/installment-plans", "/api/assets", "/api/activities", "/api/habits"];
+const LIST_ENDPOINTS = ["/api/categories", "/api/projects", "/api/tasks", "/api/accounts", "/api/transactions", "/api/installment-plans", "/api/assets", "/api/activities", "/api/habits", "/api/notes"];
 
 function createEverythingOnPhone(phone: Phone) {
   const cats = phone.must("GET", "/api/categories").categories as Array<{ id: string; name: string }>;
@@ -86,6 +86,7 @@ function createEverythingOnPhone(phone: Phone) {
   phone.must("POST", "/api/transactions", { type: "EXPENSE", amount: 12_000, accountId: acct.id, categoryId: work.id, description: "خرج" });
   phone.must("POST", "/api/installment-plans", { title: "قسط", totalAmount: 1_200_000, installmentAmount: 100_000, numberOfInstallments: 12, dueDay: 5, reminderOffsets: [1440] });
   phone.must("POST", "/api/assets", { name: "ماشین", purchasePrice: 500_000_000, currentValue: 450_000_000 });
+  phone.must("POST", "/api/notes", { day: "2026-09-21", content: "یادداشت روز از گوشی" });
   return { work, sport, project, acct, event, habit };
 }
 
@@ -105,6 +106,7 @@ async function createEverythingOnWeb() {
   await w("POST", "/api/transactions", { type: "EXPENSE", amount: 9000, accountId: acct.id, categoryId: work.id });
   await w("POST", "/api/installment-plans", { title: "قسط وب", totalAmount: 600000, installmentAmount: 100000, numberOfInstallments: 6, dueDay: 5, reminderOffsets: [1440] });
   await w("POST", "/api/assets", { name: "دارایی وب", purchasePrice: 1000000, currentValue: 900000 });
+  await w("POST", "/api/notes", { day: "2026-09-22", content: "یادداشت روز از وب" });
   return { work, sport, project, acct, event, habit };
 }
 

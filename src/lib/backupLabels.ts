@@ -19,6 +19,7 @@ export const TABLE_LABELS_FA: Record<string, string> = {
   VirtualAssetEntry: "دارایی مجازی",
   Transaction: "تراکنش مالی",
   Reminder: "یادآور",
+  DailyNote: "نوت روزانه",
   CapitalSnapshot: "تاریخچه سرمایه",
   AuditLog: "سابقه فعالیت",
   Notification: "اعلان",

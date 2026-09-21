@@ -5,6 +5,8 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { createTaskSchema } from "@/lib/schemas/tasks";
+import { assertNoOverlap } from "@/lib/timeOverlapServer";
+import { occupiedRange } from "@/lib/timeOverlap";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
 
@@ -35,6 +37,7 @@ async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createTaskSchema.parse(await req.json());
+    await assertNoOverlap(userId, occupiedRange(body.startAt, body.endAt), { allowOverlap: body.allowOverlap });
 
     // The task and what follows from it (its expense and income transactions, its virtual asset) are
     // written together or not at all; the history entry below is only reached once they have committed.

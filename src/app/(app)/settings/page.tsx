@@ -7,6 +7,7 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { formatJalali } from "@/lib/jalali";
 import { computeHourlyValue } from "@/lib/hourlyValue";
 import { toPersianDigits } from "@/lib/money";
+import { describeDrop, dropIndicator, planCategoryMove, resolveDropTarget, type DropTarget } from "@/lib/categoryReorder";
 import { CATEGORY_KINDS, CATEGORY_KIND_LABELS, type CategoryKind, VALUE_TYPES, VALUE_TYPE_LABELS, type ValueType, CURRENCY_UNITS, CURRENCY_UNIT_LABELS, type CurrencyUnit } from "@/lib/types";
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
@@ -592,12 +593,17 @@ function CategoriesTab() {
   const [creating, setCreating] = useState(false);
   const { format } = useCurrencyUnit();
 
-  // Press-and-hold drag to re-parent an existing category (see isDraggable/isValidDropTarget
-  // below for the rules). dragStartRef/dragTimerRef are refs, not state, because they track a
-  // press that hasn't become a real drag yet and must never trigger a re-render on their own.
+  // Press-and-hold drag to put a category somewhere else in the list — above or below another one, inside
+  // one, or at the end (the rules live in @/lib/categoryReorder). dragStartRef/dragTimerRef are refs, not
+  // state, because they track a press that hasn't become a real drag yet and must never trigger a
+  // re-render on their own.
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragTimerRef = useRef<number | null>(null);
-  const [activeDrag, setActiveDrag] = useState<{ id: string; name: string; icon: string; x: number; y: number; hoverId: string | null } | null>(null);
+  const [activeDrag, setActiveDrag] = useState<{ id: string; name: string; icon: string; x: number; y: number; target: DropTarget | null } | null>(null);
+  // The drop the pointer is over right now, and where it is — refs so the release handler and the edge
+  // auto-scroll always read the latest without waiting for a render.
+  const dropTargetRef = useRef<DropTarget | null>(null);
+  const pointerRef = useRef({ x: 0, y: 0 });
   const [confirmMove, setConfirmMove] = useState<{ sourceId: string; sourceName: string; targetId: string; targetName: string } | null>(null);
 
   const categories: any[] = data?.categories ?? [];
@@ -641,20 +647,9 @@ function CategoriesTab() {
     mutate();
   }
 
-  // Only a childless category can be picked up — one that already has sub-categories can't
-  // itself become another one's child without the hierarchy going two levels deep (see the
-  // matching check in PATCH /api/categories/[id]). Reordering top-level groups still works via
-  // the ▲/▼ buttons regardless of this.
-  function isDraggable(c: any) {
-    return (childrenByParent.get(c.id) ?? []).length === 0;
-  }
-
-  function isValidDropTarget(sourceId: string, targetId: string) {
-    if (sourceId === targetId) return false;
-    const target = categories.find((c) => c.id === targetId);
-    if (!target || target.parentCategoryId) return false; // parent must itself be top-level
-    const source = categories.find((c) => c.id === sourceId);
-    if (source?.parentCategoryId === targetId) return false; // already there
+  // Any category can be picked up: one with sub-categories moves as a whole group (it can go between
+  // groups but not inside one), a childless one can also be nested or made a sub-category.
+  function isDraggable(_c: any) {
     return true;
   }
 
@@ -686,42 +681,122 @@ function CategoriesTab() {
     dragTimerRef.current = window.setTimeout(() => {
       window.removeEventListener("pointermove", onPendingMove);
       window.removeEventListener("pointerup", clearPendingPress);
-      setActiveDrag({ id, name, icon, x, y, hoverId: null });
+      dropTargetRef.current = null;
+      setActiveDrag({ id, name, icon, x, y, target: null });
     }, 350);
   }
 
   // Attached only while a drag is actually active (not during the pending long-press window) —
-  // re-runs solely when a *new* drag starts, since activeDrag.x/y/hoverId update via the setter
+  // re-runs solely when a *new* drag starts, since activeDrag.x/y/target update via the setter
   // below rather than through this effect re-running on every pointer move.
   useEffect(() => {
     if (!activeDrag) return;
+    const dragId = activeDrag.id;
+    const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+
+    // What letting go at (x, y) would mean: over a row, which third of it and which of its group; over the
+    // strip under the list, the end.
+    function targetAt(x: number, y: number): DropTarget | null {
+      const el = document.elementFromPoint(x, y);
+      if (!(el instanceof Element)) return null;
+      if (el.closest("[data-category-end]")) return { kind: "end" };
+      const rowEl = el.closest("[data-category-id]");
+      if (!rowEl) return null;
+      const rect = rowEl.getBoundingClientRect();
+      const groupId = rowEl.getAttribute("data-group-id");
+      const groupEls = groupId ? Array.from(document.querySelectorAll(`[data-group-id="${groupId}"]`)) : [rowEl];
+      const groupTop = Math.min(...groupEls.map((e) => e.getBoundingClientRect().top));
+      const groupBottom = Math.max(...groupEls.map((e) => e.getBoundingClientRect().bottom));
+      return resolveDropTarget(
+        categories,
+        dragId,
+        rowEl.getAttribute("data-category-id") as string,
+        clamp01((y - rect.top) / (rect.height || 1)),
+        clamp01((y - groupTop) / (groupBottom - groupTop || 1))
+      );
+    }
+
+    function update(x: number, y: number) {
+      pointerRef.current = { x, y };
+      const target = targetAt(x, y);
+      dropTargetRef.current = target;
+      setActiveDrag((prev) => (prev ? { ...prev, x, y, target } : prev));
+    }
+
     function onMove(e: PointerEvent) {
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      const rowEl = el instanceof Element ? el.closest("[data-category-id]") : null;
-      const hoverId = rowEl?.getAttribute("data-category-id") ?? null;
-      setActiveDrag((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY, hoverId } : prev));
+      update(e.clientX, e.clientY);
     }
+
+    // Holding the pointer near the top or bottom edge of the screen scrolls the page, so a long list can be
+    // dragged through without letting go.
+    let frame = 0;
+    function autoScroll() {
+      const { x, y } = pointerRef.current;
+      const edge = 72;
+      const dy = y < edge ? -Math.ceil((edge - y) / 6) : y > window.innerHeight - edge ? Math.ceil((y - (window.innerHeight - edge)) / 6) : 0;
+      if (dy !== 0) {
+        window.scrollBy(0, dy);
+        update(x, y);
+      }
+      frame = window.requestAnimationFrame(autoScroll);
+    }
+
     function onUp() {
-      setActiveDrag((prev) => {
-        if (prev?.hoverId && isValidDropTarget(prev.id, prev.hoverId)) {
-          const target = categories.find((c) => c.id === prev.hoverId);
-          if (target) setConfirmMove({ sourceId: prev.id, sourceName: prev.name, targetId: target.id, targetName: target.name });
-        }
-        return null;
-      });
+      const target = dropTargetRef.current;
+      dropTargetRef.current = null;
+      setActiveDrag(null);
+      if (target) void dropOn(dragId, target);
     }
+
+    function onCancel() {
+      dropTargetRef.current = null;
+      setActiveDrag(null);
+    }
+
+    pointerRef.current = { x: activeDrag.x, y: activeDrag.y };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointercancel", onCancel, { once: true });
+    frame = window.requestAnimationFrame(autoScroll);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDrag?.id]);
 
+  // Letting go: between two rows it is saved at once; inside a category it first asks (that changes the
+  // hierarchy, not just the order).
+  async function dropOn(dragId: string, target: DropTarget) {
+    const plan = planCategoryMove(categories, dragId, target);
+    if (!plan || plan.noop) return;
+    if (target.kind === "nest") {
+      const source = categories.find((c) => c.id === dragId);
+      const parent = categories.find((c) => c.id === target.rowId);
+      if (source && parent) setConfirmMove({ sourceId: source.id, sourceName: source.name, targetId: parent.id, targetName: parent.name });
+      return;
+    }
+    try {
+      if (plan.changesParent) await apiPatch(`/api/categories/${dragId}`, { parentCategoryId: plan.parentCategoryId });
+      await apiPatch("/api/categories/reorder", { orderedIds: plan.orderedIds });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "جابه‌جایی انجام نشد.");
+    }
+    mutate();
+  }
+
   async function confirmMoveCategory() {
     if (!confirmMove) return;
-    await apiPatch(`/api/categories/${confirmMove.sourceId}`, { parentCategoryId: confirmMove.targetId });
+    const plan = planCategoryMove(categories, confirmMove.sourceId, { kind: "nest", rowId: confirmMove.targetId });
+    try {
+      await apiPatch(`/api/categories/${confirmMove.sourceId}`, { parentCategoryId: confirmMove.targetId });
+      // Last among the new parent's sub-categories.
+      if (plan) await apiPatch("/api/categories/reorder", { orderedIds: plan.orderedIds });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "جابه‌جایی انجام نشد.");
+    }
     setConfirmMove(null);
     mutate();
   }
@@ -754,6 +829,9 @@ function CategoriesTab() {
     await apiDelete(`/api/categories/${id}`);
     mutate();
   }
+
+  const dropLine = activeDrag?.target ? dropIndicator(categories, activeDrag.target) : null;
+  const dropHint = activeDrag?.target ? describeDrop(categories, activeDrag.id, activeDrag.target) : null;
 
   return (
     <div className="space-y-3">
@@ -816,15 +894,19 @@ function CategoriesTab() {
           <ul className="divide-y divide-line">
             {topLevelCategories.map((top, index) => {
               function row(c: any, isChild: boolean) {
-                const isDropTarget = Boolean(activeDrag && activeDrag.hoverId === c.id && isValidDropTarget(activeDrag.id, c.id));
+                // Inside a category: the row itself is lit. Above/below/between: a line marks the gap.
+                const isDropTarget = activeDrag?.target?.kind === "nest" && activeDrag.target.rowId === c.id;
+                const line = dropLine && dropLine.rowId === c.id ? dropLine.edge : null;
                 return (
                   <li
                     key={c.id}
                     data-category-id={c.id}
-                    className={`px-4 py-3 space-y-2 transition-colors ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-canvas/60" : ""} ${
+                    data-group-id={top.id}
+                    className={`relative px-4 py-3 space-y-2 transition-colors ${!c.isActive ? "opacity-50" : ""} ${isChild ? "bg-canvas/60" : ""} ${
                       isDropTarget ? "bg-accent-soft ring-2 ring-accent ring-inset" : ""
                     }`}
                   >
+                    {line && <span aria-hidden className={`pointer-events-none absolute inset-x-3 z-10 h-[3px] rounded-full bg-accent ${line === "top" ? "-top-[2px]" : "-bottom-[2px]"}`} />}
                     <div className="flex items-center gap-3">
                       {isChild && <span className="text-muted shrink-0">└</span>}
                       {!isChild && (
@@ -923,6 +1005,14 @@ function CategoriesTab() {
                 </Fragment>
               );
             })}
+            {activeDrag && (
+              <li
+                data-category-end
+                className={`px-4 py-4 text-center text-xs transition-colors ${activeDrag.target?.kind === "end" ? "bg-accent-soft text-accent" : "text-muted"}`}
+              >
+                برای قرار گرفتن در انتهای فهرست، اینجا رها کنید
+              </li>
+            )}
           </ul>
         )}
       </Card>
@@ -933,7 +1023,10 @@ function CategoriesTab() {
           style={{ left: activeDrag.x + 12, top: activeDrag.y + 12 }}
         >
           <span className="text-lg">{activeDrag.icon}</span>
-          <span className="text-sm text-ink">{activeDrag.name}</span>
+          <div>
+            <p className="text-sm text-ink leading-tight">{activeDrag.name}</p>
+            {dropHint && <p className="text-[11px] text-accent leading-tight mt-0.5">{dropHint}</p>}
+          </div>
         </div>
       )}
 

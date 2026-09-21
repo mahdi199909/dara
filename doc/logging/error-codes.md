@@ -30,6 +30,7 @@
 | `SYNC-008` | LOCAL_APPLY_FAILED | — | yes | yes | A row the server sent could not be stored on the device. |
 | `SYNC-009` | UNKNOWN | — | yes | yes | A sync failure that fits no other code. |
 | `TASK-001` | TASK_NOT_FOUND | 404 | no | reserved | The task does not exist for this account. |
+| `TASK-002` | TIME_OVERLAP | 409 | no | yes | A task's or event's time range overlaps another entry; the request is repeated with allowOverlap to accept it. |
 | `FIN-001` | ACCOUNT_NOT_FOUND | 404 | no | reserved | The financial account does not exist for this account. |
 | `FIN-002` | TRANSACTION_NOT_FOUND | 404 | no | reserved | The transaction does not exist for this account. |
 | `FIN-003` | INSTALLMENT_ALREADY_PAID | 409 | no | reserved | The installment was already paid. |

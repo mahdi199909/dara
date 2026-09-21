@@ -12,6 +12,7 @@ import { withLocalTransaction } from "@/local/transaction";
 import * as tasksRepo from "@/local/repositories/tasks";
 import * as categoriesRepo from "@/local/repositories/categories";
 import * as projectsRepo from "@/local/repositories/projects";
+import * as notesRepo from "@/local/repositories/notes";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
 import * as installmentsRepo from "@/local/repositories/installments";
@@ -52,6 +53,7 @@ import { jalaliMonthRange, toJalali } from "@/lib/jalali";
 import { createTaskSchema, updateTaskSchema } from "@/lib/schemas/tasks";
 import { createCategorySchema, updateCategorySchema, reorderCategoriesSchema } from "@/lib/schemas/categories";
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
+import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
 import { createInstallmentPlanSchema, updateInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
@@ -95,6 +97,9 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "PATCH /api/categories/reorder": { operation: "CATEGORY_REORDER", entityType: "Category" },
   "PATCH /api/categories/:id": { operation: "CATEGORY_UPDATE", entityType: "Category" },
   "DELETE /api/categories/:id": { operation: "CATEGORY_DELETE", entityType: "Category" },
+  "POST /api/notes": { operation: "NOTE_CREATE", entityType: "DailyNote" },
+  "PATCH /api/notes/:id": { operation: "NOTE_UPDATE", entityType: "DailyNote" },
+  "DELETE /api/notes/:id": { operation: "NOTE_DELETE", entityType: "DailyNote" },
   "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
   "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
@@ -181,6 +186,18 @@ register("PATCH", "/api/categories/:id", ({ db, userId, params, body }) => ({
   category: categoriesRepo.updateCategory(db, userId, params.id, updateCategorySchema.parse(body)),
 }));
 register("DELETE", "/api/categories/:id", ({ db, userId, params }) => categoriesRepo.deleteCategory(db, userId, params.id));
+
+// --- Daily notes ---------------------------------------------------------------------------
+register("GET", "/api/notes", ({ db, userId, query }) => ({
+  notes: notesRepo.listNotes(
+    db,
+    userId,
+    noteQuerySchema.parse({ day: query.get("day") ?? undefined, from: query.get("from") ?? undefined, to: query.get("to") ?? undefined })
+  ),
+}));
+register("POST", "/api/notes", ({ db, userId, body }) => ({ note: notesRepo.createNote(db, userId, createNoteSchema.parse(body)) }), 201);
+register("PATCH", "/api/notes/:id", ({ db, userId, params, body }) => ({ note: notesRepo.updateNote(db, userId, params.id, updateNoteSchema.parse(body)) }));
+register("DELETE", "/api/notes/:id", ({ db, userId, params }) => notesRepo.deleteNote(db, userId, params.id));
 
 // --- Projects ------------------------------------------------------------------------------
 register("GET", "/api/projects", ({ db, userId }) => ({ projects: projectsRepo.listProjects(db, userId) }));
@@ -532,7 +549,7 @@ function errorResponse(err: unknown, request?: { method: string; path: string })
     return { status: 400, json: { error: "اطلاعات ارسالی نامعتبر است.", details: err.flatten() } };
   }
   if (err instanceof ApiError) {
-    return { status: err.status, json: { error: err.message } };
+    return { status: err.status, json: { error: err.message, ...(err.code ? { code: err.code } : {}), ...(err.details !== undefined ? { details: err.details } : {}) } };
   }
   // (A transaction that rolled back for this error already wrote it, with its stack, as <OPERATION>_FAILED.)
   if (!isErrorReported(err)) log.error("API_UNHANDLED_ERROR", { error: err, errorCode: classifyError(err) ?? "SYS-001", layer: "local", httpMethod: request?.method, httpPath: request?.path });

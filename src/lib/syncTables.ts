@@ -62,6 +62,7 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: "VirtualAssetEntry", model: "virtualAssetEntry", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
   { table: "Transaction", model: "transaction", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Reminder", model: "reminder", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
+  { table: "DailyNote", model: "dailyNote", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   // No updatedAt column — recordDailyCapitalSnapshot upserts *today's* row in place
   // (ON CONFLICT("userId","date") DO UPDATE) as more time gets logged through the day, so a
   // same-day edit after this row's first sync won't be picked up again until a fresh row is

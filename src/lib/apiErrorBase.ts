@@ -11,9 +11,12 @@ export class ApiError extends Error {
   status: number;
   /** A stable DOMAIN-NNN code for the response; when absent, handleApiError derives one from the status. */
   code?: ErrorCode;
-  constructor(message: string, status = 400, code?: ErrorCode) {
+  /** Structured facts a client can act on (e.g. the entries a time range collides with); sent in the response body. */
+  details?: unknown;
+  constructor(message: string, status = 400, code?: ErrorCode, details?: unknown) {
     super(message);
     this.status = status;
     if (code) this.code = code;
+    if (details !== undefined) this.details = details;
   }
 }

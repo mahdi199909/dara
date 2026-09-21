@@ -10,6 +10,8 @@
 // Transaction/VirtualAssetEntry repositories didn't exist yet), which meant a task logged on the
 // phone silently produced no expense and no virtual asset while the same task logged on the web
 // did: the same data, different totals depending on where it was entered.
+import { assertNoOverlap } from "../timeOverlapLocal";
+import { occupiedRange } from "@/lib/timeOverlap";
 import { ApiError } from "@/lib/apiErrorBase";
 import type { CreateTaskInput, UpdateTaskInput } from "@/lib/schemas/tasks";
 import type { LocalDb } from "../db";
@@ -80,6 +82,7 @@ export function listTasks(db: LocalDb, userId: string, filters: { status?: strin
 }
 
 export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) {
+  assertNoOverlap(db, userId, occupiedRange(input.startAt, input.endAt), { allowOverlap: input.allowOverlap });
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -118,6 +121,12 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
 
 export function updateTask(db: LocalDb, userId: string, id: string, input: UpdateTaskInput) {
   const existing = getOwnedRow(db, userId, id);
+  // Only when the times themselves are being changed — ticking a task done must never fail because of an old overlap.
+  if (input.startAt !== undefined || input.endAt !== undefined) {
+    const startAt = input.startAt !== undefined ? input.startAt : existing.startAt;
+    const endAt = input.endAt !== undefined ? input.endAt : existing.endAt;
+    assertNoOverlap(db, userId, occupiedRange(startAt, endAt), { allowOverlap: input.allowOverlap, self: { kind: "TASK", id } });
+  }
   const wasDone = existing.status === "DONE";
   const willBeDone = input.status === "DONE";
 

@@ -7,6 +7,8 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncEventDirectCostTransaction, syncEventIncomeTransaction } from "@/lib/directCostSync";
 import { RECURRENCE_FREQS, VALUE_TYPES } from "@/lib/types";
+import { assertNoOverlap } from "@/lib/timeOverlapServer";
+import { occupiedRange } from "@/lib/timeOverlap";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
 
@@ -26,6 +28,8 @@ const updateSchema = z.object({
   recurrenceInterval: z.number().int().min(1).optional(),
   recurrenceUntil: z.string().datetime().nullable().optional(),
   recurrenceCount: z.number().int().min(1).max(500).nullable().optional(),
+  // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
+  allowOverlap: z.boolean().optional(),
 });
 
 async function getOwned(userId: string, id: string) {
@@ -38,7 +42,19 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
-    const body = updateSchema.parse(await req.json());
+    const { allowOverlap, ...body } = updateSchema.parse(await req.json());
+
+    // Only when the time itself changes; a recurring series or an all-day entry is not checked.
+    if (body.startAt !== undefined || body.endAt !== undefined || body.allDay !== undefined || body.recurrenceFreq !== undefined) {
+      const allDay = body.allDay ?? existing.allDay;
+      const freq = body.recurrenceFreq ?? existing.recurrenceFreq;
+      if (!allDay && freq === "NONE") {
+        await assertNoOverlap(userId, occupiedRange(body.startAt ?? existing.startAt, body.endAt ?? existing.endAt), {
+          allowOverlap,
+          self: { kind: "EVENT", id: existing.id },
+        });
+      }
+    }
 
     const event = await withTransaction(
       async () => {

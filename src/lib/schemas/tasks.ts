@@ -17,6 +17,8 @@ export const createTaskSchema = z.object({
   incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
+  // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
+  allowOverlap: z.boolean().optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
@@ -33,5 +35,7 @@ export const updateTaskSchema = z.object({
   incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
+  // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
+  allowOverlap: z.boolean().optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

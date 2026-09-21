@@ -9,6 +9,8 @@ import TimePicker from "@/components/ui/TimePicker";
 import { XIcon, TrashIcon } from "@/components/icons";
 import { REMINDER_OFFSET_PRESETS, RECURRENCE_FREQS, type RecurrenceFreq } from "@/lib/types";
 import { customOffsetToMinutes, planReminderChanges, reminderOffsetLabel, type ExistingReminder } from "@/lib/reminderPlan";
+import OverlapNotice from "@/components/day/OverlapNotice";
+import { overlapRefusal, type OverlapRefusal } from "@/lib/overlapClient";
 
 const RECURRENCE_LABELS: Record<RecurrenceFreq, string> = {
   NONE: "بدون تکرار",
@@ -76,6 +78,8 @@ export default function EventFormModal({
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the chosen time lies on top of something already on the calendar — see OverlapNotice.
+  const [overlap, setOverlap] = useState<OverlapRefusal | null>(null);
 
   function toggleOffset(minutes: number) {
     setReminderOffsets((prev) => (prev.includes(minutes) ? prev.filter((m) => m !== minutes) : [...prev, minutes]));
@@ -105,9 +109,15 @@ export default function EventFormModal({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    await save(false);
+  }
+
+  /** `allowOverlap` is true only when the person saw the overlap warning and chose to save anyway. */
+  async function save(allowOverlap: boolean) {
     if (!title.trim()) return;
     setLoading(true);
     setError(null);
+    setOverlap(null);
     try {
       const startAt = new Date(`${dayIso(date)}T${startTime}:00`);
       const endAt = new Date(startAt.getTime() + Number(durationMin) * 60000);
@@ -122,6 +132,7 @@ export default function EventFormModal({
         recurrenceFreq,
         recurrenceCount: recurrenceFreq !== "NONE" && recurrenceEndMode === "COUNT" ? Number(recurrenceCount) : null,
         recurrenceUntil: recurrenceFreq !== "NONE" && recurrenceEndMode === "DATE" ? recurrenceUntil.toISOString() : null,
+        allowOverlap: allowOverlap || undefined,
       };
 
       if (isEdit) {
@@ -134,7 +145,9 @@ export default function EventFormModal({
       }
       onCreated();
     } catch (err: any) {
-      setError(err?.message ?? "ثبت انجام نشد.");
+      const refusal = overlapRefusal(err);
+      if (refusal) setOverlap(refusal);
+      else setError(err?.message ?? "ثبت انجام نشد.");
     } finally {
       setLoading(false);
     }
@@ -181,12 +194,12 @@ export default function EventFormModal({
           <input autoFocus required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="عنوان رویداد" className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm" />
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
-              <JalaliDateInput value={date} onChange={setDate} />
+              <JalaliDateInput value={date} onChange={(d) => { setDate(d); setOverlap(null); }} />
             </div>
-            <TimePicker value={startTime} onChange={setStartTime} required />
+            <TimePicker value={startTime} onChange={(v) => { setStartTime(v); setOverlap(null); }} required />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input type="number" dir="ltr" min={5} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="مدت (دقیقه)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
+            <input type="number" dir="ltr" min={5} value={durationMin} onChange={(e) => { setDurationMin(e.target.value); setOverlap(null); }} placeholder="مدت (دقیقه)" className="bg-surface rounded-xl border border-line px-3 py-2 text-sm text-right" />
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="bg-surface rounded-xl border border-line px-3 py-2 text-sm">
               <option value="">دسته‌بندی</option>
               {categories.filter((c: any) => c.isActive).map((c: any) => (
@@ -300,6 +313,7 @@ export default function EventFormModal({
             {customError && <p className="text-xs text-waste mt-1">{customError}</p>}
           </div>
 
+          {overlap && <OverlapNotice refusal={overlap} saving={loading} onSaveAnyway={() => void save(true)} />}
           {error && <p className="text-sm text-waste">{error}</p>}
 
           <div className="flex gap-2">

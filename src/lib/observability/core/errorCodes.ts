@@ -46,6 +46,7 @@ export const ERROR_CODES = {
 
   // --- Domain rules
   "TASK-001": { name: "TASK_NOT_FOUND", description: "The task does not exist for this account.", httpStatus: 404, retryable: false },
+  "TASK-002": { name: "TIME_OVERLAP", description: "A task's or event's time range overlaps another entry; the request is repeated with allowOverlap to accept it.", httpStatus: 409, retryable: false },
   "FIN-001": { name: "ACCOUNT_NOT_FOUND", description: "The financial account does not exist for this account.", httpStatus: 404, retryable: false },
   "FIN-002": { name: "TRANSACTION_NOT_FOUND", description: "The transaction does not exist for this account.", httpStatus: 404, retryable: false },
   "FIN-003": { name: "INSTALLMENT_ALREADY_PAID", description: "The installment was already paid.", httpStatus: 409, retryable: false },

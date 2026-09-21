@@ -1,43 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
+import { searchAll } from "@/lib/searchData";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
+const MAX_QUERY_LENGTH = 100;
+
+// Search across everything the person keeps — tasks, events, daily notes, habits, categories,
+// installment plans, transactions, projects, assets — each result carrying the facts worth reading
+// in the list itself (see src/lib/searchEngine.ts) and the place tapping it should go.
 async function GET(req: NextRequest) {
   try {
     const userId = await requireUserId();
-    const q = new URL(req.url).searchParams.get("q")?.trim();
-    if (!q || q.length < 1) return NextResponse.json({ results: [] });
-
-    const contains = { contains: q };
-
-    const [tasks, activities, events, transactions, assets, projects, categories] = await Promise.all([
-      prisma.task.findMany({ where: { userId, deletedAt: null, title: contains }, take: 10 }),
-      prisma.activity.findMany({ where: { userId, deletedAt: null, title: contains }, take: 10 }),
-      prisma.event.findMany({ where: { userId, deletedAt: null, title: contains }, take: 10 }),
-      prisma.transaction.findMany({ where: { userId, deletedAt: null, description: contains }, take: 10 }),
-      prisma.asset.findMany({ where: { userId, deletedAt: null, name: contains }, take: 10 }),
-      prisma.project.findMany({ where: { userId, deletedAt: null, name: contains }, take: 10 }),
-      prisma.category.findMany({ where: { userId, deletedAt: null, name: contains }, take: 10 }),
-    ]);
-
-    const results = [
-      ...tasks.map((t) => ({ type: "Task", id: t.id, title: t.title, href: `/tasks?highlight=${t.id}` })),
-      ...activities.map((a) => ({ type: "Activity", id: a.id, title: a.title, href: `/?highlight=${a.id}` })),
-      ...events.map((e) => ({ type: "Event", id: e.id, title: e.title, href: `/calendar?highlight=${e.id}` })),
-      ...transactions.map((t) => ({
-        type: "Transaction",
-        id: t.id,
-        title: t.description || "تراکنش",
-        href: `/finance?highlight=${t.id}`,
-      })),
-      ...assets.map((a) => ({ type: "Asset", id: a.id, title: a.name, href: `/assets?highlight=${a.id}` })),
-      ...projects.map((p) => ({ type: "Project", id: p.id, title: p.name, href: `/projects/detail?id=${p.id}` })),
-      ...categories.map((c) => ({ type: "Category", id: c.id, title: c.name, href: `/settings?tab=categories` })),
-    ];
-
-    return NextResponse.json({ results });
+    const q = new URL(req.url).searchParams.get("q")?.trim().slice(0, MAX_QUERY_LENGTH);
+    if (!q) return NextResponse.json({ results: [] });
+    return NextResponse.json({ results: await searchAll(userId, q) });
   } catch (err) {
     return handleApiError(err);
   }

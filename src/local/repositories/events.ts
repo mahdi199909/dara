@@ -23,6 +23,8 @@
 //   - Reminders created via createEvent's reminderOffsets are not individually audit-logged;
 //     only the standalone create-reminder call (createReminder here, POST /reminders on the
 //     web) writes a CREATE audit entry per reminder.
+import { assertNoOverlap } from "../timeOverlapLocal";
+import { occupiedRange } from "@/lib/timeOverlap";
 import { ApiError } from "@/lib/apiErrorBase";
 import { expandOccurrences } from "@/lib/recurrence";
 import { formatReminderOffset } from "@/lib/reminderText";
@@ -246,6 +248,10 @@ export function listEvents(db: LocalDb, userId: string, range: { from?: string |
 }
 
 export function createEvent(db: LocalDb, userId: string, input: CreateEventInput) {
+  // A recurring series is not checked (its later occurrences are not on the calendar yet), nor is an all-day entry.
+  if (!input.allDay && (input.recurrenceFreq ?? "NONE") === "NONE") {
+    assertNoOverlap(db, userId, occupiedRange(input.startAt, input.endAt), { allowOverlap: input.allowOverlap });
+  }
   const id = crypto.randomUUID();
   const createdAt = now();
 
@@ -296,6 +302,17 @@ export function createEvent(db: LocalDb, userId: string, input: CreateEventInput
 
 export function updateEvent(db: LocalDb, userId: string, id: string, input: UpdateEventInput) {
   const existing = getOwnedEventRow(db, userId, id);
+  // Only when the time itself changes; a recurring series or an all-day entry is not checked.
+  if (input.startAt !== undefined || input.endAt !== undefined || input.allDay !== undefined || input.recurrenceFreq !== undefined) {
+    const allDay = input.allDay ?? !!existing.allDay;
+    const freq = input.recurrenceFreq ?? existing.recurrenceFreq;
+    if (!allDay && freq === "NONE") {
+      assertNoOverlap(db, userId, occupiedRange(input.startAt ?? existing.startAt, input.endAt ?? existing.endAt), {
+        allowOverlap: input.allowOverlap,
+        self: { kind: "EVENT", id },
+      });
+    }
+  }
 
   const sets: string[] = [];
   const params: unknown[] = [];

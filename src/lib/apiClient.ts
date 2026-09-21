@@ -1,10 +1,13 @@
 export class ApiClientError extends Error {
   status: number;
   details?: unknown;
-  constructor(message: string, status: number, details?: unknown) {
+  /** The stable DOMAIN-NNN code the server (or the phone's own routes) answered with, when it named one. */
+  code?: string;
+  constructor(message: string, status: number, details?: unknown, code?: string) {
     super(message);
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -12,14 +15,16 @@ async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = "خطایی رخ داد. دوباره تلاش کنید.";
     let details: unknown;
+    let code: string | undefined;
     try {
       const body = await res.json();
       message = body.error ?? message;
       details = body.details;
+      code = typeof body.code === "string" ? body.code : undefined;
     } catch {
       // ignore non-JSON error bodies
     }
-    throw new ApiClientError(message, res.status, details);
+    throw new ApiClientError(message, res.status, details, code);
   }
   if (res.status === 204) return undefined as T;
   return res.json();
@@ -37,8 +42,8 @@ async function handleLocal<T>(method: string, url: string, body?: unknown): Prom
   const { dispatchLocal } = await import("./localDispatcher");
   const { status, json } = dispatchLocal(method, url, body);
   if (status >= 400) {
-    const err = json as { error?: string; details?: unknown };
-    throw new ApiClientError(err.error ?? "خطایی رخ داد. دوباره تلاش کنید.", status, err.details);
+    const err = json as { error?: string; details?: unknown; code?: string };
+    throw new ApiClientError(err.error ?? "خطایی رخ داد. دوباره تلاش کنید.", status, err.details, err.code);
   }
   // A successful local write should reach the server (and so the web app) within seconds, not
   // only the next time the app is reopened — see syncScheduler.ts. /api/local/* is device

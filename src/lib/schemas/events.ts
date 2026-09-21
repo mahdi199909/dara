@@ -25,6 +25,8 @@ export const createEventSchema = z
     recurrenceUntil: z.string().datetime().nullable().optional(),
     recurrenceCount: z.number().int().min(1).max(500).nullable().optional(),
     reminderOffsets: z.array(z.number().int().min(0)).optional(),
+  // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
+    allowOverlap: z.boolean().optional(),
   })
   .refine((b) => !(b.recurrenceUntil && b.recurrenceCount), {
     message: "پایان تکرار را یا با تاریخ یا با تعداد مشخص کنید، نه هر دو.",
@@ -49,6 +51,8 @@ export const updateEventSchema = z.object({
   recurrenceInterval: z.number().int().min(1).optional(),
   recurrenceUntil: z.string().datetime().nullable().optional(),
   recurrenceCount: z.number().int().min(1).max(500).nullable().optional(),
+  // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
+  allowOverlap: z.boolean().optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 

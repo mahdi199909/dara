@@ -1,27 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 import { apiPost, fetcher, ApiClientError } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
 import { notifySaved } from "@/lib/savedToast";
+import { refreshAllCaches } from "@/lib/refreshCaches";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
 import TimePicker from "@/components/ui/TimePicker";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
+import OverlapNotice from "@/components/day/OverlapNotice";
+import { overlapRefusal, type OverlapRefusal } from "@/lib/overlapClient";
 import { CAPTURE_TYPES, CAPTURE_TYPE_LABELS, VALUE_TYPES, VALUE_TYPE_LABELS, type CaptureEntityType, type ValueType } from "@/lib/types";
-
-function refreshAllCaches() {
-  mutate("/api/dashboard");
-  mutate("/api/tasks");
-  mutate((key) => typeof key === "string" && key.startsWith("/api/events"));
-  mutate((key) => typeof key === "string" && key.startsWith("/api/reports"));
-  mutate((key) => typeof key === "string" && key.startsWith("/api/transactions"));
-  mutate("/api/accounts");
-  mutate((key) => typeof key === "string" && key.startsWith("/api/virtual-assets"));
-  mutate("/api/day-battery");
-  mutate("/api/capital");
-}
 
 type FlowType = "COST" | "INCOME";
 
@@ -74,6 +65,8 @@ export default function CaptureForm({
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when the chosen time lies on top of something already on the day — see OverlapNotice.
+  const [overlap, setOverlap] = useState<OverlapRefusal | null>(null);
 
   // A project's auto-generated category is shown regardless of the Expense/Asset tab — a
   // project can incur both (buying a part is an expense, time spent is an asset), so tying
@@ -110,9 +103,15 @@ export default function CaptureForm({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    await save(false);
+  }
+
+  /** `allowOverlap` is true only when the person saw the overlap warning and chose to save anyway. */
+  async function save(allowOverlap: boolean) {
     if (!title.trim()) return;
     setLoading(true);
     setError(null);
+    setOverlap(null);
 
     try {
       const amountNum = amount ? Number(amount) : undefined;
@@ -138,6 +137,7 @@ export default function CaptureForm({
           incomeAmount: flowType === "INCOME" ? amountNum : undefined,
           startAt: startAt?.toISOString(),
           endAt: endAt?.toISOString(),
+          allowOverlap: allowOverlap || undefined,
         });
       } else {
         let startAt: Date;
@@ -164,6 +164,7 @@ export default function CaptureForm({
           valueType,
           directCost: flowType === "COST" ? amountNum : undefined,
           incomeAmount: flowType === "INCOME" ? amountNum : undefined,
+          allowOverlap: allowOverlap || undefined,
         });
         // Same "already happened" default as a Task, expressed the way events track
         // completion — a fresh EventCompletion row rather than a status field.
@@ -188,7 +189,9 @@ export default function CaptureForm({
 
       onDone(summary);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "ثبت انجام نشد.");
+      const refusal = overlapRefusal(err);
+      if (refusal) setOverlap(refusal);
+      else setError(err instanceof ApiClientError ? err.message : "ثبت انجام نشد.");
     } finally {
       setLoading(false);
     }
@@ -273,14 +276,14 @@ export default function CaptureForm({
 
       <div>
         <label className="text-xs text-muted mb-1.5 block">روز</label>
-        <JalaliDateInput value={day} onChange={setDay} />
+        <JalaliDateInput value={day} onChange={(d) => { setDay(d); setOverlap(null); }} />
       </div>
 
       <div>
         <label className="text-xs text-muted mb-1.5 block">زمان (اختیاری)</label>
         <div className="grid grid-cols-2 gap-2">
-          <TimePicker value={startTime} onChange={setStartTime} placeholder="شروع" />
-          <TimePicker value={endTime} onChange={setEndTime} placeholder="پایان" />
+          <TimePicker value={startTime} onChange={(v) => { setStartTime(v); setOverlap(null); }} placeholder="شروع" />
+          <TimePicker value={endTime} onChange={(v) => { setEndTime(v); setOverlap(null); }} placeholder="پایان" />
         </div>
       </div>
 
@@ -308,6 +311,7 @@ export default function CaptureForm({
         <MoneyInput value={amount} onChange={setAmount} placeholder="۰" />
       </div>
 
+      {overlap && <OverlapNotice refusal={overlap} saving={loading} onSaveAnyway={() => void save(true)} />}
       {error && <p className="text-sm text-waste">{error}</p>}
 
       <button

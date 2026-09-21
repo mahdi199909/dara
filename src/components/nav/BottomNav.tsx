@@ -8,7 +8,6 @@ import { apiPost } from "@/lib/apiClient";
 import { APP_NAME } from "@/lib/appVersion";
 import { MoreIcon, XIcon, SearchIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
-import SearchBox from "@/components/SearchBox";
 import NotificationBell from "@/components/NotificationBell";
 
 // The native-feeling replacement for the old hamburger + full-screen NavDrawer: the four most
@@ -20,11 +19,9 @@ export default function BottomNav({ userName }: { userName: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
 
   function closeMore() {
     setMoreOpen(false);
-    setSearchOpen(false);
   }
 
   async function logout() {
@@ -108,31 +105,22 @@ export default function BottomNav({ userName }: { userName: string }) {
             style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {searchOpen ? (
-              <div className="flex items-center gap-2 px-5 pt-5 pb-2">
-                <SearchBox autoFocus />
-                <button onClick={() => setSearchOpen(false)} className="text-sm text-muted shrink-0">
-                  بستن
+            <div className="flex items-center justify-between px-5 pt-5 pb-2">
+              <div className="flex items-center gap-2.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/icon.png" alt={APP_NAME} className="h-8 w-8 rounded-xl" />
+                <p className="text-xs text-muted">{userName}</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Link href="/search" onClick={closeMore} className="p-2 rounded-full hover:bg-canvas text-muted" aria-label="جستجو">
+                  <SearchIcon className="w-5 h-5" />
+                </Link>
+                <NotificationBell />
+                <button onClick={closeMore} className="p-1.5 text-muted hover:text-ink" aria-label="بستن">
+                  <XIcon className="w-5 h-5" />
                 </button>
               </div>
-            ) : (
-              <div className="flex items-center justify-between px-5 pt-5 pb-2">
-                <div className="flex items-center gap-2.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icon.png" alt={APP_NAME} className="h-8 w-8 rounded-xl" />
-                  <p className="text-xs text-muted">{userName}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setSearchOpen(true)} className="p-2 rounded-full hover:bg-canvas text-muted" aria-label="جستجو">
-                    <SearchIcon className="w-5 h-5" />
-                  </button>
-                  <NotificationBell />
-                  <button onClick={closeMore} className="p-1.5 text-muted hover:text-ink" aria-label="بستن">
-                    <XIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
 
             <div className="px-3 pb-2 grid grid-cols-3 gap-2">
               {MORE_NAV_ITEMS.map((item) => {

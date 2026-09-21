@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatToman, formatDuration, formatMoney, parseAmount, toPersianDigits, toAsciiDigits, tomanToUnit, unitToToman } from "./money";
+import { formatToman, formatDuration, shortDuration, formatMoney, parseAmount, toPersianDigits, toAsciiDigits, tomanToUnit, unitToToman } from "./money";
 
 describe("digit conversion", () => {
   it("converts ascii to persian and back", () => {
@@ -80,5 +80,20 @@ describe("parseAmount", () => {
   });
   it("parses persian digits", () => {
     expect(parseAmount("۱۵۰۰۰۰۰")).toBe(1500000);
+  });
+});
+
+describe("shortDuration", () => {
+  it("writes hours and minutes in two short units", () => {
+    expect(shortDuration(280)).toBe("۴س ۴۰د");
+  });
+  it("drops the empty unit", () => {
+    expect(shortDuration(360)).toBe("۶س");
+    expect(shortDuration(40)).toBe("۴۰د");
+    expect(shortDuration(0)).toBe("۰د");
+  });
+  it("never shows negative or fractional minutes", () => {
+    expect(shortDuration(-5)).toBe("۰د");
+    expect(shortDuration(59.6)).toBe("۱س");
   });
 });

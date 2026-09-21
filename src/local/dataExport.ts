@@ -73,6 +73,7 @@ export const DATA_EXPORT_TABLES = [
   "VirtualAssetEntry",
   "Transaction",
   "Reminder",
+  "DailyNote",
   "CapitalSnapshot",
   "AuditLog",
   "Notification",

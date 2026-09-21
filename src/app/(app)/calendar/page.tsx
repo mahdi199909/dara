@@ -1,14 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import useSWR from "swr";
 import { fetcher, apiPost } from "@/lib/apiClient";
 import { toJalali, formatJalali, formatJalaliMonthYear, formatTime, weekdayNameFa } from "@/lib/jalali";
-import { getJalaliMonthGrid, isSameDay, addJalaliMonths } from "@/lib/calendarGrid";
+import { getJalaliMonthGrid, isSameDay, addJalaliMonths, parseDayKey } from "@/lib/calendarGrid";
 import { Card, EmptyState } from "@/components/ui/Card";
-import { ChevronRightIcon, ChevronLeftIcon, PlusIcon, CheckSquareIcon } from "@/components/icons";
+import { ChevronRightIcon, ChevronLeftIcon, PlusIcon, CheckSquareIcon, ChartIcon } from "@/components/icons";
 import EventFormModal from "@/components/calendar/EventFormModal";
 import DayDetailModal from "@/components/calendar/DayDetailModal";
+import DayPanel from "@/components/day/DayPanel";
+import type { NoteDto } from "@/lib/schemas/notes";
 import FeaturedMetricPicker from "@/components/calendar/FeaturedMetricPicker";
 import { toPersianDigits, compactDuration, formatDuration } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
@@ -38,17 +42,49 @@ function dayKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+// useSearchParams needs a Suspense boundary for the static (Android) export.
 export default function CalendarPage() {
+  return (
+    <Suspense fallback={null}>
+      <CalendarPageInner />
+    </Suspense>
+  );
+}
+
+function CalendarPageInner() {
   const [view, setView] = useState<(typeof VIEWS)[number]["key"]>("month");
   const [cursor, setCursor] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [detailDay, setDetailDay] = useState<Date | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [showFeaturedPicker, setShowFeaturedPicker] = useState(false);
   const { format } = useCurrencyUnit();
 
+  // A search result lands here as /calendar?day=YYYY-MM-DD (&item=<id> to mark what was found): show that
+  // day's month and open the day itself.
+  const searchParams = useSearchParams();
+  const dayParam = searchParams.get("day");
+  const itemParam = searchParams.get("item");
+  useEffect(() => {
+    const target = dayParam ? parseDayKey(dayParam) : null;
+    if (!target) return;
+    setView("month");
+    setCursor(target);
+    setDetailDay(target);
+    setHighlightId(itemParam);
+  }, [dayParam, itemParam]);
+
   const { jy, jm } = toJalali(cursor);
+
+  // Days of the shown month that have a note, marked in the grid.
+  const monthGrid = useMemo(() => (view === "month" ? getJalaliMonthGrid(jy, jm) : null), [view, jy, jm]);
+  const { data: notesData } = useSWR<{ notes: NoteDto[] }>(
+    monthGrid ? `/api/notes?from=${dayKeyIso(monthGrid[0])}&to=${dayKeyIso(monthGrid[monthGrid.length - 1])}` : null,
+    fetcher
+  );
+  const noteDays = useMemo(() => new Set((notesData?.notes ?? []).map((n) => n.day)), [notesData]);
 
   const { data: overviewData, mutate: mutateOverview } = useSWR<{
     overview: { days: any[]; monthIncome: number; monthExpense: number; monthProductiveMinutes: number; monthFeaturedTotal: number | null; featured: any };
@@ -178,23 +214,35 @@ export default function CalendarPage() {
           </button>
         ))}
       </div>
-      {view !== "agenda" && (
-        <div className="flex items-center justify-between">
-          <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted shrink-0">
-            <ChevronRightIcon className="w-4 h-4" />
-          </button>
-          <span className="text-sm text-ink text-center truncate px-2">
-            {view === "year"
-              ? toPersianDigits(jy)
-              : view === "month"
-                ? formatJalaliMonthYear(cursor)
-                : formatJalali(cursor, { withWeekday: view === "day" })}
-          </span>
-          <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted shrink-0">
-            <ChevronLeftIcon className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-2">
+        {view !== "agenda" ? (
+          <div className="flex items-center gap-1 min-w-0">
+            <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted shrink-0">
+              <ChevronRightIcon className="w-4 h-4" />
+            </button>
+            <span className="text-sm text-ink text-center truncate px-1">
+              {view === "year"
+                ? toPersianDigits(jy)
+                : view === "month"
+                  ? formatJalaliMonthYear(cursor)
+                  : formatJalali(cursor, { withWeekday: view === "day" })}
+            </span>
+            <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted shrink-0">
+              <ChevronLeftIcon className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <span />
+        )}
+        {/* The category calendar lives in Reports; this opens it on the month being looked at here. */}
+        <Link
+          href={`/reports?tab=categoryCalendar&day=${dayKeyIso(cursor)}`}
+          className="shrink-0 flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs text-ink hover:border-accent hover:text-accent transition"
+        >
+          <ChartIcon className="w-3.5 h-3.5" />
+          تقویم دسته‌بندی‌ها
+        </Link>
+      </div>
 
       {view === "year" && (
         <>
@@ -313,7 +361,10 @@ export default function CalendarPage() {
                       inMonth ? "bg-surface border-line" : "bg-canvas border-transparent text-muted"
                     } ${isToday ? "ring-2 ring-brand-400" : ""}`}
                   >
-                    <span className={`text-xs ${inMonth ? "text-ink" : "text-muted"}`}>{toPersianDigits(jd)}</span>
+                    <span className={`text-xs flex items-center gap-1 ${inMonth ? "text-ink" : "text-muted"}`}>
+                      {toPersianDigits(jd)}
+                      {noteDays.has(dayKeyIso(day)) && <span aria-label="نوت دارد" className="text-[9px] leading-none">📝</span>}
+                    </span>
                     {summary && (
                       <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[8px] leading-tight font-medium">
                         {summary.income > 0 && <span className="text-accent">+{compactMoney(summary.income)}</span>}
@@ -335,7 +386,8 @@ export default function CalendarPage() {
       {detailDay && (
         <DayDetailModal
           date={detailDay}
-          onClose={() => setDetailDay(null)}
+          highlightId={highlightId}
+          onClose={() => { setDetailDay(null); setHighlightId(null); }}
           onChanged={() => { mutateOverview(); mutate(); }}
         />
       )}
@@ -388,44 +440,7 @@ export default function CalendarPage() {
 
       {view === "day" && (
         <Card className="p-4">
-          {(occurrencesByDay.get(dayKey(cursor)) ?? []).length === 0 && (tasksByDay.get(dayKey(cursor)) ?? []).length === 0 ? (
-            <EmptyState message="رویداد یا کاری برای این روز ثبت نشده." />
-          ) : (
-            <ul className="space-y-2">
-              {(occurrencesByDay.get(dayKey(cursor)) ?? []).map((occ) => (
-                <li key={occ.occurrenceId} className="flex items-center gap-2 border-b border-line pb-2 last:border-0">
-                  <button
-                    onClick={() => toggleDone(occ)}
-                    aria-label="تکمیل رویداد"
-                    className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center transition ${
-                      occ.isDone ? "bg-accent border-accent text-on-accent" : "border-line text-transparent"
-                    }`}
-                  >
-                    <CheckSquareIcon className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  </button>
-                  <button
-                    onClick={() => openEdit(occ)}
-                    className="flex-1 flex items-center gap-3 text-right hover:bg-canvas rounded-lg -mx-1 px-1 py-0.5"
-                  >
-                    <span className="text-sm text-muted w-14 shrink-0">{formatTime(new Date(occ.startAt))}</span>
-                    <div>
-                      <p className={`text-sm ${occ.isDone ? "text-muted line-through" : "text-ink"}`}>{occ.event.title}</p>
-                      {occ.event.category && <p className="text-xs text-muted">{occ.event.category.icon} {occ.event.category.name}</p>}
-                    </div>
-                  </button>
-                </li>
-              ))}
-              {(tasksByDay.get(dayKey(cursor)) ?? []).map((t) => (
-                <li key={t.id} className="flex items-center gap-3 border-b border-line pb-2 last:border-0">
-                  <span className="w-14 shrink-0 flex justify-center"><CheckSquareIcon className="w-4 h-4 text-amber-500" /></span>
-                  <div>
-                    <p className="text-sm text-ink">{t.title}</p>
-                    {t.category && <p className="text-xs text-muted">{t.category.icon} {t.category.name}</p>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+          <DayPanel day={cursor} onChanged={() => { mutate(); }} />
         </Card>
       )}
 

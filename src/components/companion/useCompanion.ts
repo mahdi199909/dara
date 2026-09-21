@@ -20,6 +20,7 @@ interface DayBatterySegmentDto {
 interface DayBatteryDto {
   segments: DayBatterySegmentDto[];
   capacityMinutes: number;
+  loggedMinutes: number;
   unloggedMinutes: number;
 }
 interface SettingsDto {
@@ -36,6 +37,9 @@ export interface UseCompanionResult {
    * "پر کردن بازه" click (see Home's wiring), the same onLogGap(start, end) shape
    * DayBattery.tsx's own tap-a-gap flow uses. */
   largestUnloggedGap: { start: Date; end: Date } | null;
+  /** Everything logged today, of every kind — the very number DayBattery shows as "ثبت‌شده", so a
+   * card that reports it next to the productive time can never disagree with the bar below it. */
+  loggedMinutes: number;
 }
 
 function sumByKind(segments: DayBatterySegmentDto[], kind: DaySegmentKindFilter): number {
@@ -49,7 +53,7 @@ export function useCompanion(): UseCompanionResult {
   const { habits } = useHabits();
 
   const enabled = settingsData ? settingsData.settings.companionEnabled !== false : false;
-  if (!batteryData || !settingsData || !enabled) return { state: null, enabled, largestUnloggedGap: null };
+  if (!batteryData || !settingsData || !enabled) return { state: null, enabled, largestUnloggedGap: null, loggedMinutes: 0 };
 
   const { battery } = batteryData;
   const largestUnloggedSegment = battery.segments
@@ -83,5 +87,5 @@ export function useCompanion(): UseCompanionResult {
     seed
   );
 
-  return { state, enabled, largestUnloggedGap };
+  return { state, enabled, largestUnloggedGap, loggedMinutes: Math.max(battery.loggedMinutes, state.achievedMinutes) };
 }

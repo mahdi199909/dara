@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
-import { summarizeInstallments, recomputeInstallmentDueDate } from "@/lib/installments";
+import { summarizeInstallments, redateInstallments } from "@/lib/installments";
 import { updateInstallmentPlanSchema } from "@/lib/schemas/installments";
+import { parseDayKey } from "@/lib/calendarGrid";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
 
@@ -33,25 +34,37 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const existing = await getOwned(userId, params.id);
     const body = updateInstallmentPlanSchema.parse(await req.json());
 
-    // The plan and the re-dated installments commit together.
+    // A new first date moves the whole schedule, which would rewrite dates that real payments
+    // were made against — so it is only accepted while nothing is paid yet.
+    if (body.firstDueDate !== undefined && existing.installments.some((i) => i.status === "PAID")) {
+      throw new ApiError("بعد از پرداخت یک قسط، تاریخ اولین قسط قابل تغییر نیست. فقط روز سررسید اقساط باقی‌مانده را می‌توانید تغییر دهید.", 409);
+    }
+    const redating = redateInstallments({ installments: existing.installments, dueDay: body.dueDay, firstDueDate: body.firstDueDate });
+
+    // The plan, the re-dated installments and their reminders commit together.
     const plan = await withTransaction(
       async () => {
         await prisma.installmentPlan.update({
           where: { id: params.id },
           data: {
             title: body.title,
-            dueDay: body.dueDay,
+            dueDay: redating?.dueDay,
+            startDate: body.firstDueDate ? parseDayKey(body.firstDueDate) ?? undefined : undefined,
             notes: body.notes,
           },
         });
 
-        // Re-date only installments that haven't been paid yet — PAID ones keep their real
+        // Only installments that haven't been paid yet are re-dated — PAID ones keep their real
         // historical due date so past reports/receipts stay accurate.
-        if (body.dueDay !== undefined && body.dueDay !== existing.dueDay) {
-          for (const installment of existing.installments) {
-            if (installment.status === "PAID") continue;
-            const dueDate = recomputeInstallmentDueDate(existing.startDate, body.dueDay, installment.index);
-            await prisma.installment.update({ where: { id: installment.id }, data: { dueDate } });
+        for (const change of redating?.changes ?? []) {
+          await prisma.installment.update({ where: { id: change.id }, data: { dueDate: change.dueDate } });
+          // The reminders were set for the old date; move them with it (same as moving an event).
+          const reminders = await prisma.reminder.findMany({ where: { installmentId: change.id } });
+          for (const r of reminders) {
+            await prisma.reminder.update({
+              where: { id: r.id },
+              data: { remindAt: new Date(change.dueDate.getTime() - r.offsetMinutes * 60000), notified: false },
+            });
           }
         }
 

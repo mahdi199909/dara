@@ -8,6 +8,8 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { expandOccurrences } from "@/lib/recurrence";
 import { syncEventDirectCostTransaction, syncEventIncomeTransaction } from "@/lib/directCostSync";
 import { RECURRENCE_FREQS, VALUE_TYPES } from "@/lib/types";
+import { assertNoOverlap } from "@/lib/timeOverlapServer";
+import { occupiedRange } from "@/lib/timeOverlap";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
 
@@ -29,6 +31,8 @@ const createSchema = z
     recurrenceUntil: z.string().datetime().nullable().optional(),
     recurrenceCount: z.number().int().min(1).max(500).nullable().optional(),
     reminderOffsets: z.array(z.number().int().min(0)).optional(),
+    // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
+    allowOverlap: z.boolean().optional(),
   })
   .refine((b) => !(b.recurrenceUntil && b.recurrenceCount), {
     message: "پایان تکرار را یا با تاریخ یا با تعداد مشخص کنید، نه هر دو.",
@@ -102,6 +106,11 @@ async function POST(req: NextRequest) {
 
     const startAt = new Date(body.startAt);
     const endAt = new Date(body.endAt);
+
+    // A recurring series is not checked (its later occurrences are not on the calendar yet), nor is an all-day entry.
+    if (!body.allDay && (body.recurrenceFreq ?? "NONE") === "NONE") {
+      await assertNoOverlap(userId, occupiedRange(startAt, endAt), { allowOverlap: body.allowOverlap });
+    }
 
     // The event, its cost / income transactions and its reminders are created together.
     const event = await withTransaction(

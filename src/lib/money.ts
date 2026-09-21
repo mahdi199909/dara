@@ -88,6 +88,16 @@ export function formatDuration(minutes: number, opts?: { persianDigits?: boolean
   return `${p(h)} ساعت و ${p(m)} دقیقه`;
 }
 
+/** Two-unit short form for tight cards — "۴س ۴۰د", "۶س", "۴۰د" (never rounds, unlike compactDuration). */
+export function shortDuration(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (h === 0) return `${toPersianDigits(m)}د`;
+  if (m === 0) return `${toPersianDigits(h)}س`;
+  return `${toPersianDigits(h)}س ${toPersianDigits(m)}د`;
+}
+
 /** Compact duration for a small calendar cell — "۴۵د" or "۲.۵س", not the full "X ساعت و Y دقیقه". */
 export function compactDuration(minutes: number): string {
   if (minutes < 60) return `${toPersianDigits(minutes)}د`;

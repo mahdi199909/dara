@@ -5,6 +5,8 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { updateTaskSchema } from "@/lib/schemas/tasks";
+import { assertNoOverlap } from "@/lib/timeOverlapServer";
+import { occupiedRange } from "@/lib/timeOverlap";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
 
@@ -18,7 +20,14 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
-    const body = updateTaskSchema.parse(await req.json());
+    const { allowOverlap, ...body } = updateTaskSchema.parse(await req.json());
+
+    // Only when the times themselves are being changed — ticking a task done must never fail because of an old overlap.
+    if (body.startAt !== undefined || body.endAt !== undefined) {
+      const startAt = body.startAt !== undefined ? body.startAt : existing.startAt;
+      const endAt = body.endAt !== undefined ? body.endAt : existing.endAt;
+      await assertNoOverlap(userId, occupiedRange(startAt, endAt), { allowOverlap, self: { kind: "TASK", id: existing.id } });
+    }
 
     const wasDone = existing.status === "DONE";
     const willBeDone = body.status === "DONE";
