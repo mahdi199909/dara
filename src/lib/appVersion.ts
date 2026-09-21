@@ -30,7 +30,7 @@ export const APK_LATEST_RELEASE_URL = `https://github.com/mahdi199909/dara/relea
  * CI run has published the APK, because from then on every older install is told to update.
  */
 export const LATEST_APP_RELEASE = {
-  versionName: "1.1.0",
+  versionName: "1.2.0",
   /** Installs below this are locked out until they update (1 = nobody is ever forced). */
   minSupportedVersionCode: 1,
 } as const;
