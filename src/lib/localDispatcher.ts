@@ -5,9 +5,10 @@
 // registered here should return the exact same JSON shape its web counterpart does.
 import { ZodError } from "zod";
 import { ApiError } from "@/lib/apiErrorBase";
-import { classifyError, getLogger } from "@/lib/observability";
+import { classifyError, getLogger, isErrorReported, type OperationBase } from "@/lib/observability";
 import { openLocalDb, type LocalDb } from "@/local/db";
 import { getLocalUserId } from "@/local/localUser";
+import { withLocalTransaction } from "@/local/transaction";
 import * as tasksRepo from "@/local/repositories/tasks";
 import * as categoriesRepo from "@/local/repositories/categories";
 import * as projectsRepo from "@/local/repositories/projects";
@@ -72,6 +73,7 @@ type Handler = (ctx: HandlerCtx) => unknown;
 
 interface Route {
   method: string;
+  path: string;
   regex: RegExp;
   paramNames: string[];
   status: number;
@@ -79,6 +81,53 @@ interface Route {
 }
 
 const routes: Route[] = [];
+
+/**
+ * The operation each write route performs, for the log: when one fails and rolls back, the line says
+ * TASK_CREATE_FAILED rather than only that "a transaction" did. The names are the ones the server's routes give
+ * their own transactions. A write route not listed here is just as atomic — it only has no name of its own.
+ */
+const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType: string }> = {
+  "POST /api/tasks": { operation: "TASK_CREATE", entityType: "Task" },
+  "PATCH /api/tasks/:id": { operation: "TASK_UPDATE", entityType: "Task" },
+  "DELETE /api/tasks/:id": { operation: "TASK_DELETE", entityType: "Task" },
+  "POST /api/categories": { operation: "CATEGORY_CREATE", entityType: "Category" },
+  "PATCH /api/categories/reorder": { operation: "CATEGORY_REORDER", entityType: "Category" },
+  "PATCH /api/categories/:id": { operation: "CATEGORY_UPDATE", entityType: "Category" },
+  "DELETE /api/categories/:id": { operation: "CATEGORY_DELETE", entityType: "Category" },
+  "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
+  "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
+  "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
+  "POST /api/accounts": { operation: "ACCOUNT_CREATE", entityType: "FinanceAccount" },
+  "PATCH /api/accounts/:id": { operation: "ACCOUNT_UPDATE", entityType: "FinanceAccount" },
+  "DELETE /api/accounts/:id": { operation: "ACCOUNT_DELETE", entityType: "FinanceAccount" },
+  "POST /api/transactions": { operation: "TRANSACTION_CREATE", entityType: "Transaction" },
+  "PATCH /api/transactions/:id": { operation: "TRANSACTION_UPDATE", entityType: "Transaction" },
+  "DELETE /api/transactions/:id": { operation: "TRANSACTION_DELETE", entityType: "Transaction" },
+  "POST /api/installment-plans": { operation: "INSTALLMENT_CREATE", entityType: "InstallmentPlan" },
+  "PATCH /api/installment-plans/:id": { operation: "INSTALLMENT_UPDATE", entityType: "InstallmentPlan" },
+  "DELETE /api/installment-plans/:id": { operation: "INSTALLMENT_DELETE", entityType: "InstallmentPlan" },
+  "POST /api/installments/:id/pay": { operation: "INSTALLMENT_PAY", entityType: "Installment" },
+  "POST /api/assets": { operation: "ASSET_CREATE", entityType: "Asset" },
+  "PATCH /api/assets/:id": { operation: "ASSET_UPDATE", entityType: "Asset" },
+  "DELETE /api/assets/:id": { operation: "ASSET_DELETE", entityType: "Asset" },
+  "POST /api/activities": { operation: "ACTIVITY_CREATE", entityType: "Activity" },
+  "PATCH /api/activities/:id": { operation: "ACTIVITY_UPDATE", entityType: "Activity" },
+  "DELETE /api/activities/:id": { operation: "ACTIVITY_DELETE", entityType: "Activity" },
+  "POST /api/activities/:id/time-entries": { operation: "TIME_ENTRY_CREATE", entityType: "TimeEntry" },
+  "POST /api/activities/:id/timer/start": { operation: "TIME_TIMER_START", entityType: "Activity" },
+  "POST /api/activities/:id/timer/stop": { operation: "TIME_TIMER_STOP", entityType: "Activity" },
+  "POST /api/events": { operation: "EVENT_CREATE", entityType: "Event" },
+  "PATCH /api/events/:id": { operation: "EVENT_UPDATE", entityType: "Event" },
+  "DELETE /api/events/:id": { operation: "EVENT_DELETE", entityType: "Event" },
+  "POST /api/events/:id/complete": { operation: "EVENT_COMPLETE", entityType: "Event" },
+  "POST /api/habits": { operation: "HABIT_CREATE", entityType: "Habit" },
+  "PATCH /api/habits/:id": { operation: "HABIT_UPDATE", entityType: "Habit" },
+  "DELETE /api/habits/:id": { operation: "HABIT_DELETE", entityType: "Habit" },
+  "POST /api/habits/:id/checkin": { operation: "HABIT_CHECKIN", entityType: "HabitCheckIn" },
+  "PATCH /api/habits/:id/checkin": { operation: "HABIT_UPDATE", entityType: "HabitCheckIn" },
+  "PATCH /api/settings": { operation: "SETTINGS_UPDATE", entityType: "Settings" },
+};
 
 /** Registers a local route. `path` uses `:param` segments, e.g. "/api/tasks/:id". */
 function register(method: string, path: string, handler: Handler, status = 200) {
@@ -93,7 +142,18 @@ function register(method: string, path: string, handler: Handler, status = 200) 
       return segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     })
     .join("/");
-  routes.push({ method, regex: new RegExp(`^${pattern}$`), paramNames, status, handler });
+  routes.push({ method, path, regex: new RegExp(`^${pattern}$`), paramNames, status, handler });
+}
+
+/** Every registered route and the operation it is named after (if any), for tests that guard the table above. */
+export function listLocalRoutes(): Array<{ method: string; path: string; operation?: OperationBase }> {
+  return routes.map((route) => ({ method: route.method, path: route.path, operation: OPERATION_OF_ROUTE[`${route.method} ${route.path}`]?.operation }));
+}
+
+/** Entries of the table above that no registered route answers to: empty, unless a route was renamed or removed. */
+export function staleOperationRoutes(): string[] {
+  const registered = new Set(routes.map((route) => `${route.method} ${route.path}`));
+  return Object.keys(OPERATION_OF_ROUTE).filter((key) => !registered.has(key));
 }
 
 // --- Tasks -------------------------------------------------------------------------------
@@ -453,7 +513,8 @@ function errorResponse(err: unknown, request?: { method: string; path: string })
   if (err instanceof ApiError) {
     return { status: err.status, json: { error: err.message } };
   }
-  log.error("API_UNHANDLED_ERROR", { error: err, errorCode: classifyError(err) ?? "SYS-001", layer: "local", httpMethod: request?.method, httpPath: request?.path });
+  // (A transaction that rolled back for this error already wrote it, with its stack, as <OPERATION>_FAILED.)
+  if (!isErrorReported(err)) log.error("API_UNHANDLED_ERROR", { error: err, errorCode: classifyError(err) ?? "SYS-001", layer: "local", httpMethod: request?.method, httpPath: request?.path });
   // `details` carries the real underlying message (not just a generic Persian string) so it can
   // surface all the way to FirstRunGate's error display — on-device failures here (e.g. the
   // sql.js/Capacitor Filesystem driver bootstrap) have no other way to be seen without ADB.
@@ -476,7 +537,11 @@ export function dispatchLocal(method: string, url: string, body?: unknown): Loca
   try {
     const db = openLocalDb(resolveDriver());
     const userId = getLocalUserId(db);
-    const json = route.handler({ db, userId, params, query: searchParams, body });
+    const run = () => route.handler({ db, userId, params, query: searchParams, body });
+    // A write is one step: what the handler writes, its history entry included, commits together or not at all.
+    // (Reads are left alone — they change nothing worth protecting, and each write to the driver schedules a save.)
+    const named = OPERATION_OF_ROUTE[`${route.method} ${route.path}`];
+    const json = route.method === "GET" ? run() : withLocalTransaction(db, run, { operation: named?.operation, entityType: named?.entityType, entityId: params.id });
     return { status: route.status, json };
   } catch (err) {
     return errorResponse(err, { method, path: pathname });

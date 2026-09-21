@@ -122,6 +122,9 @@ export function classifyError(err: unknown): ErrorCode | null {
         return "DB-007";
       case "P2024":
         return "DB-004";
+      case "P2028": // Transaction API error: timed out or already closed
+      case "P2034": // a write conflict or deadlock made the transaction fail
+        return "DB-003";
       case "P1001":
       case "P1002":
       case "P1008":

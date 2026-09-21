@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { withTransaction } from "./transaction";
 import { computeVirtualAssetValue } from "./timeCost";
 import { syncActivityDirectCostTransaction } from "./directCostSync";
 import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
@@ -6,7 +7,7 @@ import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
 export { syncActivityDirectCostTransaction as syncDirectCostTransaction };
 
 /** Recomputes Activity.totalDurationMin from its TimeEntries and syncs the VirtualAssetEntry (create/update/delete). */
-export async function recalcActivityDuration(activityId: string) {
+async function recalcActivityDurationWrites(activityId: string) {
   const activity = await prisma.activity.findUniqueOrThrow({
     where: { id: activityId },
     include: { timeEntries: true, category: true },
@@ -44,7 +45,7 @@ export async function recalcActivityDuration(activityId: string) {
   return totalDurationMin;
 }
 
-export async function startTimer(userId: string, activityId: string) {
+async function startTimerWrites(userId: string, activityId: string) {
   await prisma.timeEntry.updateMany({
     where: { activity: { userId }, isRunning: true },
     data: { isRunning: false, endAt: new Date() },
@@ -66,7 +67,7 @@ export async function startTimer(userId: string, activityId: string) {
   return timeEntry;
 }
 
-export async function stopTimer(activityId: string) {
+async function stopTimerWrites(activityId: string) {
   const running = await prisma.timeEntry.findFirst({ where: { activityId, isRunning: true } });
   if (!running) return null;
 
@@ -82,7 +83,7 @@ export async function stopTimer(activityId: string) {
   return timeEntry;
 }
 
-export async function addManualTimeEntry(
+async function addManualTimeEntryWrites(
   activityId: string,
   input: { startAt?: Date; endAt?: Date; durationMin?: number }
 ) {
@@ -105,4 +106,25 @@ export async function addManualTimeEntry(
 
   await recalcActivityDuration(activityId);
   return timeEntry;
+}
+
+// --- The public functions. Each is one transaction (or joins the one its caller already opened), so a
+// timer that stopped is never left with an activity total that was not updated, and a virtual asset never
+// disagrees with the time it was computed from.
+
+/** Recomputes Activity.totalDurationMin from its TimeEntries and syncs the VirtualAssetEntry (create/update/delete). */
+export function recalcActivityDuration(activityId: string) {
+  return withTransaction(() => recalcActivityDurationWrites(activityId), { entityType: "Activity", entityId: activityId });
+}
+
+export function startTimer(userId: string, activityId: string) {
+  return withTransaction(() => startTimerWrites(userId, activityId), { operation: "TIME_TIMER_START", entityType: "Activity", entityId: activityId });
+}
+
+export function stopTimer(activityId: string) {
+  return withTransaction(() => stopTimerWrites(activityId), { operation: "TIME_TIMER_STOP", entityType: "Activity", entityId: activityId });
+}
+
+export function addManualTimeEntry(activityId: string, input: Parameters<typeof addManualTimeEntryWrites>[1]) {
+  return withTransaction(() => addManualTimeEntryWrites(activityId, input), { operation: "TIME_ENTRY_CREATE", entityType: "TimeEntry", entityId: activityId });
 }

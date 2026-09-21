@@ -10,6 +10,7 @@ import { applyPushedProfile } from "@/lib/profileSyncServer";
 import type { ProfilePayload } from "@/lib/profileSync";
 import type { NextRequest } from "next/server";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 import { logSyncPush } from "@/lib/observability/server/syncLog";
 
 type Row = Record<string, unknown>;
@@ -85,17 +86,25 @@ async function POST(req: NextRequest) {
         continue;
       }
       const model = modelFor(config.model);
-      const existing = await model.findUnique({ where: { id: t.id }, select: ownerSelect(config) });
+      const rowId = t.id; // (a plain string from here on — the checks above narrowed it, and a callback would not keep that)
+      const existing = await model.findUnique({ where: { id: rowId }, select: ownerSelect(config) });
       if (existing && ownerOf(config, existing) !== userId) {
         tombstoneSummary.ignored++; // never let one account delete another's row
         continue;
       }
-      if (existing) await model.delete({ where: { id: t.id } });
-      await prisma.syncTombstone.upsert({
-        where: { userId_table_rowId: { userId, table: config.table, rowId: t.id } },
-        create: { userId, table: config.table, rowId: t.id },
-        update: { deletedAt: new Date() },
-      });
+      // (resolved here, not taken from `model` above: inside the transaction below it must be the transaction's own)
+      // The deletion and its tombstone are one step: a delete that lost its tombstone would never reach the other devices.
+      await withTransaction(
+        async () => {
+          if (existing) await modelFor(config.model).delete({ where: { id: rowId } });
+          await prisma.syncTombstone.upsert({
+            where: { userId_table_rowId: { userId, table: config.table, rowId } },
+            create: { userId, table: config.table, rowId },
+            update: { deletedAt: new Date() },
+          });
+        },
+        { entityType: config.table }
+      );
       tombstoneSummary.applied++;
     }
     // Bounded growth: a device offline for over a year re-syncs from scratch anyway.

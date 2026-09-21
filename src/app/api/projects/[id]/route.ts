@@ -9,6 +9,7 @@ import { computeRealCost } from "@/lib/timeCost";
 import { renameProjectCategory, deactivateProjectCategory, syncProjectCompletionAsset } from "@/lib/projectSync";
 import { PROJECT_STATUSES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -90,16 +91,23 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const wasCompleted = existing.status === "COMPLETED";
     const willBeCompleted = body.status === "COMPLETED";
 
-    const project = await prisma.project.update({
-      where: { id: params.id },
-      data: {
-        ...body,
-        completedAt: !wasCompleted && willBeCompleted ? new Date() : body.status && body.status !== "COMPLETED" ? null : undefined,
-      },
-    });
+    // The update, the renamed category and the completion asset commit together.
+    const project = await withTransaction(
+      async () => {
+        const project = await prisma.project.update({
+          where: { id: params.id },
+          data: {
+            ...body,
+            completedAt: !wasCompleted && willBeCompleted ? new Date() : body.status && body.status !== "COMPLETED" ? null : undefined,
+          },
+        });
 
-    if (body.name && body.name !== existing.name) await renameProjectCategory(project.id, body.name);
-    if (body.status !== undefined) await syncProjectCompletionAsset(project.id);
+        if (body.name && body.name !== existing.name) await renameProjectCategory(project.id, body.name);
+        if (body.status !== undefined) await syncProjectCompletionAsset(project.id);
+        return project;
+      },
+      { operation: !wasCompleted && willBeCompleted ? "PROJECT_COMPLETE" : "PROJECT_UPDATE", entityType: "Project", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({
@@ -124,8 +132,13 @@ async function DELETE(req: NextRequest, { params }: { params: { id: string } }) 
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
 
-    await prisma.project.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
-    await deactivateProjectCategory(params.id);
+    await withTransaction(
+      async () => {
+        await prisma.project.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+        await deactivateProjectCategory(params.id);
+      },
+      { operation: "PROJECT_DELETE", entityType: "Project", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

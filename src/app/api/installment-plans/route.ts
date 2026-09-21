@@ -7,6 +7,7 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { generateInstallmentSchedule, summarizeInstallments } from "@/lib/installments";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const createSchema = z.object({
   title: z.string().min(1).max(150),
@@ -52,35 +53,42 @@ async function POST(req: NextRequest) {
       installmentAmount: body.installmentAmount,
     });
 
-    const plan = await prisma.installmentPlan.create({
-      data: {
-        userId,
-        title: body.title,
-        totalAmount: body.totalAmount,
-        installmentAmount: body.installmentAmount,
-        numberOfInstallments: body.numberOfInstallments,
-        dueDay: body.dueDay,
-        startDate,
-        notes: body.notes,
-        installments: { create: schedule },
-      },
-      include: { installments: { orderBy: { index: "asc" } } },
-    });
-
-    if (body.reminderOffsets?.length) {
-      for (const installment of plan.installments) {
-        await prisma.reminder.createMany({
-          data: body.reminderOffsets.map((offsetMinutes) => ({
+    // The plan, all of its installments and their reminders are created together.
+    const plan = await withTransaction(
+      async () => {
+        const plan = await prisma.installmentPlan.create({
+          data: {
             userId,
-            targetType: "INSTALLMENT",
-            installmentId: installment.id,
-            title: `سررسید قسط: ${plan.title}`,
-            offsetMinutes,
-            remindAt: new Date(installment.dueDate.getTime() - offsetMinutes * 60000),
-          })),
+            title: body.title,
+            totalAmount: body.totalAmount,
+            installmentAmount: body.installmentAmount,
+            numberOfInstallments: body.numberOfInstallments,
+            dueDay: body.dueDay,
+            startDate,
+            notes: body.notes,
+            installments: { create: schedule },
+          },
+          include: { installments: { orderBy: { index: "asc" } } },
         });
-      }
-    }
+
+        if (body.reminderOffsets?.length) {
+          for (const installment of plan.installments) {
+            await prisma.reminder.createMany({
+              data: body.reminderOffsets.map((offsetMinutes) => ({
+                userId,
+                targetType: "INSTALLMENT",
+                installmentId: installment.id,
+                title: `سررسید قسط: ${plan.title}`,
+                offsetMinutes,
+                remindAt: new Date(installment.dueDate.getTime() - offsetMinutes * 60000),
+              })),
+            });
+          }
+        }
+        return plan;
+      },
+      { operation: "INSTALLMENT_CREATE", entityType: "InstallmentPlan" }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

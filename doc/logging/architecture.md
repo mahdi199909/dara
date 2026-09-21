@@ -5,7 +5,7 @@ calls. Its purpose: **if a person says a year later "my data is wrong", we can r
 happened** — without logging more than that, without leaking anything private, and without ever
 slowing down or breaking the application.
 
-Status of each part is marked **[done]** (phases 0 and 1, in the code today) or **[planned N]** (phase N
+Status of each part is marked **[done]** (phases 0 to 3, in the code today) or **[planned N]** (phase N
 of the rollout below). Nothing marked planned is claimed to exist.
 
 ## 1. Three layers, deliberately separate
@@ -129,6 +129,91 @@ visible.
 **Docker.** `docker-compose.yml` caps each container's log at 5 × 20 MB (Postgres 3 × 10 MB) so logs
 can never fill the disk, and passes `GIT_COMMIT` so every record says which build wrote it.
 
+## 2c. Atomic operations (phase 3) **[done]**
+
+**The rule.** An operation that writes more than one row — a task and its expense, an installment and the payment
+that settles it, a timer and the total it feeds — is one database transaction: every write commits together or none
+does. And what says "it worked" (the history entry, the `*_SUCCESS` line) is written only once the commit has
+happened, so the logs and the History screen can never claim something that was rolled back.
+
+### The server: `withTransaction` (`src/lib/transaction.ts`)
+
+```ts
+const { task, fresh } = await withTransaction(
+  async () => {
+    const task = await prisma.task.create({ … });
+    if (task.directCost > 0) await syncTaskDirectCostTransaction(task.id);   // helpers join by themselves
+    return { task, fresh: await prisma.task.findUnique({ … }) };
+  },
+  { operation: "TASK_CREATE", entityType: "Task" }
+);
+await writeAuditLog({ … });   // reached only after the commit
+```
+
+How helpers join without being handed anything: `prisma` (from `src/lib/db.ts`) is a thin proxy. While a
+`withTransaction` callback runs, an `AsyncLocalStorage` (`observability/server/transactionContext.ts`) holds the Prisma
+transaction client and the proxy routes every call to it; outside a transaction it is the ordinary client. A
+`withTransaction` inside another simply joins it — the outermost one owns the commit and the rollback.
+**Pitfall:** never keep a model delegate taken outside a transaction (`const model = prisma.task`) and use it inside:
+it would bypass the transaction (and, on SQLite, deadlock against it). Resolve delegates inside the callback, as
+`sync/push` and `tombstones.ts` do.
+
+| Outcome | What the log says |
+| --- | --- |
+| commit | `DB_TRANSACTION_COMMIT` (DEBUG, `duration_ms`); then the work queued with `afterCommit()` runs: the audit row and the `*_SUCCESS` line |
+| the callback failed | `DB_TRANSACTION_ROLLBACK` and, when an operation was named, `<OPERATION>_FAILED` (`TASK_CREATE_FAILED` …) with the stack; queued work is discarded |
+| the caller's own mistake (404, 409, invalid input) | the same lines one level down (DEBUG / WARN instead of WARN / ERROR): it is the expected outcome, and the request record says so too |
+| the transaction itself failed (timeout, lost connection, failed commit) | `DB_TRANSACTION_FAILED` (ERROR, `DB-003`); Prisma's `P2028` / `P2034` classify as `DB-003` |
+
+The error is then answered by `handleApiError` as before (`{ error, code, requestId }`, 500) but is not logged a second
+time: a transaction that already wrote `<OPERATION>_FAILED` marks the error as reported. Metrics:
+`db_transactions_total{outcome}` and `db_transaction_duration_ms`.
+
+Limits: an interactive transaction waits at most 5 s for a connection and runs at most 15 s. Audit entries stay
+*after* the commit on the server (a failed insert would poison a PostgreSQL transaction); one that cannot be stored is
+`AUDIT_WRITE_FAILED` and never fails the operation.
+
+**Where it is used:** every route that writes more than one row — tasks, activities (with the timer and time
+entries), projects, events, habit check-ins, installment plans and the payment of an installment, assets, categories,
+settings, quick capture, the sync push's "delete + tombstone" step, and the shared tombstone helpers
+(`src/lib/tombstones.ts`).
+
+**Installment payment is exactly once.** The installment is claimed with a conditional update (`status ≠ PAID → PAID`)
+inside the transaction that also creates the expense: of two payments made at the same moment one wins and the other
+gets 409 and writes nothing, and a failure between the two steps leaves neither.
+
+### The phone: `withLocalTransaction` (`src/local/transaction.ts`)
+
+The same rule and the same events (with `layer: "local"`) for the on-device SQLite:
+
+- `dispatchLocal` runs every non-GET route inside one transaction (`src/lib/localDispatcher.ts`): the handler, its audit
+  entry included, commits together or not at all. Reads are left alone (each write to the driver schedules a save of
+  the whole file).
+- `OPERATION_OF_ROUTE` names the operation each route performs (`TASK_CREATE_FAILED` …). A route without a name is just
+  as atomic — only its failure has no name of its own; a test makes every new write route pick one list or the other.
+- The success line waits for the commit (`afterLocalCommit`). The audit entry is stored *inside* the transaction, so a
+  rollback removes it together with the change (on SQLite a failed insert does not poison the transaction).
+- The callback must be **synchronous**. The phone's database is one in-memory SQLite that is written to a file from a
+  timer and on `pagehide`; a transaction left open across an `await` could be exported half-written. An async callback
+  is refused and rolled back.
+- Also transactional now: the first start (user + settings + default categories), adding missing default categories,
+  merging duplicate categories, applying one widget-queue entry (an activity and its time, or a check-in — a retried
+  entry can no longer leave half of itself behind), the calendar-file import, and the three blocks that used to write
+  `BEGIN` / `COMMIT` by hand (backup import, the wipe when another account signs in, applying a sync pull), which now
+  use the same wrapper.
+
+### Testing
+
+Failures are injected with SQLite triggers that abort the *last* write of an operation (`RAISE(ABORT)`), after the
+earlier ones have been made. The tests assert that nothing is left behind, that no history entry and no success line
+exist, that the failure is logged once with a code, and that the same request succeeds once the fault is removed.
+Server: `src/testing/transactions.e2e.test.ts` (the primitive) and `src/testing/atomicOperations.e2e.test.ts` (the
+routes); phone: `src/local/transaction.test.ts` and `src/local/atomicOperations.test.ts`. The route suites were also run
+with the transaction switched off, to confirm that they fail without it.
+
+**Deliberately not one transaction:** the rows of a sync push (each is applied on its own — a bad row must not block
+the good ones, see `SYNC_PARTIAL_SUCCESS`), the retention jobs, and effects outside the database (OS notifications).
+
 ## 3. The record
 
 One JSON object per line. Optional fields are omitted when unknown (absent = null); `metadata` is
@@ -234,7 +319,7 @@ Client bundles only see `NEXT_PUBLIC_*` variables (inlined at build time).
 | 0 | core library, registries, redaction, sinks, tests, the 31 `console.*` calls replaced, docs | **done** |
 | 1 | server pipeline: request context (`request_id`, trace), `withApiLogging`, Prisma timing/slow/error classification, auth events, sync summaries, error codes in API responses, Docker log rotation | **done** in the code; takes effect on the server after a deploy |
 | 2 | audit evolution: additive columns, field-level diffs, the `audit.log()` facade beside `writeAuditLog`, closing the unaudited routes, backups, retention (see [audit.md](audit.md)) | **done** in the code; the server part takes effect after a deploy, the phone part with the next APK |
-| 3 | atomic money paths: real database transactions; log/audit only after commit | planned (needs its own approval: it changes behaviour) |
+| 3 | atomic money paths: real database transactions on the server and the phone; history and success logged only after commit; installment payment exactly once | **done** in the code (section 2c); the server part takes effect after a deploy, the phone part with the next APK |
 | 4 | Android/web client: device file sink, sync correlation headers, local event ids, widget/notification events, global error capture, diagnostics export | planned (ships with a new APK) |
 | 5 | retention jobs, admin log-level/metrics endpoints, dashboards, benchmarks | planned |
 

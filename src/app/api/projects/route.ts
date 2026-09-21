@@ -7,6 +7,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { createProjectCategory } from "@/lib/projectSync";
 import { PROJECT_STATUSES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -35,11 +36,18 @@ async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
-    const project = await prisma.project.create({ data: { ...body, userId } });
+    // A project and its matching category are created together.
+    const project = await withTransaction(
+      async () => {
+        const project = await prisma.project.create({ data: { ...body, userId } });
 
-    // Every project gets a matching category (defaults to "دارایی") so project work
-    // categorizes naturally in Quick Capture — see lib/projectSync.ts.
-    await createProjectCategory(project);
+        // Every project gets a matching category (defaults to "دارایی") so project work
+        // categorizes naturally in Quick Capture — see lib/projectSync.ts.
+        await createProjectCategory(project);
+        return project;
+      },
+      { operation: "PROJECT_CREATE", entityType: "Project" }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

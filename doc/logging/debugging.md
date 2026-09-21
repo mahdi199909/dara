@@ -67,6 +67,10 @@ Server request path (phase 1):
 | `API_UNHANDLED_ERROR` | ERROR | a route handler (server) or the on-device dispatcher threw something unexpected; `error_code` `SYS-001` or a `DB-…` code; stack on the server only | `handleApiError`, `withApiLogging`, `dispatchLocal` |
 | `DB_QUERY_ERROR` / `DB_CONNECTION_ERROR` / `DB_CONNECTION_POOL_EXHAUSTED` | WARN (constraint, missing row) / ERROR | a Prisma call failed: model, operation, duration, `DB-001…007`; **no SQL, no arguments** | `prisma.ts` |
 | `DB_SLOW_QUERY` | WARN | a Prisma call took ≥ `LOG_SLOW_QUERY_MS`; model + operation only | `prisma.ts` |
+| `DB_TRANSACTION_COMMIT` | DEBUG | an operation's writes were committed together (`operation`, `duration_ms`) — the history entry and the `*_SUCCESS` line follow it | `transaction.ts` (server), `local/transaction.ts` (phone, `layer: local`) |
+| `DB_TRANSACTION_ROLLBACK` | WARN (a fault) · DEBUG (the caller's mistake) | an operation failed and **none** of its writes were kept; the error is the one that caused it | same |
+| `TASK_CREATE_FAILED` and the other `<OPERATION>_FAILED` events | ERROR (a fault, with stack) · WARN (the caller's mistake) | the named operation rolled back; `entity_type`, `entity_id`, `error_code`. Written once — `API_UNHANDLED_ERROR` does not repeat it | same |
+| `DB_TRANSACTION_FAILED` | ERROR | the transaction itself failed — timed out, lost its connection, or the commit was refused (`DB-003`) | same |
 | `AUTH_LOGIN_FAILED` / `AUTH_RATE_LIMITED` / `AUTH_REGISTER_FAILED` | WARN | security events: reason, IP, hashed account (`AUTH-001/002/005`) | `authEvents.ts` |
 | `AUTH_SESSION_INVALID` / `AUTH_FORBIDDEN` | WARN | no/invalid session (`AUTH-003`, from the Edge middleware or the route), or a non-owner on an admin route (`AUTH-004`) | `middleware.ts`, `auth.ts`, `admin.ts` |
 | `AUTH_LOGIN_SUCCESS` / `AUTH_REGISTER_SUCCESS` / `AUTH_LOGOUT_SUCCESS` | INFO | who signed in/out (user id, IP on the first two) | `authEvents.ts` |
@@ -103,6 +107,14 @@ every code in [error-codes.md](error-codes.md).
 the `requestId` of the error response, e.g. from the browser's network tab). Search the log for it:
 you get the request line, the auth context, each database failure, the unhandled error with its
 stack, and the completion record with the status and code — in order.
+
+**"It says it failed — is anything half-saved?"** No: an operation that writes several rows is one transaction, and
+the failure line says which one rolled back. Search the request id (server) or the entity id (phone): you will see
+`<OPERATION>_FAILED` and `DB_TRANSACTION_ROLLBACK` and **no** `<OPERATION>_SUCCESS`, and no history entry — the
+entry is only written for something that committed (on the phone it is stored inside the same transaction and goes
+with the rollback). `error_code` `DB-003` means the transaction machinery itself failed (a timeout, a lost
+connection): look at `DB_TRANSACTION_FAILED` next to it. A failure logged as WARN with a 4xx status is the caller's
+mistake (an installment paid twice is a 409), not a fault.
 
 **Sync keeps failing on one phone.** Find `SYNC_FAILED` and read `metadata.kind`:
 `network` (`SYNC-001`) offline/blocked; `auth` (`SYNC-003`) the server refuses the session — sign out and in;

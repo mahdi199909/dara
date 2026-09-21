@@ -4,6 +4,7 @@ import { AuthError } from "./auth";
 import { ApiError } from "./apiErrorBase";
 import { classifyError, codeForHttpStatus, getLogger, type ErrorCode } from "./observability";
 import { getRequestContext, setRequestErrorCode } from "./observability/server/requestContext";
+import { isErrorReported } from "./observability/server/transactionContext";
 
 export { ApiError } from "./apiErrorBase";
 
@@ -45,6 +46,7 @@ export function handleApiError(err: unknown): NextResponse {
   // person only ever sees the generic message below, plus the code and request id to quote).
   const code = classifyError(err) ?? "SYS-001";
   setRequestErrorCode(code);
-  if (!isNextDynamicUsage(err)) log.error("API_UNHANDLED_ERROR", { error: err, errorCode: code });
+  // (A transaction that rolled back for this error already wrote it, with its stack, as <OPERATION>_FAILED.)
+  if (!isNextDynamicUsage(err) && !isErrorReported(err)) log.error("API_UNHANDLED_ERROR", { error: err, errorCode: code });
   return NextResponse.json(errorBody("خطایی رخ داد. دوباره تلاش کنید.", code), { status: 500 });
 }

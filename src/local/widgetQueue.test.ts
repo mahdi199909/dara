@@ -133,6 +133,24 @@ describe("drainWidgetQueue", () => {
     expect(remaining[0].title).toBe("دسته حذف‌شده");
   });
 
+  it("applies a capture whole or not at all: a failure while writing its time leaves no activity behind, so the retry cannot duplicate it", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([{ title: "نیمه‌کاره", categoryId: "cat_1", durationMinutes: 45, startedAt: "2026-08-20T08:00:00.000Z" }])
+    );
+
+    db.execute(`CREATE TRIGGER refuse_time BEFORE INSERT ON "TimeEntry" BEGIN SELECT RAISE(ABORT, 'injected fault'); END`);
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(0);
+    expect(listActivities(db, USER_ID)).toEqual([]); // the activity was written first, and went with it
+    expect(JSON.parse(store.get("widget_pending_captures")!)).toHaveLength(1); // still queued
+
+    db.execute(`DROP TRIGGER refuse_time`);
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(listActivities(db, USER_ID).map((a) => a.title)).toEqual(["نیمه‌کاره"]); // once, not twice
+    expect(store.has("widget_pending_captures")).toBe(false);
+  });
+
   it("accepts entries with an optional source field ('widget' or 'notification'), old entries without it, and rejects an invalid value", async () => {
     const db = await freshDb();
     store.set(
@@ -215,6 +233,23 @@ describe("drainWidgetQueue — habit check-in toggles", () => {
 
     const count = await drainWidgetQueue(db, USER_ID);
     expect(count).toBe(0);
+    expect(store.has("widget_pending_habit_checkins")).toBe(false);
+  });
+
+  it("applies a habit toggle whole or not at all: a failure after the check-in was written leaves no check-in behind", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "مطالعه", virtualAssetValuePerCheckIn: 5000 });
+    store.set("widget_pending_habit_checkins", JSON.stringify([{ habitId: habit.id, date: new Date().toISOString() }]));
+    const checkIns = () => db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM "HabitCheckIn"`)!.n;
+
+    db.execute(`CREATE TRIGGER refuse_asset BEFORE INSERT ON "VirtualAssetEntry" BEGIN SELECT RAISE(ABORT, 'injected fault'); END`);
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(0);
+    expect(checkIns()).toBe(0); // the check-in was written first, and went with it
+    expect(JSON.parse(store.get("widget_pending_habit_checkins")!)).toHaveLength(1);
+
+    db.execute(`DROP TRIGGER refuse_asset`);
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(checkIns()).toBe(1);
     expect(store.has("widget_pending_habit_checkins")).toBe(false);
   });
 

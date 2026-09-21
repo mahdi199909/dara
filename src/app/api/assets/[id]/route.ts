@@ -6,6 +6,7 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(150).optional(),
@@ -40,19 +41,26 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const existing = await getOwned(userId, params.id);
     const body = updateSchema.parse(await req.json());
 
-    const asset = await prisma.asset.update({ where: { id: params.id }, data: body });
+    // The new value and its entry in the value history commit together.
+    const asset = await withTransaction(
+      async () => {
+        const asset = await prisma.asset.update({ where: { id: params.id }, data: body });
 
-    if (body.currentValue !== undefined && body.currentValue !== existing.currentValue) {
-      await prisma.assetTransaction.create({
-        data: {
-          assetId: asset.id,
-          type: "VALUE_UPDATE",
-          amount: body.currentValue - existing.currentValue,
-          date: new Date(),
-          notes: "به‌روزرسانی ارزش دارایی",
-        },
-      });
-    }
+        if (body.currentValue !== undefined && body.currentValue !== existing.currentValue) {
+          await prisma.assetTransaction.create({
+            data: {
+              assetId: asset.id,
+              type: "VALUE_UPDATE",
+              amount: body.currentValue - existing.currentValue,
+              date: new Date(),
+              notes: "به‌روزرسانی ارزش دارایی",
+            },
+          });
+        }
+        return asset;
+      },
+      { operation: "ASSET_UPDATE", entityType: "Asset", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

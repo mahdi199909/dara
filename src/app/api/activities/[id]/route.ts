@@ -7,6 +7,7 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { recalcActivityDuration, syncDirectCostTransaction } from "@/lib/activityService";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -43,9 +44,15 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const existing = await getOwned(userId, params.id);
     const body = updateSchema.parse(await req.json());
 
-    const activity = await prisma.activity.update({ where: { id: params.id }, data: body });
-    if (body.categoryId !== undefined) await recalcActivityDuration(activity.id);
-    if (body.directCost !== undefined) await syncDirectCostTransaction(activity.id);
+    const activity = await withTransaction(
+      async () => {
+        const activity = await prisma.activity.update({ where: { id: params.id }, data: body });
+        if (body.categoryId !== undefined) await recalcActivityDuration(activity.id);
+        if (body.directCost !== undefined) await syncDirectCostTransaction(activity.id);
+        return activity;
+      },
+      { operation: "ACTIVITY_UPDATE", entityType: "Activity", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

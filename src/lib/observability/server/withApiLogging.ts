@@ -14,6 +14,7 @@ import type { Level } from "../core/levels";
 import { metrics } from "../core/metrics";
 import { getLogger } from "../root";
 import { beginRequest, runWithRequestContext, setRequestErrorCode, type RequestContext } from "./requestContext";
+import { isErrorReported } from "./transactionContext";
 import { serverSettings } from "./settings";
 
 const log = getLogger(null, "route");
@@ -65,7 +66,7 @@ function finish(context: RequestContext, response: Response | undefined, thrown:
   if (threw) {
     const code = classifyError(thrown) ?? "SYS-001";
     setRequestErrorCode(code);
-    log.error("API_UNHANDLED_ERROR", { error: thrown, errorCode: code, httpMethod: context.method, httpPath: context.path, route: context.route });
+    if (!isErrorReported(thrown)) log.error("API_UNHANDLED_ERROR", { error: thrown, errorCode: code, httpMethod: context.method, httpPath: context.path, route: context.route });
   }
 
   const statusClass = `${Math.floor(status / 100)}xx`;

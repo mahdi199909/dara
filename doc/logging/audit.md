@@ -163,10 +163,13 @@ Existing call sites use `writeAuditLog` (server, `src/lib/audit.ts`) and `writeL
 
 - store the canonical `event` (from the vocabulary), the request/trace ids (server) or a fresh
   `localEventId` (phone), and the diff of an update;
-- write the operation's `*_SUCCESS` line to the application log, **after** the write — the routes call
-  the writer once their own write has committed, so "success" is never logged before the commit; an audit
-  row that cannot be stored is reported (`AUDIT_WRITE_FAILED`, `AUDIT-001`) without failing the operation
-  and without hiding that the operation itself succeeded;
+- write the operation's `*_SUCCESS` line to the application log, **after** the commit (phase 3): on the server
+  the routes call the writer once their transaction has committed (and a call made *inside* a transaction is
+  held back until it does, then dropped if it rolls back); on the phone the entry is stored inside the
+  transaction — a rollback removes it with the change — and the success line waits for the commit. So neither
+  the History screen nor the log ever shows something that was rolled back. An audit row that cannot be
+  stored is reported (`AUDIT_WRITE_FAILED`, `AUDIT-001`) without failing the operation and without hiding
+  that the operation itself succeeded;
 - never throw.
 
 New server code uses the facade, which needs less:

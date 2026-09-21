@@ -17,6 +17,10 @@ today, **[planned 4]** ships with a later APK.
   `AUDIT_WRITE_FAILED`, `WIDGET_QUEUE_FAILED`, `WIDGET_REFRESH_FAILED`, `LOCAL_NOTIFICATION_FAILED`,
   `LOCAL_NOTIFICATION_PERMISSION_FAILED`, `CAPITAL_SNAPSHOT_FAILED`, `IMPORT_ROW_FAILED`, …
   (see [debugging.md](debugging.md)).
+- Every write the app makes on the device is one SQLite transaction (`withLocalTransaction`, see
+  [architecture.md](architecture.md) section 2c): a failure half-way leaves nothing behind, and the log says
+  `DB_TRANSACTION_ROLLBACK` and `<OPERATION>_FAILED` (with `layer: "local"`) instead of a success. The
+  `*_SUCCESS` line is written after the commit.
 - Widget queue records never contain what the person typed into a widget; notification failures name
   the operation and the reminder id, never its title or body.
 

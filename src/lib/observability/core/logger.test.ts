@@ -345,7 +345,8 @@ describe("operation() and time()", () => {
     ).rejects.toThrow("deadlock");
     expect(sink.events()).toEqual(["EXPENSE_CREATE_STARTED", "EXPENSE_CREATE_FAILED"]);
     expect(sink.events()).not.toContain("EXPENSE_CREATE_SUCCESS");
-    expect(sink.last()).toMatchObject({ level: "ERROR", error_code: "DB-002", error: { message: "deadlock" } });
+    // P2034 is Prisma's "transaction failed because of a write conflict or deadlock": the transaction code
+    expect(sink.last()).toMatchObject({ level: "ERROR", error_code: "DB-003", error: { message: "deadlock" } });
   });
 
   it("works with synchronous work too", async () => {

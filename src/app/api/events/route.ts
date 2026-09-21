@@ -9,6 +9,7 @@ import { expandOccurrences } from "@/lib/recurrence";
 import { syncEventDirectCostTransaction, syncEventIncomeTransaction } from "@/lib/directCostSync";
 import { RECURRENCE_FREQS, VALUE_TYPES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const createSchema = z
   .object({
@@ -102,42 +103,49 @@ async function POST(req: NextRequest) {
     const startAt = new Date(body.startAt);
     const endAt = new Date(body.endAt);
 
-    const event = await prisma.event.create({
-      data: {
-        userId,
-        title: body.title,
-        description: body.description,
-        startAt,
-        endAt,
-        allDay: body.allDay ?? false,
-        location: body.location,
-        categoryId: body.categoryId,
-        projectId: body.projectId,
-        valueType: body.valueType,
-        directCost: body.directCost ?? 0,
-        incomeAmount: body.incomeAmount ?? 0,
-        recurrenceFreq: body.recurrenceFreq ?? "NONE",
-        recurrenceInterval: body.recurrenceInterval ?? 1,
-        recurrenceUntil: body.recurrenceUntil ? new Date(body.recurrenceUntil) : undefined,
-        recurrenceCount: body.recurrenceCount,
+    // The event, its cost / income transactions and its reminders are created together.
+    const event = await withTransaction(
+      async () => {
+        const event = await prisma.event.create({
+          data: {
+            userId,
+            title: body.title,
+            description: body.description,
+            startAt,
+            endAt,
+            allDay: body.allDay ?? false,
+            location: body.location,
+            categoryId: body.categoryId,
+            projectId: body.projectId,
+            valueType: body.valueType,
+            directCost: body.directCost ?? 0,
+            incomeAmount: body.incomeAmount ?? 0,
+            recurrenceFreq: body.recurrenceFreq ?? "NONE",
+            recurrenceInterval: body.recurrenceInterval ?? 1,
+            recurrenceUntil: body.recurrenceUntil ? new Date(body.recurrenceUntil) : undefined,
+            recurrenceCount: body.recurrenceCount,
+          },
+        });
+
+        if (event.directCost > 0) await syncEventDirectCostTransaction(event.id);
+        if (event.incomeAmount > 0) await syncEventIncomeTransaction(event.id);
+
+        if (body.reminderOffsets?.length) {
+          await prisma.reminder.createMany({
+            data: body.reminderOffsets.map((offsetMinutes) => ({
+              userId,
+              targetType: "EVENT",
+              eventId: event.id,
+              title: `یادآوری: ${event.title}`,
+              offsetMinutes,
+              remindAt: new Date(startAt.getTime() - offsetMinutes * 60000),
+            })),
+          });
+        }
+        return event;
       },
-    });
-
-    if (event.directCost > 0) await syncEventDirectCostTransaction(event.id);
-    if (event.incomeAmount > 0) await syncEventIncomeTransaction(event.id);
-
-    if (body.reminderOffsets?.length) {
-      await prisma.reminder.createMany({
-        data: body.reminderOffsets.map((offsetMinutes) => ({
-          userId,
-          targetType: "EVENT",
-          eventId: event.id,
-          title: `یادآوری: ${event.title}`,
-          offsetMinutes,
-          remindAt: new Date(startAt.getTime() - offsetMinutes * 60000),
-        })),
-      });
-    }
+      { operation: "EVENT_CREATE", entityType: "Event" }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

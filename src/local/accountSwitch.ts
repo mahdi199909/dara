@@ -9,6 +9,7 @@
 import { SYNC_TABLES } from "@/lib/syncTables";
 import type { LocalDb } from "./db";
 import { LOCAL_USER_ID, ensureDefaultCategories } from "./localUser";
+import { withLocalTransaction } from "./transaction";
 import { META_LINKED_EMAIL, META_LINKED_USER_ID, META_TOMBSTONES_ACKED_AT, getSyncMeta, setSyncMeta, clearAllSyncIssues } from "./syncMeta";
 
 export interface LinkedAccount {
@@ -36,8 +37,8 @@ export function isAccountSwitch(db: LocalDb, remoteUserId: string): LinkedAccoun
  * state (default categories, placeholder name, untouched settings). Children go before parents so
  * this also works while SQLite foreign keys happen to be enforced. */
 export function wipeLocalAccountData(db: LocalDb): void {
-  db.execute("BEGIN TRANSACTION");
-  try {
+  // All of it or none of it: a wipe that stopped half-way would leave the old account's rows beside the new one's.
+  withLocalTransaction(db, () => {
     for (const config of [...SYNC_TABLES].reverse()) db.run(`DELETE FROM "${config.table}"`);
     db.run(`DELETE FROM "SyncTombstone"`);
     db.run(`DELETE FROM "AuditLog"`);
@@ -55,9 +56,5 @@ export function wipeLocalAccountData(db: LocalDb): void {
       [crypto.randomUUID(), LOCAL_USER_ID, now, now]
     );
     ensureDefaultCategories(db, LOCAL_USER_ID);
-    db.execute("COMMIT");
-  } catch (err) {
-    db.execute("ROLLBACK");
-    throw err;
-  }
+  });
 }

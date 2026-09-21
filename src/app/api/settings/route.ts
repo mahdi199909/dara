@@ -8,6 +8,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { computeHourlyValue } from "@/lib/hourlyValue";
 import { CURRENCY_UNITS } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -59,18 +60,25 @@ async function PATCH(req: NextRequest) {
 
     const existing = await prisma.settings.findUnique({ where: { userId } });
 
-    if (name) {
-      await prisma.user.update({ where: { id: userId }, data: { name } });
-    }
+    // The name and the settings are one save.
+    const settings = await withTransaction(
+      async () => {
+        if (name) {
+          await prisma.user.update({ where: { id: userId }, data: { name } });
+        }
 
-    const settings = await prisma.settings.upsert({
-      where: { userId },
-      update: {
-        ...settingsBody,
-        dashboardCardPrefs: dashboardCardPrefs ? JSON.stringify(dashboardCardPrefs) : undefined,
+        const settings = await prisma.settings.upsert({
+          where: { userId },
+          update: {
+            ...settingsBody,
+            dashboardCardPrefs: dashboardCardPrefs ? JSON.stringify(dashboardCardPrefs) : undefined,
+          },
+          create: { userId, ...settingsBody },
+        });
+        return settings;
       },
-      create: { userId, ...settingsBody },
-    });
+      { operation: "SETTINGS_UPDATE", entityType: "Settings" }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

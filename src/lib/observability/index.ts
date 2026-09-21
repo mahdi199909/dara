@@ -46,3 +46,4 @@ export { AUDIT_VOCABULARY, auditEntryFor, auditEntryForEvent, auditEventFor, res
 export type { AuditVocabularyEntry, ResolvedAuditIdentity } from "./core/auditVocabulary";
 export { buildAuditChanges, serializeChanges, maskMoneyInSnapshot, parseAuditMoneyMode, MAX_CHANGES_CHARS } from "./core/auditEntry";
 export type { AuditChanges, AuditMoneyMode } from "./core/auditEntry";
+export { markErrorReported, isErrorReported } from "./core/reportedErrors";

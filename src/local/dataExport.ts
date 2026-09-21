@@ -11,6 +11,7 @@
 // *set of tables* and their dependency order (see DATA_EXPORT_TABLES below), which changes far
 // less often than individual columns do.
 import type { LocalDb } from "./db";
+import { withLocalTransaction } from "./transaction";
 import { getLogger } from "../lib/observability";
 
 const log = getLogger("backup", "data-import");
@@ -291,10 +292,7 @@ function insertTableRows(db: LocalDb, table: string, rows: Record<string, unknow
  * Category, whose (userId, name) doesn't already exist) — it never UPDATEs or DELETEs anything,
  * so running this is always purely additive and safe to retry.
  *
- * Wrapped in a single SQL transaction (BEGIN/COMMIT via LocalDb.execute — the LocalDb interface
- * has no dedicated transaction method, but both real drivers, see src/local/drivers/browserSqlJs.ts
- * and src/local/drivers/nodeSqlite.ts, pass execute()'s raw SQL straight to sql.js, which
- * understands BEGIN/COMMIT/ROLLBACK like any SQLite connection) so a truly unexpected failure
+ * Wrapped in a single transaction (see withLocalTransaction) so a truly unexpected failure
  * (not a single bad row — those are already caught inside insertTableRows and counted, not
  * thrown) leaves the database exactly as it was rather than half-imported.
  */
@@ -302,8 +300,7 @@ export function importAllData(db: LocalDb, file: DataExportFile): ImportResult {
   const result: ImportResult = { added: {}, skipped: {}, errors: {} };
   const sourceCategories = buildSourceCategoryLookup(file.tables.Category);
 
-  db.execute("BEGIN TRANSACTION");
-  try {
+  withLocalTransaction(db, () => {
     for (const table of DATA_EXPORT_TABLES) {
       const rows = file.tables[table];
       if (!Array.isArray(rows) || rows.length === 0) continue;
@@ -322,11 +319,7 @@ export function importAllData(db: LocalDb, file: DataExportFile): ImportResult {
       if (skipped > 0) result.skipped[table] = skipped;
       if (errors > 0) result.errors[table] = errors;
     }
-    db.execute("COMMIT");
-  } catch (err) {
-    db.execute("ROLLBACK");
-    throw err;
-  }
+  });
 
   return result;
 }

@@ -6,6 +6,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { createTaskSchema } from "@/lib/schemas/tasks";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 async function GET(req: NextRequest) {
   try {
@@ -35,28 +36,36 @@ async function POST(req: NextRequest) {
     const userId = await requireUserId();
     const body = createTaskSchema.parse(await req.json());
 
-    const task = await prisma.task.create({
-      data: {
-        title: body.title,
-        description: body.description,
-        status: body.status,
-        categoryId: body.categoryId,
-        projectId: body.projectId,
-        estimatedCost: body.estimatedCost,
-        valueType: body.valueType,
-        directCost: body.directCost ?? 0,
-        incomeAmount: body.incomeAmount ?? 0,
-        userId,
-        dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-        startAt: body.startAt ? new Date(body.startAt) : undefined,
-        endAt: body.endAt ? new Date(body.endAt) : undefined,
-      },
-    });
+    // The task and what follows from it (its expense and income transactions, its virtual asset) are
+    // written together or not at all; the history entry below is only reached once they have committed.
+    const { task, fresh } = await withTransaction(
+      async () => {
+        const task = await prisma.task.create({
+          data: {
+            title: body.title,
+            description: body.description,
+            status: body.status,
+            categoryId: body.categoryId,
+            projectId: body.projectId,
+            estimatedCost: body.estimatedCost,
+            valueType: body.valueType,
+            directCost: body.directCost ?? 0,
+            incomeAmount: body.incomeAmount ?? 0,
+            userId,
+            dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+            startAt: body.startAt ? new Date(body.startAt) : undefined,
+            endAt: body.endAt ? new Date(body.endAt) : undefined,
+          },
+        });
 
-    if (task.directCost > 0) await syncTaskDirectCostTransaction(task.id);
-    if (task.incomeAmount > 0) await syncTaskIncomeTransaction(task.id);
-    if (task.startAt && task.endAt) await syncTaskVirtualAsset(task.id);
-    const fresh = await prisma.task.findUnique({ where: { id: task.id }, include: { category: true, project: true } });
+        if (task.directCost > 0) await syncTaskDirectCostTransaction(task.id);
+        if (task.incomeAmount > 0) await syncTaskIncomeTransaction(task.id);
+        if (task.startAt && task.endAt) await syncTaskVirtualAsset(task.id);
+        const fresh = await prisma.task.findUnique({ where: { id: task.id }, include: { category: true, project: true } });
+        return { task, fresh };
+      },
+      { operation: "TASK_CREATE", entityType: "Task" }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

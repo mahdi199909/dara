@@ -7,6 +7,7 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { CATEGORY_KINDS, VALUE_TYPES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(50).optional(),
@@ -70,11 +71,16 @@ async function DELETE(req: NextRequest, { params }: { params: { id: string } }) 
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
 
-    await prisma.category.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
-    // The schema's onDelete: SetNull for parentCategoryId only fires on a real row DELETE, never
-    // on this soft-delete UPDATE — without this, a sub-category of this one would keep pointing
-    // at a now-deleted parent forever (same fix as the on-device repository's deleteCategory).
-    await prisma.category.updateMany({ where: { parentCategoryId: params.id, userId }, data: { parentCategoryId: null } });
+    await withTransaction(
+      async () => {
+        await prisma.category.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+        // The schema's onDelete: SetNull for parentCategoryId only fires on a real row DELETE, never
+        // on this soft-delete UPDATE — without this, a sub-category of this one would keep pointing
+        // at a now-deleted parent forever (same fix as the on-device repository's deleteCategory).
+        await prisma.category.updateMany({ where: { parentCategoryId: params.id, userId }, data: { parentCategoryId: null } });
+      },
+      { operation: "CATEGORY_DELETE", entityType: "Category", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

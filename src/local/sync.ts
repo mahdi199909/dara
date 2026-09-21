@@ -13,6 +13,7 @@ import { buildBatches } from "@/lib/syncBatching";
 import type { ProfilePayload } from "@/lib/profileSync";
 import { LOCAL_USER_ID } from "./localUser";
 import type { LocalDb } from "./db";
+import { withLocalTransaction } from "./transaction";
 import { META_TOMBSTONES_ACKED_AT, clearSyncIssue, getSyncMeta, recordSyncIssue, retryableIssues, setSyncMeta } from "./syncMeta";
 import { applyRemoteTombstone, hasLocalTombstoneAtOrAfter, listLocalTombstonesSince } from "./tombstones";
 import { applyRemoteProfile, readLocalProfilePayload } from "./profileSyncLocal";
@@ -372,8 +373,8 @@ export async function pullRemoteChanges(db: LocalDb, token: string, lastPulledAt
   let tombstonesApplied = 0;
   let profileApplied = { settingsApplied: false, nameApplied: false };
 
-  db.execute("BEGIN TRANSACTION");
-  try {
+  // The whole pull lands together or not at all (synchronous, so nothing else on the phone runs in between).
+  withLocalTransaction(db, () => {
     // Deletions first, so a row deleted elsewhere and re-created under the same natural key
     // (un-check then re-check) arrives after the old one is gone.
     for (const t of body.tombstones ?? []) {
@@ -400,11 +401,7 @@ export async function pullRemoteChanges(db: LocalDb, token: string, lastPulledAt
       if (applied > 0) pulled[config.table] = applied;
       failures.push(...failed);
     }
-    db.execute("COMMIT");
-  } catch (err) {
-    db.execute("ROLLBACK");
-    throw err;
-  }
+  });
 
   return { pulled, syncedAt: body.syncedAt, tombstonesApplied, failures, profileApplied, protocol: body.protocol ?? 0 };
 }

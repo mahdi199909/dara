@@ -17,6 +17,7 @@ import type { LocalDb } from "./db";
 import { createActivity } from "./repositories/activities";
 import { addManualTimeEntry } from "./activityService";
 import { toggleHabitCheckIn } from "./repositories/habits";
+import { withLocalTransaction } from "./transaction";
 import { getLogger } from "../lib/observability";
 
 const log = getLogger("widgets", "queue");
@@ -102,13 +103,18 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
   const failed: unknown[] = [];
   for (const entry of valid) {
     try {
-      const activity = createActivity(db, userId, {
-        title: entry.title,
-        categoryId: entry.categoryId ?? undefined,
-      });
-      addManualTimeEntry(db, activity.id, {
-        startAt: new Date(entry.startedAt),
-        durationMin: entry.durationMinutes,
+      // The activity and its time are one step. Were the time to fail after the activity was written, the entry would stay
+      // queued (see above) and every retry would add one more activity without time. (No operation name: the failure is
+      // reported below as WIDGET_QUEUE_FAILED, which says what happens to the entry next.)
+      withLocalTransaction(db, () => {
+        const activity = createActivity(db, userId, {
+          title: entry.title,
+          categoryId: entry.categoryId ?? undefined,
+        });
+        addManualTimeEntry(db, activity.id, {
+          startAt: new Date(entry.startedAt),
+          durationMin: entry.durationMinutes,
+        });
       });
       applied++;
     } catch (err) {
@@ -152,7 +158,8 @@ async function drainHabitCheckInQueue(db: LocalDb, userId: string): Promise<numb
   const failed: unknown[] = [];
   for (const entry of valid) {
     try {
-      toggleHabitCheckIn(db, userId, entry.habitId, { date: entry.date });
+      // The check-in, the virtual asset it earns and its history entry are one step.
+      withLocalTransaction(db, () => toggleHabitCheckIn(db, userId, entry.habitId, { date: entry.date }));
       applied++;
     } catch (err) {
       log.error("WIDGET_QUEUE_FAILED", { error: err, errorCode: "WIDGET-001", layer: "local", queue: "habit_checkin", entityType: "habit", entityId: entry.habitId, willRetry: true });

@@ -17,6 +17,7 @@ import {
   type ResolvedAuditIdentity,
 } from "./observability";
 import { getRequestContext } from "./observability/server/requestContext";
+import { afterCommit, inTransaction } from "./observability/server/transactionContext";
 import { prisma } from "./db";
 
 // No fixed module: each event takes the module of its own domain (TASK_UPDATE_SUCCESS → tasks, AUDIT_WRITE_FAILED → audit).
@@ -57,8 +58,18 @@ function reportOperationSuccess(identity: ResolvedAuditIdentity, params: AuditPa
   });
 }
 
-/** Writes an audit log entry. Never throws — logging failures must not break the primary operation. */
+/**
+ * Writes an audit log entry. Never throws — logging failures must not break the primary operation.
+ *
+ * Called inside a withTransaction callback, the entry (and the operation's success line) is queued and
+ * written only once that transaction has committed; if it rolls back, neither is ever written — the
+ * history and the log never claim something that did not happen.
+ */
 export async function writeAuditLog(params: AuditParams): Promise<void> {
+  if (inTransaction()) {
+    afterCommit(() => writeAuditLog(params));
+    return;
+  }
   const identity = resolveAuditIdentity({ action: params.action, entityType: params.entityType, event: params.event });
   let auditId: string | undefined;
   let changes: AuditChanges | null | undefined;

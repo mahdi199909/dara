@@ -7,6 +7,7 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { addManualTimeEntry, startTimer, syncDirectCostTransaction } from "@/lib/activityService";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -60,30 +61,37 @@ async function POST(req: NextRequest) {
     const userId = await requireUserId();
     const body = createSchema.parse(await req.json());
 
-    const activity = await prisma.activity.create({
-      data: {
-        userId,
-        title: body.title,
-        notes: body.notes,
-        categoryId: body.categoryId,
-        taskId: body.taskId,
-        projectId: body.projectId,
-        directCost: body.directCost ?? 0,
+    // The activity, its first time entry / running timer and its cost transaction commit together.
+    const { activity, fresh } = await withTransaction(
+      async () => {
+        const activity = await prisma.activity.create({
+          data: {
+            userId,
+            title: body.title,
+            notes: body.notes,
+            categoryId: body.categoryId,
+            taskId: body.taskId,
+            projectId: body.projectId,
+            directCost: body.directCost ?? 0,
+          },
+        });
+
+        if (body.durationMin && body.durationMin > 0) {
+          await addManualTimeEntry(activity.id, { durationMin: body.durationMin });
+        } else if (body.startTimerNow) {
+          await startTimer(userId, activity.id);
+        }
+
+        if (activity.directCost > 0) await syncDirectCostTransaction(activity.id);
+
+        const fresh = await prisma.activity.findUnique({
+          where: { id: activity.id },
+          include: { category: true, timeEntries: true, virtualAssetEntry: true },
+        });
+        return { activity, fresh };
       },
-    });
-
-    if (body.durationMin && body.durationMin > 0) {
-      await addManualTimeEntry(activity.id, { durationMin: body.durationMin });
-    } else if (body.startTimerNow) {
-      await startTimer(userId, activity.id);
-    }
-
-    if (activity.directCost > 0) await syncDirectCostTransaction(activity.id);
-
-    const fresh = await prisma.activity.findUnique({
-      where: { id: activity.id },
-      include: { category: true, timeEntries: true, virtualAssetEntry: true },
-    });
+      { operation: "ACTIVITY_CREATE", entityType: "Activity" }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

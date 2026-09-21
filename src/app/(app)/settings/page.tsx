@@ -1261,37 +1261,45 @@ function BackupTab() {
     try {
       const db = getLocalDbInstance();
       if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
-      const [{ createEvent }, { getLocalUserId }] = await Promise.all([import("@/local/repositories/events"), import("@/local/localUser")]);
+      const [{ createEvent }, { getLocalUserId }, { withLocalTransaction }] = await Promise.all([
+        import("@/local/repositories/events"),
+        import("@/local/localUser"),
+        import("@/local/transaction"),
+      ]);
       const userId = getLocalUserId(db);
 
       let added = 0;
       let skipped = 0;
-      for (const ev of icsPreview) {
-        // Same title + same start time already exists — treat this exact event as already
-        // imported rather than creating a visible duplicate. Not a perfect UID-based dedup (an
-        // .ics has no persisted record of "already imported this" the way this app's own JSON
-        // backup import does by row id), but good enough to make re-importing the same file safe.
-        const existing = db.get<{ id: string }>(
-          `SELECT "id" FROM "Event" WHERE "userId" = ? AND "title" = ? AND "startAt" = ? AND "deletedAt" IS NULL`,
-          [userId, ev.title, ev.startAt.toISOString()]
-        );
-        if (existing) {
-          skipped++;
-          continue;
+      // All of the file or none of it: an import that failed half-way must not leave part of the calendar behind.
+      // (Running it again is safe either way — see the duplicate check below.)
+      withLocalTransaction(db, () => {
+        for (const ev of icsPreview) {
+          // Same title + same start time already exists — treat this exact event as already
+          // imported rather than creating a visible duplicate. Not a perfect UID-based dedup (an
+          // .ics has no persisted record of "already imported this" the way this app's own JSON
+          // backup import does by row id), but good enough to make re-importing the same file safe.
+          const existing = db.get<{ id: string }>(
+            `SELECT "id" FROM "Event" WHERE "userId" = ? AND "title" = ? AND "startAt" = ? AND "deletedAt" IS NULL`,
+            [userId, ev.title, ev.startAt.toISOString()]
+          );
+          if (existing) {
+            skipped++;
+            continue;
+          }
+          createEvent(db, userId, {
+            title: ev.title,
+            description: ev.description ?? undefined,
+            startAt: ev.startAt.toISOString(),
+            endAt: ev.endAt.toISOString(),
+            allDay: ev.allDay,
+            recurrenceFreq: ev.recurrenceFreq !== "NONE" ? ev.recurrenceFreq : undefined,
+            recurrenceInterval: ev.recurrenceFreq !== "NONE" ? ev.recurrenceInterval : undefined,
+            recurrenceUntil: ev.recurrenceUntil ? ev.recurrenceUntil.toISOString() : undefined,
+            recurrenceCount: ev.recurrenceCount ?? undefined,
+          });
+          added++;
         }
-        createEvent(db, userId, {
-          title: ev.title,
-          description: ev.description ?? undefined,
-          startAt: ev.startAt.toISOString(),
-          endAt: ev.endAt.toISOString(),
-          allDay: ev.allDay,
-          recurrenceFreq: ev.recurrenceFreq !== "NONE" ? ev.recurrenceFreq : undefined,
-          recurrenceInterval: ev.recurrenceFreq !== "NONE" ? ev.recurrenceInterval : undefined,
-          recurrenceUntil: ev.recurrenceUntil ? ev.recurrenceUntil.toISOString() : undefined,
-          recurrenceCount: ev.recurrenceCount ?? undefined,
-        });
-        added++;
-      }
+      });
       setIcsResult({ added, skipped });
       setIcsPreview(null);
     } catch (err) {

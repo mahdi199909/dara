@@ -6,6 +6,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { summarizeInstallments, recomputeInstallmentDueDate } from "@/lib/installments";
 import { updateInstallmentPlanSchema } from "@/lib/schemas/installments";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 async function getOwned(userId: string, id: string) {
   const plan = await prisma.installmentPlan.findFirst({
@@ -32,27 +33,34 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const existing = await getOwned(userId, params.id);
     const body = updateInstallmentPlanSchema.parse(await req.json());
 
-    await prisma.installmentPlan.update({
-      where: { id: params.id },
-      data: {
-        title: body.title,
-        dueDay: body.dueDay,
-        notes: body.notes,
+    // The plan and the re-dated installments commit together.
+    const plan = await withTransaction(
+      async () => {
+        await prisma.installmentPlan.update({
+          where: { id: params.id },
+          data: {
+            title: body.title,
+            dueDay: body.dueDay,
+            notes: body.notes,
+          },
+        });
+
+        // Re-date only installments that haven't been paid yet — PAID ones keep their real
+        // historical due date so past reports/receipts stay accurate.
+        if (body.dueDay !== undefined && body.dueDay !== existing.dueDay) {
+          for (const installment of existing.installments) {
+            if (installment.status === "PAID") continue;
+            const dueDate = recomputeInstallmentDueDate(existing.startDate, body.dueDay, installment.index);
+            await prisma.installment.update({ where: { id: installment.id }, data: { dueDate } });
+          }
+        }
+
+        const fresh = await getOwned(userId, params.id);
+        const plan = { ...fresh, summary: summarizeInstallments(fresh.installments) };
+        return plan;
       },
-    });
-
-    // Re-date only installments that haven't been paid yet — PAID ones keep their real
-    // historical due date so past reports/receipts stay accurate.
-    if (body.dueDay !== undefined && body.dueDay !== existing.dueDay) {
-      for (const installment of existing.installments) {
-        if (installment.status === "PAID") continue;
-        const dueDate = recomputeInstallmentDueDate(existing.startDate, body.dueDay, installment.index);
-        await prisma.installment.update({ where: { id: installment.id }, data: { dueDate } });
-      }
-    }
-
-    const fresh = await getOwned(userId, params.id);
-    const plan = { ...fresh, summary: summarizeInstallments(fresh.installments) };
+      { operation: "INSTALLMENT_UPDATE", entityType: "InstallmentPlan", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({
@@ -81,14 +89,20 @@ async function DELETE(req: NextRequest, { params }: { params: { id: string } }) 
     const deleteTransactions = new URL(req.url).searchParams.get("deleteTransactions") === "true";
     const ts = new Date();
 
-    if (deleteTransactions && existing.installments.length > 0) {
-      await prisma.transaction.updateMany({
-        where: { installmentId: { in: existing.installments.map((i) => i.id) } },
-        data: { deletedAt: ts },
-      });
-    }
+    // Deleting the payments and the plan is one step.
+    await withTransaction(
+      async () => {
+        if (deleteTransactions && existing.installments.length > 0) {
+          await prisma.transaction.updateMany({
+            where: { installmentId: { in: existing.installments.map((i) => i.id) } },
+            data: { deletedAt: ts },
+          });
+        }
 
-    await prisma.installmentPlan.update({ where: { id: params.id }, data: { deletedAt: ts } });
+        await prisma.installmentPlan.update({ where: { id: params.id }, data: { deletedAt: ts } });
+      },
+      { operation: "INSTALLMENT_DELETE", entityType: "InstallmentPlan", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

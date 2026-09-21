@@ -7,6 +7,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncHabitCheckInVirtualAsset } from "@/lib/habitSync";
 import { deleteRowsWithTombstones, deleteVirtualAssetEntriesWithTombstones } from "@/lib/tombstones";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const bodySchema = z.object({ date: z.string().datetime().optional() });
 
@@ -31,8 +32,14 @@ async function POST(req: NextRequest, { params }: { params: { id: string } }) {
     const { ipAddress, userAgent } = requestMeta(req);
 
     if (existing) {
-      await deleteVirtualAssetEntriesWithTombstones({ habitCheckInId: existing.id });
-      await deleteRowsWithTombstones(userId, "habitCheckIn", { id: existing.id });
+      // The check-in and the virtual asset it earned go together.
+      await withTransaction(
+        async () => {
+          await deleteVirtualAssetEntriesWithTombstones({ habitCheckInId: existing.id });
+          await deleteRowsWithTombstones(userId, "habitCheckIn", { id: existing.id });
+        },
+        { operation: "HABIT_UNDO", entityType: "HabitCheckIn", entityId: existing.id }
+      );
       await writeAuditLog({
         userId,
         action: "HABIT_UNCHECK",
@@ -45,8 +52,15 @@ async function POST(req: NextRequest, { params }: { params: { id: string } }) {
       return NextResponse.json({ checkedIn: false });
     }
 
-    const checkIn = await prisma.habitCheckIn.create({ data: { habitId: habit.id, date } });
-    await syncHabitCheckInVirtualAsset(checkIn.id);
+    // The check-in and the virtual asset it earns are written together.
+    const checkIn = await withTransaction(
+      async () => {
+        const checkIn = await prisma.habitCheckIn.create({ data: { habitId: habit.id, date } });
+        await syncHabitCheckInVirtualAsset(checkIn.id);
+        return checkIn;
+      },
+      { operation: "HABIT_CHECKIN", entityType: "HabitCheckIn" }
+    );
     await writeAuditLog({
       userId,
       action: "HABIT_CHECKIN",
@@ -91,11 +105,17 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const { ipAddress, userAgent } = requestMeta(req);
     const durationMin = body.durationMin > 0 ? body.durationMin : null;
 
-    const checkIn = existing
-      ? await prisma.habitCheckIn.update({ where: { id: existing.id }, data: { durationMin } })
-      : await prisma.habitCheckIn.create({ data: { habitId: habit.id, date, durationMin } });
+    const checkIn = await withTransaction(
+      async () => {
+        const checkIn = existing
+          ? await prisma.habitCheckIn.update({ where: { id: existing.id }, data: { durationMin } })
+          : await prisma.habitCheckIn.create({ data: { habitId: habit.id, date, durationMin } });
 
-    await syncHabitCheckInVirtualAsset(checkIn.id);
+        await syncHabitCheckInVirtualAsset(checkIn.id);
+        return checkIn;
+      },
+      { operation: "HABIT_UPDATE", entityType: "HabitCheckIn" }
+    );
     await writeAuditLog({
       userId,
       action: "HABIT_LOG_DURATION",

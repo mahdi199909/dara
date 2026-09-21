@@ -8,6 +8,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncEventDirectCostTransaction, syncEventIncomeTransaction } from "@/lib/directCostSync";
 import { RECURRENCE_FREQS, VALUE_TYPES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -39,28 +40,34 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     const existing = await getOwned(userId, params.id);
     const body = updateSchema.parse(await req.json());
 
-    const event = await prisma.event.update({
-      where: { id: params.id },
-      data: {
-        ...body,
-        startAt: body.startAt ? new Date(body.startAt) : undefined,
-        endAt: body.endAt ? new Date(body.endAt) : undefined,
-        recurrenceUntil: body.recurrenceUntil === undefined ? undefined : body.recurrenceUntil ? new Date(body.recurrenceUntil) : null,
-      },
-    });
-
-    if (body.directCost !== undefined) await syncEventDirectCostTransaction(event.id);
-    if (body.incomeAmount !== undefined) await syncEventIncomeTransaction(event.id);
-
-    if (body.startAt) {
-      const reminders = await prisma.reminder.findMany({ where: { eventId: event.id } });
-      for (const r of reminders) {
-        await prisma.reminder.update({
-          where: { id: r.id },
-          data: { remindAt: new Date(event.startAt.getTime() - r.offsetMinutes * 60000), notified: false },
+    const event = await withTransaction(
+      async () => {
+        const event = await prisma.event.update({
+          where: { id: params.id },
+          data: {
+            ...body,
+            startAt: body.startAt ? new Date(body.startAt) : undefined,
+            endAt: body.endAt ? new Date(body.endAt) : undefined,
+            recurrenceUntil: body.recurrenceUntil === undefined ? undefined : body.recurrenceUntil ? new Date(body.recurrenceUntil) : null,
+          },
         });
-      }
-    }
+
+        if (body.directCost !== undefined) await syncEventDirectCostTransaction(event.id);
+        if (body.incomeAmount !== undefined) await syncEventIncomeTransaction(event.id);
+
+        if (body.startAt) {
+          const reminders = await prisma.reminder.findMany({ where: { eventId: event.id } });
+          for (const r of reminders) {
+            await prisma.reminder.update({
+              where: { id: r.id },
+              data: { remindAt: new Date(event.startAt.getTime() - r.offsetMinutes * 60000), notified: false },
+            });
+          }
+        }
+        return event;
+      },
+      { operation: "EVENT_UPDATE", entityType: "Event", entityId: params.id }
+    );
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

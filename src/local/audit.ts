@@ -4,6 +4,7 @@
 // ipAddress/userAgent/requestId from on a local call, so callers just omit them.
 import type { LocalDb } from "./db";
 import { buildAuditChanges, getLogger, newId, resolveAuditIdentity, serializeChanges, type AuditChanges } from "../lib/observability";
+import { afterLocalCommit } from "./transaction";
 
 // No fixed module: each event takes the module of its own domain (TASK_UPDATE_SUCCESS → tasks, AUDIT_WRITE_FAILED → audit).
 const log = getLogger(null, "local-writer");
@@ -22,7 +23,11 @@ interface LocalAuditParams {
   changes?: AuditChanges | null;
 }
 
-/** Writes an audit log entry locally. Never throws — logging failures must not break the primary operation. */
+/**
+ * Writes an audit log entry locally. Never throws — logging failures must not break the primary operation.
+ * Called inside a transaction (every write route runs in one), the entry is part of it: it is stored together
+ * with the change it records, and a rollback removes both. The success line waits for the commit.
+ */
 export function writeLocalAuditLog(db: LocalDb, params: LocalAuditParams): void {
   const identity = resolveAuditIdentity({ action: params.action, entityType: params.entityType, event: params.event });
   const localEventId = newId("lev");
@@ -51,15 +56,18 @@ export function writeLocalAuditLog(db: LocalDb, params: LocalAuditParams): void 
   } catch (err) {
     log.error("AUDIT_WRITE_FAILED", { error: err, errorCode: "AUDIT-001", layer: "local", entityType: params.entityType, entityId: params.entityId, operation: params.action });
   }
-  // The write committed before this was called, so its success is logged now, whether or not the audit row could be stored.
-  if (identity.logEvent) {
-    log.info(identity.logEvent, {
-      entityType: identity.entityType,
-      entityId: params.entityId,
-      operation: identity.action,
-      localEventId,
-      changedFields: changes?.changedFields,
-      layer: "local",
-    });
+  // Success is logged once the change has committed (at once, when no transaction is open) — whether or not the audit row could be stored.
+  const logEvent = identity.logEvent;
+  if (logEvent) {
+    afterLocalCommit(db, () =>
+      log.info(logEvent, {
+        entityType: identity.entityType,
+        entityId: params.entityId,
+        operation: identity.action,
+        localEventId,
+        changedFields: changes?.changedFields,
+        layer: "local",
+      })
+    );
   }
 }

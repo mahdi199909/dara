@@ -162,6 +162,8 @@ describe("error codes", () => {
     expect(classifyError({ code: "P2003" })).toBe("DB-006");
     expect(classifyError({ code: "P2025" })).toBe("DB-007");
     expect(classifyError({ code: "P2024" })).toBe("DB-004");
+    expect(classifyError({ code: "P2028" })).toBe("DB-003"); // a transaction that timed out or was already closed
+    expect(classifyError({ code: "P2034" })).toBe("DB-003"); // a transaction that lost to a write conflict or deadlock
     for (const code of ["P1001", "P1002", "P1008", "P1017"]) expect(classifyError({ code })).toBe("DB-001");
     expect(classifyError({ code: "P2010" })).toBe("DB-002");
     expect(classifyError({ code: "ECONNRESET" })).toBeNull();

@@ -2,7 +2,7 @@
 // never drift from the code: a test regenerates them and fails if the checked-in files differ.
 // Regenerate with:  npx tsx scripts/logs/generate-docs.ts
 import { ERROR_CODES, syncErrorCode, type ErrorCode, type SyncErrorKind } from "./core/errorCodes";
-import { DOMAINS, EVENTS, EVENT_NAMES, MODULE_OF_DOMAIN, type Domain } from "./core/events";
+import { DOMAINS, EVENTS, EVENT_NAMES, MODULE_OF_DOMAIN, OPERATIONS, type Domain } from "./core/events";
 
 export interface SourceFile {
   /** Repo-relative path with forward slashes. */
@@ -27,6 +27,22 @@ const CODES_VIA_HELPER: Array<{ call: string; codes: string[] }> = [
   { call: "classifyError(", codes: ["VAL-001", "AUTH-003", "DB-001", "DB-002", "DB-004", "DB-005", "DB-006", "DB-007"] },
 ];
 
+/** TASK_CREATE, EXPENSE_CREATE, TIME_TIMER_STOP … — the base of an operation's three events. */
+const OPERATION_BASES: ReadonlySet<string> = new Set(Object.entries(OPERATIONS).flatMap(([domain, actions]) => (actions as readonly string[]).map((action) => `${domain}_${action}`)));
+
+/**
+ * withTransaction({ operation: "TASK_CREATE" }) writes TASK_CREATE_FAILED when it rolls back, without that
+ * name ever appearing as a literal: an operation named on a line that says `operation:` counts as emitting its FAILED event.
+ */
+function operationsNamedIn(text: string): string[] {
+  const named: string[] = [];
+  for (const line of text.split("\n")) {
+    if (!line.includes("operation:")) continue;
+    for (const match of line.matchAll(/["'`]([A-Z]+(?:_[A-Z]+)+)["'`]/g)) if (OPERATION_BASES.has(match[1])) named.push(match[1]);
+  }
+  return named;
+}
+
 /** Which registered event names / error codes application code writes (as literals, or through a code-picking helper). */
 export function findUsages(files: SourceFile[]): { events: Set<string>; codes: Set<string> } {
   const events = new Set<string>();
@@ -35,6 +51,7 @@ export function findUsages(files: SourceFile[]): { events: Set<string>; codes: S
   const codePattern = /["'`]([A-Z]+-\d{3})["'`]/g;
   for (const file of files.filter(isUsageFile)) {
     for (const match of file.text.matchAll(eventPattern)) events.add(match[1]);
+    for (const base of operationsNamedIn(file.text)) events.add(`${base}_FAILED`);
     for (const match of file.text.matchAll(codePattern)) if (match[1] in ERROR_CODES) codes.add(match[1]);
     for (const helper of CODES_VIA_HELPER) if (file.text.includes(helper.call)) for (const code of helper.codes) codes.add(code);
   }

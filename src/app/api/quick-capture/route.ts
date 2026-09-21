@@ -9,6 +9,7 @@ import { parseQuickCapture } from "@/lib/parser";
 import { addManualTimeEntry, syncDirectCostTransaction } from "@/lib/activityService";
 import { resolveDefaultAccountId } from "@/lib/accounts";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
+import { withTransaction } from "@/lib/transaction";
 
 const schema = z.object({
   text: z.string().min(1).max(500),
@@ -54,14 +55,20 @@ async function POST(req: NextRequest) {
       await writeAuditLog({ userId, action: "CREATE", entityType: "Task", entityId: task.id, newValue: task, ipAddress, userAgent, metadata: { source: "quick_capture", rawText: body.text } });
       result = { entityType: "Task", entity: task };
     } else if (type === "ACTIVITY") {
-      const activity = await prisma.activity.create({
-        data: { userId, title, categoryId, projectId: body.projectId, directCost: amount ?? 0 },
-      });
-      if (durationMinutes && durationMinutes > 0) {
-        await addManualTimeEntry(activity.id, { durationMin: durationMinutes });
-      }
-      if (activity.directCost > 0) await syncDirectCostTransaction(activity.id);
-      const fresh = await prisma.activity.findUnique({ where: { id: activity.id }, include: { timeEntries: true, virtualAssetEntry: true } });
+      const { activity, fresh } = await withTransaction(
+        async () => {
+          const activity = await prisma.activity.create({
+            data: { userId, title, categoryId, projectId: body.projectId, directCost: amount ?? 0 },
+          });
+          if (durationMinutes && durationMinutes > 0) {
+            await addManualTimeEntry(activity.id, { durationMin: durationMinutes });
+          }
+          if (activity.directCost > 0) await syncDirectCostTransaction(activity.id);
+          const fresh = await prisma.activity.findUnique({ where: { id: activity.id }, include: { timeEntries: true, virtualAssetEntry: true } });
+          return { activity, fresh };
+        },
+        { operation: "ACTIVITY_CREATE", entityType: "Activity" }
+      );
       await writeAuditLog({ userId, action: "CREATE", entityType: "Activity", entityId: activity.id, newValue: fresh, ipAddress, userAgent, metadata: { source: "quick_capture", rawText: body.text } });
       result = { entityType: "Activity", entity: fresh };
     } else if (type === "EVENT") {
@@ -73,19 +80,26 @@ async function POST(req: NextRequest) {
       await writeAuditLog({ userId, action: "CREATE", entityType: "Event", entityId: event.id, newValue: event, ipAddress, userAgent, metadata: { source: "quick_capture", rawText: body.text } });
       result = { entityType: "Event", entity: event };
     } else {
-      const accountId = body.accountId ?? (await resolveDefaultAccountId(userId));
-      const transaction = await prisma.transaction.create({
-        data: {
-          userId,
-          type: "EXPENSE",
-          amount: amount ?? 0,
-          date: date ?? new Date(),
-          description: title,
-          accountId,
-          categoryId,
-          projectId: body.projectId,
+      // A default account created on the way and the expense itself commit together.
+      const transaction = await withTransaction(
+        async () => {
+          const accountId = body.accountId ?? (await resolveDefaultAccountId(userId));
+          const transaction = await prisma.transaction.create({
+            data: {
+              userId,
+              type: "EXPENSE",
+              amount: amount ?? 0,
+              date: date ?? new Date(),
+              description: title,
+              accountId,
+              categoryId,
+              projectId: body.projectId,
+            },
+          });
+          return transaction;
         },
-      });
+        { operation: "EXPENSE_CREATE", entityType: "Transaction" }
+      );
       await writeAuditLog({ userId, action: "CREATE_EXPENSE", entityType: "Transaction", entityId: transaction.id, newValue: transaction, ipAddress, userAgent, metadata: { source: "quick_capture", rawText: body.text } });
       result = { entityType: "Transaction", entity: transaction };
     }
