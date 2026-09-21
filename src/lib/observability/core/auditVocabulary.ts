@@ -37,6 +37,7 @@ export const AUDIT_VOCABULARY: readonly AuditVocabularyEntry[] = [
   // Owner-only administration (an /api/admin route): the actor is the signed-in owner.
   entry("License", "ADMIN_LICENSE_UPDATE", "LICENSE_ADMIN_UPDATED"),
   entry("AppRelease", "ADMIN_RELEASE_UPDATE", "RELEASE_ADMIN_UPDATED"),
+  entry("LogSettings", "ADMIN_LOG_LEVEL_UPDATE", "LOG_LEVEL_ADMIN_UPDATED"),
 
   // Work
   entry("Task", "CREATE", "TASK_CREATED", "TASK_CREATE_SUCCESS"),

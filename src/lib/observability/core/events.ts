@@ -197,6 +197,7 @@ const STANDALONE = {
   SYNC_PAYLOAD_REJECTED: s("WARN", "The server refused a row or a whole request body.", { protected: true }),
   SYNC_SIZE_LIMIT_EXCEEDED: s("WARN", "A sync request exceeded the size limit and was split or refused.", { protected: true }),
   SYNC_CORRELATION_UNSUPPORTED: s("INFO", "The server did not accept the phone's correlation headers (an older server); requests go without them for a while."),
+  SYNC_SLOW: s("WARN", "A sync request or run took longer than the slow-sync threshold (SLOW_SYNC_THRESHOLD_MS)."),
 
   // --- Notifications
   NOTIFICATION_CREATED: s("INFO", "An in-app notification was created."),
@@ -260,6 +261,7 @@ const STANDALONE = {
   LOG_SINK_FAILED: s("ERROR", "A log sink failed to write; logging continues without it.", { protected: true }),
   LOG_INTERNAL_ERROR: s("ERROR", "A log record could not be built; a reduced record was written instead.", { protected: true }),
   LOG_LEVEL_CHANGED: s("INFO", "A log level was changed at runtime.", { protected: true }),
+  LOG_QUERIED: s("INFO", "The owner searched the application log (the filters used, never the results).", { protected: true }),
 } satisfies Record<string, StandaloneMeta>;
 
 export type EventName = OperationEvent | keyof typeof STANDALONE;

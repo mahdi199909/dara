@@ -52,8 +52,11 @@ LOG_LEVEL=info,SYNC=debug
 Keys match an event's domain (`SYNC`, `AUTH`, `DB`, `HTTP`…), a module (`finance`, `sync`, `widgets`)
 or a logger's component (`sync-runner`). Inside a running process
 `LoggerCore.levels.setOverride("SYNC", "DEBUG", ttlMs)` and `setUserOverride(userId, "DEBUG", ttlMs)`
-do the same without a redeploy and expire on their own; an admin endpoint for it is planned (phase 5).
-Slow-request and slow-query thresholds: `LOG_SLOW_REQUEST_MS` (1000) and `LOG_SLOW_QUERY_MS` (300).
+do the same without a redeploy and expire on their own — and since phase 5 the owner can do it from `/admin` (log levels)
+or `PUT /api/admin/logging`: a component, the whole server or one account, 30 minutes by default and 24 hours at most, put back
+in one step, every change audited ([operations.md](operations.md)).
+The slow thresholds are `SLOW_API_THRESHOLD_MS` (1000), `SLOW_DB_THRESHOLD_MS` (300), `SLOW_SYNC_THRESHOLD_MS` (3000) and
+`SLOW_REPORT_THRESHOLD_MS` (2000); the older `LOG_SLOW_REQUEST_MS` and `LOG_SLOW_QUERY_MS` still work.
 
 ## What the code emits today
 
@@ -63,10 +66,14 @@ Server request path (phase 1):
 | --- | --- | --- | --- |
 | `HTTP_REQUEST_COMPLETED` | DEBUG (GET 2xx) · INFO (write 2xx) · WARN (4xx) · ERROR (5xx) | one per API request: `method`, `path`, `status_code`, `duration_ms`, `error_code`, `metadata.route`, `dbQueries`, `dbMs` | `withApiLogging` |
 | `HTTP_REQUEST_STARTED` | DEBUG | the request arrived | `withApiLogging` |
-| `API_SLOW_REQUEST` | WARN | the request took ≥ `LOG_SLOW_REQUEST_MS` (with its database share) | `withApiLogging` |
+| `API_SLOW_REQUEST` | WARN | the request took ≥ `SLOW_API_THRESHOLD_MS` (with its database share) | `withApiLogging` |
+| `SYNC_SLOW` | WARN | a `/api/sync/*` request took ≥ `SLOW_SYNC_THRESHOLD_MS` (server), or a whole sync cycle took ≥ the phone's threshold — one warning, in place of `API_SLOW_REQUEST` on the server | `withApiLogging`, `syncRunner` |
+| `REPORT_GENERATION_STARTED` / `_COMPLETED` / `_FAILED` | DEBUG / INFO / ERROR | every report, server and phone: `metadata.report`, `metadata.dateRange`, `metadata.recordCount` (rows in the result — never a figure), `duration_ms`; a failure carries `REPORT-001` and is not written a second time by the request handler | `core/reportRun.ts` |
+| `REPORT_SLOW` | WARN | a report took ≥ `SLOW_REPORT_THRESHOLD_MS` (phone: `NEXT_PUBLIC_SLOW_REPORT_THRESHOLD_MS`) | `core/reportRun.ts` |
+| `LOG_LEVEL_CHANGED` / `LOG_QUERIED` | INFO | the owner changed a log level at runtime / searched the log (the filters, never the results) | `adminLogging.ts`, `/api/admin/logs` |
 | `API_UNHANDLED_ERROR` | ERROR | a route handler (server) or the on-device dispatcher threw something unexpected; `error_code` `SYS-001` or a `DB-…` code; stack on the server only | `handleApiError`, `withApiLogging`, `dispatchLocal` |
 | `DB_QUERY_ERROR` / `DB_CONNECTION_ERROR` / `DB_CONNECTION_POOL_EXHAUSTED` | WARN (constraint, missing row) / ERROR | a Prisma call failed: model, operation, duration, `DB-001…007`; **no SQL, no arguments** | `prisma.ts` |
-| `DB_SLOW_QUERY` | WARN | a Prisma call took ≥ `LOG_SLOW_QUERY_MS`; model + operation only | `prisma.ts` |
+| `DB_SLOW_QUERY` | WARN | a Prisma call took ≥ `SLOW_DB_THRESHOLD_MS`; model + operation only | `prisma.ts` |
 | `DB_TRANSACTION_COMMIT` | DEBUG | an operation's writes were committed together (`operation`, `duration_ms`) — the history entry and the `*_SUCCESS` line follow it | `transaction.ts` (server), `local/transaction.ts` (phone, `layer: local`) |
 | `DB_TRANSACTION_ROLLBACK` | WARN (a fault) · DEBUG (the caller's mistake) | an operation failed and **none** of its writes were kept; the error is the one that caused it | same |
 | `TASK_CREATE_FAILED` and the other `<OPERATION>_FAILED` events | ERROR (a fault, with stack) · WARN (the caller's mistake) | the named operation rolled back; `entity_type`, `entity_id`, `error_code`. Written once — `API_UNHANDLED_ERROR` does not repeat it | same |
@@ -108,6 +115,27 @@ Everywhere (phase 0):
 
 Every event is documented, including those reserved for later phases, in [events.md](events.md);
 every code in [error-codes.md](error-codes.md).
+
+## The support timeline (phase 5)
+
+With `LOG_FILE_DIR` set the server keeps its own searchable history, and the owner can read it without shell access:
+`/admin` → *تایم‌لاین فنی کاربر*, or `GET /api/admin/logs`.
+
+```
+/api/admin/logs?user=ali@example.com&since=24h            everything the server did for one account (by address or id)
+/api/admin/logs?user=ali@example.com&level=warn           only the trouble — including sign-ins that failed with that address
+/api/admin/logs?request=req_01J…                           one request end to end (the id is in the person's screenshot)
+/api/admin/logs?sync=sync_01J…                             one sync cycle, server side (the phone's own records quote the same id)
+/api/admin/logs?user=cm…&event=SYNC_*&limit=300
+```
+
+The list reads like the story the specification asks for — sign-in, task created, timer started, expense created, sync
+started, failed, retried, succeeded — oldest first, with the request id, status, duration and error code of each line and the
+redacted metadata one click away. It never shows a title, note, amount, address, password or token, and every use of it is
+written to the log (`LOG_QUERIED`). Filters, limits and the privacy rules: [operations.md](operations.md).
+
+The same records answer aggregate questions on the health view (`/admin` → *وضعیت سرور*, `GET /api/admin/health`): error
+rate, the slowest routes, failed jobs, and the last twenty problems with their request ids.
 
 ## Playbooks
 

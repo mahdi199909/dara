@@ -163,6 +163,33 @@ describe("a quiet cycle stays quiet", () => {
   });
 });
 
+describe("a slow cycle", () => {
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS;
+  });
+
+  it("also writes SYNC_SLOW, with the threshold, once the whole cycle took at least that long", async () => {
+    process.env.NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS = "30";
+    server({
+      pull: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 45));
+        return pulled();
+      },
+    });
+    const outcome = await runSync(db, license({ lastPushedAt: new Date(Date.now() + 60_000).toISOString() }), { trigger: "resume" });
+    expect(outcome.ok).toBe(true);
+    expect(byEvent("SYNC_SLOW")).toMatchObject({ level: "WARN", layer: "local", sync_id: outcome.syncId, metadata: { ok: true, trigger: "resume", thresholdMs: 30 } });
+    expect(byEvent("SYNC_SLOW").duration_ms).toBeGreaterThanOrEqual(30);
+    expect(names().at(-1)).toBe("SYNC_SLOW"); // after the cycle's own closing line
+  });
+
+  it("stays silent for a cycle under the threshold (8 seconds unless configured)", async () => {
+    server();
+    await runSync(db, license({ lastPushedAt: new Date(Date.now() + 60_000).toISOString() }), { trigger: "resume" });
+    expect(memory.sink.find("SYNC_SLOW")).toEqual([]);
+  });
+});
+
 describe("scenario 6: a sync that fails and then succeeds", () => {
   it("says FAILED, then RETRY when the next cycle starts, then SUCCESS — and forgets the failure", async () => {
     createTask(db, LOCAL_USER_ID, { title: TITLE });

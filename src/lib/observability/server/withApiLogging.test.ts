@@ -22,6 +22,8 @@ beforeEach(() => {
 afterEach(() => {
   memory.restore();
   delete process.env.LOG_SLOW_REQUEST_MS;
+  delete process.env.SLOW_API_THRESHOLD_MS;
+  delete process.env.SLOW_SYNC_THRESHOLD_MS;
 });
 
 function req(method: string, path = "/api/tasks", init: RequestInit = {}): Request {
@@ -229,6 +231,45 @@ describe("withApiLogging", () => {
     process.env.LOG_SLOW_REQUEST_MS = "5000";
     await wrapped("GET", "/api/fast", ok)(req("GET", "/api/fast"));
     expect(memory.sink.find("API_SLOW_REQUEST")).toEqual([]);
+  });
+
+  it("takes the threshold from SLOW_API_THRESHOLD_MS, which wins over the older LOG_SLOW_REQUEST_MS", async () => {
+    process.env.LOG_SLOW_REQUEST_MS = "5000";
+    process.env.SLOW_API_THRESHOLD_MS = "10";
+    await wrapped("GET", "/api/slow", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return ok();
+    })(req("GET", "/api/slow"));
+    expect(memory.sink.find("API_SLOW_REQUEST")[0]).toMatchObject({ metadata: { thresholdMs: 10 } });
+  });
+
+  it("counts every slow request by route, for the slow-requests panel", async () => {
+    process.env.SLOW_API_THRESHOLD_MS = "5";
+    const slow = metrics.counter("http_slow_requests_total");
+    const before = slow.value({ route: "/api/slowcount" });
+    for (let i = 0; i < 2; i++) {
+      await wrapped("GET", "/api/slowcount", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        return ok();
+      })(req("GET", "/api/slowcount"));
+    }
+    expect(slow.value({ route: "/api/slowcount" }) - before).toBe(2);
+  });
+
+  it("gives a sync request its own, more patient threshold and its own event", async () => {
+    process.env.SLOW_API_THRESHOLD_MS = "5";
+    process.env.SLOW_SYNC_THRESHOLD_MS = "30";
+    const pause = (ms: number) => async () => {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      return ok();
+    };
+    await wrapped("POST", "/api/sync/push", pause(15))(req("POST", "/api/sync/push")); // slow for an API call, not for a sync
+    expect(memory.sink.find("SYNC_SLOW")).toEqual([]);
+    expect(memory.sink.find("API_SLOW_REQUEST")).toEqual([]);
+
+    await wrapped("POST", "/api/sync/push", pause(45))(req("POST", "/api/sync/push"));
+    expect(memory.sink.find("SYNC_SLOW")[0]).toMatchObject({ level: "WARN", module: "sync", path: "/api/sync/push", metadata: { thresholdMs: 30, route: "/api/sync/push" } });
+    expect(memory.sink.find("API_SLOW_REQUEST")).toEqual([]); // one warning, not two
   });
 
   it("gives concurrent requests distinct ids, each on its own records", async () => {

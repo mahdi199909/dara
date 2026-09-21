@@ -101,3 +101,31 @@ describe("LevelController", () => {
     expect(c.snapshot().userOverrideCount).toBe(1);
   });
 });
+
+describe("LevelController.entries (the owner's view)", () => {
+  it("lists every rule with its expiry, user ids included — unlike snapshot(), which only counts them", () => {
+    let now = 1_000;
+    const c = new LevelController("INFO", { SYNC: "WARN" }, () => now);
+    c.setOverride("finance", "DEBUG", 60_000);
+    c.setUserOverride("usr_1", "DEBUG", 120_000);
+    expect(c.entries()).toEqual({
+      base: "INFO",
+      overrides: [
+        { key: "SYNC", level: "WARN", expiresAt: null },
+        { key: "FINANCE", level: "DEBUG", expiresAt: 61_000 },
+      ],
+      users: [{ userId: "usr_1", level: "DEBUG", expiresAt: 121_000 }],
+    });
+    expect(c.snapshot().userOverrideCount).toBe(1);
+    expect(JSON.stringify(c.snapshot())).not.toContain("usr_1");
+  });
+
+  it("drops what has expired before listing it", () => {
+    let now = 0;
+    const c = new LevelController("INFO", {}, () => now);
+    c.setOverride("SYNC", "DEBUG", 1_000);
+    c.setUserOverride("usr_1", "DEBUG", 1_000);
+    now = 2_000;
+    expect(c.entries()).toMatchObject({ overrides: [], users: [] });
+  });
+});

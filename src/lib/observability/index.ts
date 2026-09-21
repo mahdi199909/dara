@@ -47,3 +47,5 @@ export type { AuditVocabularyEntry, ResolvedAuditIdentity } from "./core/auditVo
 export { buildAuditChanges, serializeChanges, maskMoneyInSnapshot, parseAuditMoneyMode, MAX_CHANGES_CHARS } from "./core/auditEntry";
 export type { AuditChanges, AuditMoneyMode } from "./core/auditEntry";
 export { markErrorReported, isErrorReported } from "./core/reportedErrors";
+export { startReport, countReportRows } from "./core/reportRun";
+export type { ReportRun, ReportRange, ReportRunOptions } from "./core/reportRun";

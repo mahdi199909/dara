@@ -17,7 +17,7 @@ import { createTestLogger, installMemoryLogger } from "../testing";
 import { applyClientIdentity } from "./clientContext";
 import { buildDiagnosticReport, cleanRecord, DIAGNOSTIC_FORMAT } from "./diagnostics";
 import { getClientLogging, installClientLogging, type ClientLogging } from "./install";
-import { MemoryLogFileStore } from "./logFileStore";
+import { MemoryLogFileStore } from "../core/logFileStore";
 import { DiagnosticsUnavailableError, collectDiagnosticReport, shareDiagnosticReport } from "./shareReport";
 
 const T0 = Date.UTC(2026, 8, 21, 4, 0, 0);

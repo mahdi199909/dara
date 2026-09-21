@@ -1,6 +1,7 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { resetLocalDbForTests } from "@/local/db";
 import { createNodeSqliteDriver } from "@/local/drivers/nodeSqlite";
+import { installMemoryLogger } from "@/lib/observability/testing";
 import { dispatchLocal, setLocalDbDriver } from "./localDispatcher";
 
 describe("localDispatcher", () => {
@@ -171,4 +172,54 @@ describe("localDispatcher", () => {
     expect(calendar.categories).toBeInstanceOf(Array);
     expect(calendar.jy).toBeGreaterThan(1000);
   });
+
+  describe("report logging", () => {
+    let memory: ReturnType<typeof installMemoryLogger>;
+    beforeEach(() => {
+      memory = installMemoryLogger();
+    });
+    afterEach(() => memory.restore());
+
+    it("writes how long each report took, over which period and how many rows — on the device, and never a figure or a name", () => {
+      const category = (dispatchLocal("POST", "/api/categories", { name: "دستهٔ محرمانه", kind: "PRODUCTIVE" }).json as any).category;
+      const account = (dispatchLocal("POST", "/api/accounts", { name: "حساب محرمانه" }).json as any).account;
+      dispatchLocal("POST", "/api/transactions", { type: "INCOME", amount: 987654321, accountId: account.id, categoryId: category.id });
+      memory.sink.clear();
+
+      expect(dispatchLocal("GET", "/api/reports?preset=month").status).toBe(200);
+      expect(dispatchLocal("GET", "/api/reports/category-calendar").status).toBe(200);
+
+      expect(memory.sink.events().filter((e) => e.startsWith("REPORT_"))).toEqual([
+        "REPORT_GENERATION_STARTED",
+        "REPORT_GENERATION_COMPLETED",
+        "REPORT_GENERATION_STARTED",
+        "REPORT_GENERATION_COMPLETED",
+      ]);
+      const [main, calendar] = memory.sink.find("REPORT_GENERATION_COMPLETED");
+      expect(main).toMatchObject({ level: "INFO", layer: "local", metadata: { report: "time_and_money" } });
+      expect(typeof main.duration_ms).toBe("number");
+      expect(main.metadata.recordCount).toBeGreaterThanOrEqual(1);
+      expect(Date.parse((main.metadata.dateRange as any).from)).toBeLessThan(Date.parse((main.metadata.dateRange as any).to));
+      expect(calendar.metadata).toMatchObject({ report: "category_calendar" });
+
+      const written = JSON.stringify(memory.sink.records);
+      for (const secret of ["987654321", "محرمانه", "hourlyValue", "netWorth"]) expect(written).not.toContain(secret);
+    });
+
+    it("writes REPORT_GENERATION_FAILED once when a report fails, and the dispatcher does not write the same failure again", async () => {
+      // The range is fine, the work is not: a table the report reads is gone.
+      const driver = await createNodeSqliteDriver(":memory:");
+      setLocalDbDriver(driver);
+      expect(dispatchLocal("GET", "/api/tasks").status).toBe(200); // opens (and bootstraps) the database
+      driver.execute('PRAGMA foreign_keys = OFF; DROP TABLE "Transaction";');
+      memory.sink.clear();
+      const res = dispatchLocal("GET", "/api/reports?preset=today");
+      expect(res.status).toBe(500);
+      expect(memory.sink.find("REPORT_GENERATION_FAILED")).toHaveLength(1);
+      expect(memory.sink.find("REPORT_GENERATION_FAILED")[0]).toMatchObject({ level: "ERROR", error_code: expect.stringMatching(/^(REPORT-001|DB-\d+|SYS-001)$/), metadata: { report: "time_and_money" } });
+      expect(memory.sink.find("API_UNHANDLED_ERROR")).toEqual([]);
+      expect(memory.sink.find("REPORT_GENERATION_COMPLETED")).toEqual([]);
+    });
+  });
 });
+

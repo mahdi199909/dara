@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LogRecord } from "./schema";
-import { BatchingSink, ConsoleSink, MemorySink, NullSink, type BatchingEvent, type ConsoleLike, type LogSink } from "./sink";
+import { BatchingSink, ConsoleSink, FilteredSink, MemorySink, NullSink, type BatchingEvent, type ConsoleLike, type LogSink } from "./sink";
 
 function record(overrides: Partial<LogRecord> = {}): LogRecord {
   return {
@@ -83,6 +83,28 @@ describe("MemorySink / NullSink", () => {
     sink.clear();
     expect(sink.records).toEqual([]);
     expect(new NullSink().write()).toBeUndefined();
+  });
+});
+
+describe("FilteredSink", () => {
+  it("lets through only the records at or above its threshold, and passes flush and close on", async () => {
+    const seen: string[] = [];
+    let flushed = 0;
+    let closed = 0;
+    const inner: LogSink = { name: "inner", write: (r) => void seen.push(r.level), flush: async () => void flushed++, close: async () => void closed++ };
+    const sink = new FilteredSink(inner, "WARN");
+    for (const level of ["DEBUG", "INFO", "WARN", "ERROR", "CRITICAL"] as const) sink.write(record({ level }));
+    expect(seen).toEqual(["WARN", "ERROR", "CRITICAL"]);
+    await sink.flush();
+    await sink.close();
+    expect([flushed, closed]).toEqual([1, 1]);
+    expect(sink.name).toBe("filtered(inner, WARN)");
+  });
+
+  it("copes with an inner sink that has no flush or close", async () => {
+    const sink = new FilteredSink({ name: "plain", write: () => {} }, "INFO");
+    await expect(sink.flush()).resolves.toBeUndefined();
+    await expect(sink.close()).resolves.toBeUndefined();
   });
 });
 
@@ -246,6 +268,138 @@ describe("BatchingSink", () => {
     // If the timer were ref'd, Vitest's worker would hang at exit; reaching this line is the check.
     expect(sink.stats().queued).toBe(1);
     return sink.close();
+  });
+
+  describe("a full batch does not wait for the interval", () => {
+    it("brings the flush forward as soon as maxBatch records are waiting, though the timer was set for later when the queue was empty", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 5_000, maxBatch: 3 });
+      sink.write(record({ message: "a" })); // an interval timer, 5 s away
+      sink.write(record({ message: "b" }));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(inner.written).toHaveLength(0); // not a full batch yet: it waits for the interval
+      sink.write(record({ message: "c" }));
+      await vi.advanceTimersByTimeAsync(1);
+      expect(inner.written.map((r) => r.message)).toEqual(["a", "b", "c"]);
+    });
+
+    it("keeps up with a steady stream, and does not let the queue fill up waiting for a timer", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 5_000, maxBatch: 100, capacity: 500 });
+      for (let tick = 0; tick < 50; tick++) {
+        for (let i = 0; i < 100; i++) sink.write(record());
+        await vi.advanceTimersByTimeAsync(10);
+      }
+      expect(sink.stats()).toMatchObject({ dropped: 0, written: 5_000, queued: 0 });
+    });
+
+    it("sends full batches at a steady rate, not a stream of tiny ones", async () => {
+      const sizes: number[] = [];
+      const inner: LogSink = {
+        name: "slow",
+        write: () => {},
+        writeBatch: async (records) => {
+          sizes.push(records.length);
+          await new Promise((resolve) => setTimeout(resolve, 5)); // a request takes a moment
+        },
+      };
+      const sink = new BatchingSink(inner, { flushIntervalMs: 5_000, maxBatch: 100, capacity: 5_000 });
+      for (let tick = 0; tick < 300; tick++) {
+        for (let i = 0; i < 10; i++) sink.write(record()); // 1 000 records a second for three seconds
+        await vi.advanceTimersByTimeAsync(10);
+      }
+      await sink.flush();
+      expect(sizes.reduce((sum, size) => sum + size, 0)).toBe(3_000);
+      expect(sizes.length).toBeLessThanOrEqual(35); // about thirty full batches, not three hundred small ones
+      expect(sizes.filter((size) => size === 100).length).toBeGreaterThanOrEqual(25);
+      expect(sink.stats()).toMatchObject({ dropped: 0, queued: 0 });
+    });
+
+    it("still writes everything queued before an explicit flush, even while a flush the timer started is in progress", async () => {
+      const written: number[] = [];
+      let release: () => void = () => {};
+      const inner: LogSink = {
+        name: "gated",
+        write: () => {},
+        writeBatch: async (records) => {
+          await new Promise<void>((resolve) => (release = resolve));
+          written.push(...records.map((r) => Number(r.message)));
+        },
+      };
+      const sink = new BatchingSink(inner, { flushIntervalMs: 1_000, maxBatch: 3 });
+      for (let i = 0; i < 3; i++) sink.write(record({ message: String(i) }));
+      await vi.advanceTimersByTimeAsync(1); // the timer's flush starts and waits at the gate
+      for (let i = 3; i < 5; i++) sink.write(record({ message: String(i) })); // arrives during it
+      const explicit = sink.flush();
+      release();
+      await vi.advanceTimersByTimeAsync(1);
+      release();
+      await explicit;
+      expect(written).toEqual([0, 1, 2, 3, 4]);
+      expect(sink.stats().queued).toBe(0);
+    });
+
+    it("writes everything when a protected record is waiting, not only the full batches", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 30_000, maxBatch: 100, urgentFlushMs: 200 });
+      for (let i = 0; i < 130; i++) sink.write(record({ message: `m${i}` })); // one full batch is sent at once, thirty are left
+      await vi.advanceTimersByTimeAsync(1);
+      expect(inner.written).toHaveLength(100);
+      sink.write(record({ level: "ERROR", message: "boom" }));
+      await vi.advanceTimersByTimeAsync(250);
+      expect(inner.written).toHaveLength(131); // the leftover records went with the error
+      expect(inner.written.at(-1)?.message).toBe("boom");
+    });
+
+    it("does not retry sooner than the retry spacing, however many records arrive while the destination is down", async () => {
+      let attempts = 0;
+      const down: LogSink = { name: "down", write: async () => { attempts++; throw new Error("down"); } };
+      const sink = new BatchingSink(down, { flushIntervalMs: 1_000, maxBatch: 3, failureThreshold: 100 });
+      for (let i = 0; i < 3; i++) sink.write(record());
+      await vi.advanceTimersByTimeAsync(1); // the full batch is tried at once, and fails
+      expect(attempts).toBe(1);
+      for (let tick = 0; tick < 40; tick++) {
+        for (let i = 0; i < 10; i++) sink.write(record()); // a busy server keeps logging
+        await vi.advanceTimersByTimeAsync(20);
+      }
+      expect(attempts).toBe(1); // 800 ms later: still waiting out the spacing
+      await vi.advanceTimersByTimeAsync(300);
+      expect(attempts).toBe(2);
+    });
+
+    it("does not pull a retry ahead of the circuit's back-off either", async () => {
+      let attempts = 0;
+      let now = 0;
+      const down: LogSink = { name: "down", write: async () => { attempts++; throw new Error("down"); } };
+      const sink = new BatchingSink(down, { flushIntervalMs: 10, maxBatch: 3, failureThreshold: 1, baseBackoffMs: 60_000, now: () => now });
+      for (let i = 0; i < 3; i++) sink.write(record());
+      await vi.advanceTimersByTimeAsync(1);
+      expect(attempts).toBe(1);
+      expect(sink.stats().circuit).toBe("open");
+      for (let tick = 0; tick < 100; tick++) {
+        for (let i = 0; i < 10; i++) sink.write(record());
+        now += 100;
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      expect(attempts).toBe(1); // ten seconds of traffic, and the destination was left alone
+    });
+  });
+
+  describe("takeQueued: what a process that is exiting writes down itself", () => {
+    it("hands over everything still waiting, oldest first across the priorities, and empties the queue", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 30_000, maxBatch: 2 });
+      sink.write(record({ level: "INFO", message: "a" }));
+      sink.write(record({ level: "ERROR", message: "b" }));
+      sink.write(record({ level: "DEBUG", message: "c" }));
+      sink.write(record({ level: "WARN", message: "d" }));
+      sink.write(record({ level: "INFO", message: "e" }));
+      expect(sink.takeQueued().map((r) => r.message)).toEqual(["a", "b", "c", "d", "e"]); // more than one batch's worth
+      expect(sink.stats().queued).toBe(0);
+      expect(sink.takeQueued()).toEqual([]);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(inner.written).toEqual([]); // nothing is written twice
+    });
   });
 
   describe("urgentFlushMs: an error should be written down soon, not at the next interval", () => {

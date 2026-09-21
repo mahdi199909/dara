@@ -120,6 +120,31 @@ trail's own design — columns, the diff, the vocabulary, retention — is in [a
 - **Errors nobody catches** are written with their stack and the script's file name (no path, no query) — an error
   message that quotes a value passes through the same redaction as every other message.
 
+## The owner's tools **[done, phase 5]**
+
+- **Who:** `/api/admin/logging`, `/health` and `/logs` require the owner (`requireAdmin`: the signed-in account whose e-mail is
+  `ADMIN_EMAIL`); anyone else gets `403` / `AUTH-004`, which is itself logged (`AUTH_FORBIDDEN`) and counted. Nothing sensitive
+  is rendered client-side before that check.
+- **The timeline shows nothing the log did not already hold** — ids, counts, durations, codes, event names. The records were
+  redacted when written and are passed through the same redaction again on the way out, so a record written before a rule was
+  tightened is still safe to show; an error appears without its stack unless the owner asks (`stack=1`).
+- **Searching by e-mail address** never puts the address in a log line: the failed sign-ins it finds are matched by their keyed
+  pseudonym (`em_…`, see *Authentication events*), and an address that is no account can still be looked up that way.
+- **Reading is recorded.** Every timeline search writes `LOG_QUERIED` — who, which filters, how many records matched, never the
+  results — so "who looked at this person's records" has an answer.
+- **A verbose level cannot be forgotten.** `TRACE`/`DEBUG` always expire (30 minutes by default, 24 hours at most); every change
+  of level is an audit entry (`LOG_LEVEL_ADMIN_UPDATED`) and a log line. A per-account rule can only make that account's
+  records *more* verbose than the operator's setting, never quieter.
+- **The metrics endpoint** is off unless `METRICS_TOKEN` (16 characters or more) is set, answers only to that bearer token
+  (compared in constant time), returns `404` rather than `401` when it is off, logs a wrong token as an invalid session, and
+  prints only counts, durations and event names — no person, no address, no route parameter (routes are the declared patterns,
+  not the URLs requested).
+- **The collector's token** (`LOG_REMOTE_TOKEN`) goes only in the `Authorization` header. Errors from the sink are scrubbed of
+  the address (which an operator may have written with credentials in it) and of the token; the configuration warnings name the
+  variable, never its value. A collector receives records that are free of personal data by construction, but plain `http://`
+  to another host is still warned about.
+- **The log volume** (`/app/logs`) is the server's own; it holds the same records that stdout does, for the retention period.
+
 ## IP addresses and users
 
 `user_id` is an opaque id, never an e-mail address. IP addresses are recorded only for security

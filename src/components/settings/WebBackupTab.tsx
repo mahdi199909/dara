@@ -64,10 +64,11 @@ export default function WebBackupTab() {
     setExportError(null);
     setExportMessage(null);
     try {
+      const startedAt = performance.now();
       const file = await exportServerBackup(api);
       const name = backupFileName();
       downloadJson(name, file);
-      void reportBackupToServer(api, { kind: "export", tables: file.tables });
+      void reportBackupToServer(api, { kind: "export", tables: file.tables, durationMs: performance.now() - startedAt });
       const total = restorableCounts(file.tables).reduce((sum, t) => sum + t.count, 0);
       setExportMessage(`فایل پشتیبان ساخته شد (${name}) — ${toPersianDigits(total)} مورد. آن را جای امنی نگه دارید؛ روی وب و اپلیکیشن اندروید قابل بازیابی است.`);
     } catch (err) {
@@ -114,8 +115,9 @@ export default function WebBackupTab() {
     setImportError(null);
     setProgress({ done: 0, total: 0 });
     try {
+      const startedAt = performance.now();
       const outcome = await importBackupToServer(api, pending.file, { onProgress: (done, total) => setProgress({ done, total }) });
-      void reportBackupToServer(api, { kind: "import", result: outcome });
+      void reportBackupToServer(api, { kind: "import", result: outcome, durationMs: performance.now() - startedAt });
       setResult(outcome);
       setPending(null);
       refreshEverything();

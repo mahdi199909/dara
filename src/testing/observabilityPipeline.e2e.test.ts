@@ -215,6 +215,71 @@ describe("the database layer", () => {
   });
 });
 
+describe("reports", () => {
+  afterEach(() => {
+    delete process.env.SLOW_REPORT_THRESHOLD_MS;
+  });
+
+  it("tells the log how long a report took, over which period and how many rows — under the request's own id, and never a figure or a name", async () => {
+    await server.registerUser();
+    await server.mustWeb("POST", "/api/categories", { name: "دستهٔ کاملاً محرمانه" });
+    await server.mustWeb("POST", "/api/tasks", { title: "کار محرمانهٔ گزارش" });
+    memory.sink.clear();
+
+    const res = await server.web("GET", "/api/reports?preset=month");
+    expect(res.status).toBe(200);
+
+    const [started] = memory.sink.find("REPORT_GENERATION_STARTED");
+    const [completed] = memory.sink.find("REPORT_GENERATION_COMPLETED");
+    const [request] = memory.sink.find("HTTP_REQUEST_COMPLETED");
+    expect(started).toMatchObject({ level: "DEBUG", module: "reports", layer: "server", metadata: { report: "time_and_money" } });
+    expect(completed).toMatchObject({ level: "INFO", module: "reports", metadata: { report: "time_and_money" } });
+    expect(typeof completed.duration_ms).toBe("number");
+    expect(typeof completed.metadata.recordCount).toBe("number");
+    const range = completed.metadata.dateRange as { from: string; to: string };
+    expect(Date.parse(range.from)).toBeLessThan(Date.parse(range.to));
+    expect(completed.request_id).toBe(request.request_id);
+    expect(completed.user_id).toBe(request.user_id);
+    expect(memory.sink.find("REPORT_SLOW")).toEqual([]);
+
+    // The response holds the report's figures; the log holds none of them, and none of what the person wrote.
+    const written = JSON.stringify(memory.sink.records);
+    for (const secret of ["محرمانه", "hourlyValue", "netWorth", "hiddenCost", "timeByCategory", "totalDurationMin"]) expect(written).not.toContain(secret);
+  });
+
+  it("adds REPORT_SLOW when the report takes at least SLOW_REPORT_THRESHOLD_MS", async () => {
+    await server.registerUser();
+    process.env.SLOW_REPORT_THRESHOLD_MS = "0";
+    memory.sink.clear();
+    expect((await server.web("GET", "/api/reports?preset=week")).status).toBe(200);
+    expect(memory.sink.find("REPORT_SLOW")[0]).toMatchObject({ level: "WARN", metadata: { report: "time_and_money", thresholdMs: 0 } });
+    expect((await server.web("GET", "/api/reports/category-calendar")).status).toBe(200);
+    expect(memory.sink.find("REPORT_SLOW").map((r) => r.metadata.report)).toEqual(["time_and_money", "category_calendar"]);
+  });
+
+  it("a refused range is a validation problem, not a report failure", async () => {
+    await server.registerUser();
+    memory.sink.clear();
+    const res = await server.web("GET", "/api/reports?from=2026-09-10T00:00:00.000Z&to=2026-09-01T00:00:00.000Z");
+    expect(res.status).toBe(400);
+    expect(memory.sink.find("REPORT_GENERATION_FAILED")).toEqual([]);
+    expect(memory.sink.find("REPORT_GENERATION_STARTED")).toEqual([]);
+  });
+});
+
+describe("backups", () => {
+  it("writes how long the browser says a backup or restore took, and refuses a duration that makes no sense", async () => {
+    await server.registerUser();
+    memory.sink.clear();
+    expect((await server.web("POST", "/api/backup/record", { kind: "export", rows: 5, tables: { Task: 5 }, durationMs: 812 })).status).toBe(200);
+    expect((await server.web("POST", "/api/backup/record", { kind: "import", rows: 4, tables: { Task: 4 }, unchanged: 0, rejected: 0, durationMs: 40 })).status).toBe(200);
+    expect(memory.sink.find("BACKUP_COMPLETED")[0]).toMatchObject({ level: "INFO", duration_ms: 812, metadata: { rows: 5 } });
+    expect(memory.sink.find("RESTORE_COMPLETED")[0]).toMatchObject({ duration_ms: 40 });
+    expect((await server.web("POST", "/api/backup/record", { kind: "export", rows: 1, tables: {}, durationMs: -1 })).status).toBe(400);
+    expect((await server.web("POST", "/api/backup/record", { kind: "export", rows: 1, tables: {}, durationMs: 99_999_999 })).status).toBe(400);
+  });
+});
+
 describe("sync", () => {
   it("logs what a push did as counts and kinds of refusal — never the rows or the refused values", async () => {
     await server.registerUser();

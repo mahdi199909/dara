@@ -4,9 +4,13 @@
 // failed ("amount: not a number (\"abc\")"), so it is reduced to its field name and kind of failure
 // and never logged as written.
 import type { Level } from "../core/levels";
+import { metrics } from "../core/metrics";
 import { getLogger } from "../root";
 
 const log = getLogger("sync", "server");
+
+/** Sync requests the server finished, for the sync-failure panel: a request that failed outright is in http_requests_total (5xx) instead. */
+const syncRequestsTotal = metrics.counter("sync_requests_total", "Sync requests completed, by direction and outcome (success; partial: the server refused some rows).");
 
 export interface PushTableResult {
   upserted: number;
@@ -74,6 +78,7 @@ export function logSyncPush(results: Record<string, PushTableResult>, tombstones
     const refused = summary.totals.rejected > 0;
     const changed = summary.totals.upserted > 0 || tombstones.applied > 0 || hasProfile;
     const level: Level = refused ? "WARN" : changed ? "INFO" : "DEBUG";
+    syncRequestsTotal.inc({ direction: "push", outcome: refused ? "partial" : "success" });
     log.log(level, refused ? "SYNC_PARTIAL_SUCCESS" : "SYNC_PUSH_SUCCESS", {
       direction: "push",
       counts: summary.totals,
@@ -98,6 +103,7 @@ export function logSyncPull(tables: Record<string, unknown[]>, tombstoneCount: n
         rows += list.length;
       }
     }
+    syncRequestsTotal.inc({ direction: "pull", outcome: "success" });
     log.log(rows > 0 || tombstoneCount > 0 ? "INFO" : "DEBUG", "SYNC_PULL_SUCCESS", { direction: "pull", rows, tables: counts, tombstones: tombstoneCount, incremental });
   } catch {
     // ignore

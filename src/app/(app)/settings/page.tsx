@@ -1136,6 +1136,7 @@ function BackupTab() {
       const db = getLocalDbInstance();
       if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
 
+      const startedAt = performance.now();
       const data = exportAllData(db);
       const json = JSON.stringify(data, null, 2);
       const filename = `parva-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -1151,7 +1152,7 @@ function BackupTab() {
       // The file exists now — leave the trace (history entry + log line). Best effort: it must never turn a made backup into an error.
       try {
         const [{ recordBackupExported }, { getLocalUserId }] = await Promise.all([import("@/local/backupAudit"), import("@/local/localUser")]);
-        recordBackupExported(db, getLocalUserId(db), data);
+        recordBackupExported(db, getLocalUserId(db), data, performance.now() - startedAt);
       } catch {
         // already reported by the recorder itself where it could be
       }
@@ -1214,11 +1215,12 @@ function BackupTab() {
       const { importAllData } = await import("@/local/dataExport");
       const db = getLocalDbInstance();
       if (!db) throw new Error("پایگاه داده هنوز آماده نشده — چند لحظه دیگر دوباره تلاش کنید.");
+      const startedAt = performance.now();
       const result = importAllData(db, pendingImport.file);
       // The import has returned — leave the trace (history entry + log line). Best effort, as above.
       try {
         const [{ recordBackupImported }, { getLocalUserId }] = await Promise.all([import("@/local/backupAudit"), import("@/local/localUser")]);
-        recordBackupImported(db, getLocalUserId(db), result);
+        recordBackupImported(db, getLocalUserId(db), result, performance.now() - startedAt);
       } catch {
         // already reported by the recorder itself where it could be
       }

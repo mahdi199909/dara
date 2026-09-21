@@ -50,6 +50,23 @@ describe("recordBackupExported", () => {
   });
 });
 
+describe("how long a backup took", () => {
+  it("is written on BACKUP_COMPLETED and on the restore line, in whole milliseconds", () => {
+    recordBackupExported(db, userId, file, 1234.6);
+    expect(memory.sink.find("BACKUP_COMPLETED")[0].duration_ms).toBe(1235);
+    recordBackupImported(db, userId, { added: { Task: 1 }, skipped: {}, errors: {} }, 87.2);
+    expect(memory.sink.find("RESTORE_COMPLETED")[0].duration_ms).toBe(87);
+    recordBackupImported(db, userId, { added: { Task: 1 }, skipped: {}, errors: { Task: 1 } }, 40);
+    expect(memory.sink.find("RESTORE_PARTIAL")[0].duration_ms).toBe(40);
+  });
+
+  it("is left out when it was not measured, or is not a sensible number", () => {
+    recordBackupExported(db, userId, file);
+    for (const bad of [Number.NaN, -5, Number.POSITIVE_INFINITY]) recordBackupExported(db, userId, file, bad);
+    expect(memory.sink.find("BACKUP_COMPLETED").map((r) => r.duration_ms)).toEqual([undefined, undefined, undefined, undefined]);
+  });
+});
+
 describe("recordBackupImported", () => {
   const clean: ImportResult = { added: { Task: 5, Habit: 1 }, skipped: { Task: 2 }, errors: {} };
 

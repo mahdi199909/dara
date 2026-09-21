@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-261 events in 39 domains.
+263 events in 39 domains.
 
 ## AUTH
 
@@ -281,10 +281,10 @@ Default module: `reports`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `REPORT_GENERATION_COMPLETED` | INFO | — | reserved | A report finished (range, record count and duration in the fields). |
-| `REPORT_GENERATION_FAILED` | ERROR | protected | reserved | A report failed. |
-| `REPORT_GENERATION_STARTED` | DEBUG | — | reserved | A report started. |
-| `REPORT_SLOW` | WARN | — | reserved | A report took longer than the slow-report threshold. |
+| `REPORT_GENERATION_COMPLETED` | INFO | — | yes | A report finished (range, record count and duration in the fields). |
+| `REPORT_GENERATION_FAILED` | ERROR | protected | yes | A report failed. |
+| `REPORT_GENERATION_STARTED` | DEBUG | — | yes | A report started. |
+| `REPORT_SLOW` | WARN | — | yes | A report took longer than the slow-report threshold. |
 
 ## CAPITAL
 
@@ -331,6 +331,7 @@ Default module: `sync`
 | `SYNC_RERUN_QUEUED` | DEBUG | — | yes | A sync was requested while one was running; one more run is queued. |
 | `SYNC_RETRY` | WARN | protected | yes | A failed sync will be tried again. |
 | `SYNC_SIZE_LIMIT_EXCEEDED` | WARN | protected | yes | A sync request exceeded the size limit and was split or refused. |
+| `SYNC_SLOW` | WARN | — | yes | A sync request or run took longer than the slow-sync threshold (SLOW_SYNC_THRESHOLD_MS). |
 | `SYNC_STARTED` | INFO | — | yes | A sync cycle began (the trigger is in the fields). |
 | `SYNC_SUCCESS` | INFO | — | yes | A sync cycle finished without any failure. |
 
@@ -512,6 +513,7 @@ Default module: `system`
 | --- | --- | --- | --- | --- |
 | `LOG_INTERNAL_ERROR` | ERROR | protected | yes | A log record could not be built; a reduced record was written instead. |
 | `LOG_LEVEL_CHANGED` | INFO | protected | yes | A log level was changed at runtime. |
+| `LOG_QUERIED` | INFO | protected | yes | The owner searched the application log (the filters used, never the results). |
 | `LOG_QUEUE_OVERFLOW` | WARN | protected | reserved | The log queue was full and records were dropped. |
 | `LOG_SINK_FAILED` | ERROR | protected | yes | A log sink failed to write; logging continues without it. |
 

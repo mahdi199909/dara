@@ -26,3 +26,6 @@ export {
   logSessionInvalid,
 } from "./authEvents";
 export { startServerObservability } from "./startup";
+export { getServerLogSinks, startServerLogSinks } from "./serverSinks";
+export { resolveServerLogConfig } from "./logConfig";
+export { recordJob } from "./jobMetrics";

@@ -90,14 +90,22 @@ export function restorableCounts(tables: DataExportFile["tables"]): Array<{ tabl
  * entry and the BACKUP_* / RESTORE_* log lines — see src/app/api/backup/record/route.ts). Counts only.
  * Best effort by design: a failure here must never turn a finished backup into an error.
  */
-export async function reportBackupToServer(api: BackupApi, report: { kind: "export"; tables: DataExportFile["tables"] } | { kind: "import"; result: WebImportResult }): Promise<void> {
+export async function reportBackupToServer(
+  api: BackupApi,
+  report: ({ kind: "export"; tables: DataExportFile["tables"] } | { kind: "import"; result: WebImportResult }) & {
+    /** How long the backup or restore took in the browser, when the caller measured it. */
+    durationMs?: number;
+  }
+): Promise<void> {
   try {
+    const duration = typeof report.durationMs === "number" && Number.isFinite(report.durationMs) && report.durationMs >= 0 ? { durationMs: Math.round(report.durationMs) } : {};
     if (report.kind === "export") {
       const counts = restorableCounts(report.tables);
       await api.post("/api/backup/record", {
         kind: "export",
         rows: counts.reduce((sum, item) => sum + item.count, 0),
         tables: Object.fromEntries(counts.map((item) => [item.table, item.count])),
+        ...duration,
       });
       return;
     }
@@ -108,6 +116,7 @@ export async function reportBackupToServer(api: BackupApi, report: { kind: "expo
       tables: stored,
       unchanged,
       rejected: rejected.length,
+      ...duration,
     });
   } catch {
     // the backup itself already succeeded

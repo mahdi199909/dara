@@ -8,8 +8,8 @@
 import type { MetricsSnapshot } from "../core/metrics";
 import { redactRecord, scrubString } from "../core/redact";
 import type { LogRecord } from "../core/schema";
-import { utf8Bytes } from "./bytes";
-import type { DeviceLogStats } from "./fileSink";
+import { utf8Bytes } from "../core/bytes";
+import type { RotatingFileStats } from "../core/rotatingFileSink";
 
 export const DIAGNOSTIC_FORMAT = "parva-diagnostics";
 export const DIAGNOSTIC_VERSION = 1;
@@ -20,7 +20,7 @@ export interface DiagnosticInput {
   now?: Date;
   app: { version?: string; build?: string; environment?: string; platform?: string };
   device: { deviceId?: string; osVersion?: string; tz?: string; sessionId?: string; userId?: string | null };
-  logging: { level?: string; file?: DeviceLogStats; queue?: Record<string, unknown> };
+  logging: { level?: string; file?: RotatingFileStats; queue?: Record<string, unknown> };
   /** The last sync's outcome, as counts and a kind — never rows. */
   sync?: { ok?: boolean; syncId?: string; finishedAt?: string; kind?: string; status?: number; pushedCount?: number; pulledCount?: number; rejectedCount?: number; durationMs?: number };
   metrics?: MetricsSnapshot;

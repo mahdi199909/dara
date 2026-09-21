@@ -40,6 +40,7 @@ that the routes write one summary record each (`src/lib/observability/server/syn
 | --- | --- | --- |
 | `SYNC_PUSH_SUCCESS` | INFO when rows/deletions/profile were applied, DEBUG when nothing changed | `counts` {upserted, skipped, rejected}, `tables` (the same per table), `tombstones` {applied, ignored}, `profile` |
 | `SYNC_PARTIAL_SUCCESS` | WARN | as above plus `rejections`: `"Table: kind of refusal"` → count |
+| `SYNC_SLOW` | WARN | the request took ≥ `SLOW_SYNC_THRESHOLD_MS` (default 3000; a push can carry a whole backup) — written by `withApiLogging` in place of `API_SLOW_REQUEST` for `/api/sync/*`, with `duration_ms`, `dbQueries`, `dbMs` |
 | `SYNC_PULL_SUCCESS` | INFO when rows/deletions were sent, DEBUG when the device was up to date | `rows`, `tables` (rows per table), `tombstones`, `incremental` (a cursor was given) |
 
 The kinds of refusal are a closed list, never the refused text (a refusal's own message quotes the value
@@ -79,6 +80,7 @@ phone   SYNC_COMPLETED         ok  created  updated  pushed  pulled  deleted  re
 | `SYNC_PUSH_SUCCESS` | INFO when something left the phone, else DEBUG | `pushed` / `skipped` / `rejected`; the server's request ids; **`sentIds`** — the ids of the rows sent, per table, at most 20 a table and 60 in all (`sentIdsTruncated`). Ids are random values and say nothing about a row |
 | `SYNC_SUCCESS` | INFO when something changed, else DEBUG | the cycle finished with no failure |
 | `SYNC_PARTIAL_SUCCESS` | WARN | the server refused some rows (`SYNC-005`) |
+| `SYNC_SLOW` | WARN | the whole cycle took ≥ `NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS` (default 8000), written after `SYNC_COMPLETED` with the cycle's `sync_id`, `ok`, `pushed`, `pulled` and `duration_ms` |
 | `SYNC_PAYLOAD_REJECTED` | WARN | which rows were refused and the server's reason (capped at 20) — the one place ids are always written |
 | `SYNC_SIZE_LIMIT_EXCEEDED` | WARN | a request answered 413 (`SYNC-004`): which batch, its rows and bytes, the server's request id |
 | `SYNC_FAILED` | WARN (offline) / ERROR | as before, plus `attempt`, `trigger` and `serverRequestId` — the key to the server's side of the failure |

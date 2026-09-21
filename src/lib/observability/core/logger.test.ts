@@ -414,6 +414,22 @@ describe("failure containment", () => {
     expect(snapshot.counters.log_sink_errors_total[0]).toEqual({ labels: 'sink="bad"', value: 2 });
   });
 
+  it("counts every warning and worse by event and level, and nothing milder, for the dashboards' failure panels", () => {
+    const registry = new MetricsRegistry();
+    const { logger } = createTestLogger({ metrics: registry });
+    logger.info("TASK_CREATE_SUCCESS");
+    logger.debug("SYNC_PULL_STARTED");
+    logger.warn("AUTH_LOGIN_FAILED");
+    logger.warn("AUTH_LOGIN_FAILED");
+    logger.error("SYNC_FAILED");
+    logger.critical("SYSTEM_UNHANDLED_ERROR");
+    expect(registry.snapshot().counters.log_events_total).toEqual([
+      { labels: 'event="AUTH_LOGIN_FAILED",level="WARN"', value: 2 },
+      { labels: 'event="SYNC_FAILED",level="ERROR"', value: 1 },
+      { labels: 'event="SYSTEM_UNHANDLED_ERROR",level="CRITICAL"', value: 1 },
+    ]);
+  });
+
   it("flushes and closes every sink, tolerating one that fails", async () => {
     const order: string[] = [];
     const a: LogSink = { name: "a", write: () => {}, flush: async () => void order.push("a"), close: async () => void order.push("close-a") };

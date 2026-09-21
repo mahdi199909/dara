@@ -6,10 +6,11 @@ import { getRootCore } from "../root";
 import { Logger, type LoggerCore } from "../core/logger";
 import { BatchingSink, type BatchingEvent } from "../core/sink";
 import { applyClientIdentity } from "./clientContext";
-import { DeviceLogFileSink, type DeviceLogFileSinkOptions } from "./fileSink";
+import { RotatingFileSink, type RotatingFileSinkOptions } from "../core/rotatingFileSink";
 import { installGlobalErrorCapture, type ErrorTarget } from "./globalErrors";
 import { loadDeviceIdentity, type DeviceIdentity, type KeyValueStore } from "./identity";
-import { createCapacitorLogFileStore, type LogFileStore } from "./logFileStore";
+import type { LogFileStore } from "../core/logFileStore";
+import { createCapacitorLogFileStore } from "./capacitorLogFileStore";
 
 /** Where the WebView tells us it is about to be hidden or closed. */
 export interface LifecycleTarget {
@@ -23,7 +24,7 @@ export interface ClientLoggingOptions {
   keyValue?: KeyValueStore;
   userAgent?: string;
   timeZone?: string;
-  fileSink?: Partial<DeviceLogFileSinkOptions>;
+  fileSink?: Partial<RotatingFileSinkOptions>;
   /** document (visibilitychange) and window (pagehide, error, unhandledrejection). Default: the real ones. */
   document?: LifecycleTarget;
   window?: LifecycleTarget & ErrorTarget;
@@ -35,7 +36,7 @@ export interface ClientLoggingOptions {
 
 export interface ClientLogging {
   identity: DeviceIdentity;
-  sink: DeviceLogFileSink;
+  sink: RotatingFileSink;
   batching: BatchingSink;
   /** Writes everything queued so far to the file. */
   flush(): Promise<void>;
@@ -68,7 +69,7 @@ export async function installClientLogging(options: ClientLoggingOptions = {}): 
   const identity = await loadDeviceIdentity({ store: options.keyValue, userAgent: options.userAgent, timeZone: options.timeZone });
   applyClientIdentity(identity, core);
 
-  const sink = new DeviceLogFileSink({
+  const sink = new RotatingFileSink({
     store: options.store ?? createCapacitorLogFileStore(),
     onProblem: (problem) => reportOnce(`file:${problem.kind}`, `log file ${problem.kind} problem${problem.file ? ` (${problem.file})` : ""}`, problem.error),
     ...options.fileSink,

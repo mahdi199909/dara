@@ -102,6 +102,7 @@ derived name such as `NOTE_ARCHIVE`, so a forgotten row never loses an entry.)
 | `LICENSE_TRIAL_STARTED` | License | `LICENSE_TRIAL_START` | `LICENSE_TRIAL_START_SUCCESS` |
 | `LICENSE_ADMIN_UPDATED` | License | `ADMIN_LICENSE_UPDATE` | — |
 | `RELEASE_ADMIN_UPDATED` | AppRelease | `ADMIN_RELEASE_UPDATE` | — |
+| `LOG_LEVEL_ADMIN_UPDATED` | LogSettings | `ADMIN_LOG_LEVEL_UPDATE` | — |
 | `TASK_CREATED` | Task | `CREATE` | `TASK_CREATE_SUCCESS` |
 | `TASK_UPDATED` | Task | `UPDATE` | `TASK_UPDATE_SUCCESS` |
 | `TASK_DELETED` | Task | `DELETE` | `TASK_DELETE_SUCCESS` |
@@ -192,6 +193,7 @@ the routes that did not:
 | --- | --- |
 | `PATCH /api/admin/license` | `LICENSE_ADMIN_UPDATED` against the **owner** who acted — the target account appears only as an opaque id in `metadata.targetUserId`, never the address — with the license's diff |
 | `PATCH /api/admin/release` | `RELEASE_ADMIN_UPDATED` with the diff of what the installed apps are told about updates (including a forced-update lock-out) |
+| `PUT` / `DELETE /api/admin/logging` | `LOG_LEVEL_ADMIN_UPDATED` with what the log levels were and became (`before` / `after`) and what was asked for (`metadata`) — turning a component up to DEBUG for a few minutes leaves a trace of who did it and for how long |
 | `PATCH /api/categories/reorder` (and the phone's equivalent) | `CATEGORIES_REORDERED` with the number of categories moved |
 | `POST /api/backup/record` (new) and the phone's Backup screen | `BACKUP_EXPORTED` / `BACKUP_IMPORTED` with counts per table — never rows |
 

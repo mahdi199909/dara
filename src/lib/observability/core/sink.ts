@@ -118,6 +118,31 @@ export class NullSink implements LogSink {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Filtering: give one sink a higher threshold than the rest (a remote collector that should only see warnings)
+// ---------------------------------------------------------------------------------------------
+
+/** Passes on only the records at or above `minimum`; everything else in the process still sees all of them. */
+export class FilteredSink implements LogSink {
+  readonly name: string;
+
+  constructor(private readonly inner: LogSink, private readonly minimum: keyof typeof LEVEL_VALUE) {
+    this.name = `filtered(${inner.name}, ${minimum})`;
+  }
+
+  write(record: LogRecord): void | Promise<void> {
+    if (LEVEL_VALUE[record.level] >= LEVEL_VALUE[this.minimum]) return this.inner.write(record);
+  }
+
+  flush(): Promise<void> {
+    return this.inner.flush?.() ?? Promise.resolve();
+  }
+
+  close(): Promise<void> {
+    return this.inner.close?.() ?? this.flush();
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Batching: the asynchronous, bounded, failure-tolerant wrapper for any sink that does real I/O
 // ---------------------------------------------------------------------------------------------
 
@@ -230,6 +255,8 @@ export class BatchingSink implements LogSink {
 
   private state: CircuitState = "closed";
   private retryAt = 0;
+  /** After a failed write nothing is tried again before this time, however many records arrive meanwhile. */
+  private notBefore = 0;
   private backoffMs: number;
   private consecutiveFailures = 0;
 
@@ -274,12 +301,10 @@ export class BatchingSink implements LogSink {
     if (priority === 2) this.scheduleUrgent();
   }
 
+  /** Writes everything that is queued now. (A flush the timer started may cover only part of the queue, so it is waited for and the rest written after it.) */
   async flush(): Promise<void> {
-    if (this.flushing) {
-      await this.flushing;
-      return;
-    }
-    this.flushing = this.drain().finally(() => {
+    while (this.flushing) await this.flushing;
+    this.flushing = this.drain(Number.POSITIVE_INFINITY).finally(() => {
       this.flushing = null;
     });
     await this.flushing;
@@ -295,6 +320,19 @@ export class BatchingSink implements LogSink {
       await this.inner.close?.();
     } catch {
       // closing must never throw into a shutdown path
+    }
+  }
+
+  /**
+   * Removes and returns everything still waiting, oldest first. For a process that is exiting: the 'exit' event cannot
+   * wait for an asynchronous write, so what the queue holds is written down synchronously by whoever calls this.
+   */
+  takeQueued(): LogRecord[] {
+    const records: LogRecord[] = [];
+    for (;;) {
+      const batch = this.takeBatch();
+      if (batch.length === 0) return records;
+      for (const item of batch) records.push(item.record);
     }
   }
 
@@ -351,19 +389,17 @@ export class BatchingSink implements LogSink {
     return this.state;
   }
 
+  /**
+   * Arranges a flush `delayMs` from now — unless one is already due at least that soon. A pending timer that is later
+   * is brought forward: a full batch must not wait for an interval timer that was set when the queue was empty (with a
+   * five-second interval and a busy server, the queue would fill and overflow before the first delivery). What a
+   * failure decided is never overridden: after one, nothing is tried before `notBefore` (the retry spacing, or the
+   * circuit's back-off), so a stream of new records cannot turn a retry into a busy loop against a destination that is down.
+   */
   private schedule(delayMs: number): void {
-    if (this.timer !== null) return;
-    this.timerDueAt = this.now() + delayMs;
-    this.timer = this.timers.set(() => {
-      this.timer = null;
-      void this.flush();
-    }, delayMs);
-  }
-
-  /** Brings a pending flush forward (see urgentFlushMs); while the circuit is open the back-off decides instead. */
-  private scheduleUrgent(): void {
-    if (this.urgentFlushMs === undefined || this.state === "open") return;
-    const dueAt = this.now() + this.urgentFlushMs;
+    const now = this.now();
+    const wait = Math.max(delayMs, this.notBefore - now);
+    const dueAt = now + wait;
     if (this.timer !== null) {
       if (this.timerDueAt <= dueAt) return;
       this.timers.clear(this.timer);
@@ -371,14 +407,40 @@ export class BatchingSink implements LogSink {
     this.timerDueAt = dueAt;
     this.timer = this.timers.set(() => {
       this.timer = null;
-      void this.flush();
-    }, this.urgentFlushMs);
+      this.timedFlush();
+    }, wait);
+  }
+
+  /**
+   * What the timer starts. It writes what was queued when it started — full batches only, unless the interval has run out
+   * or something that must not be lost is waiting — and leaves what arrives meanwhile for the next batch or the next
+   * interval. Draining until the queue is empty would keep going for as long as records keep arriving, and a busy server
+   * would send a stream of tiny batches instead of a few full ones.
+   */
+  private timedFlush(): void {
+    if (this.flushing) return; // the one running schedules whatever it leaves
+    const running = this.drain(this.timedBudget()).finally(() => {
+      this.flushing = null;
+    });
+    this.flushing = running;
+    running.catch(() => undefined);
+  }
+
+  private timedBudget(): number {
+    if (this.queues[2].length > 0) return Number.POSITIVE_INFINITY; // a protected record is waiting: write it now, and everything before it
+    return this.size >= this.maxBatch ? this.size - (this.size % this.maxBatch) : this.size;
+  }
+
+  /** Brings a pending flush forward (see urgentFlushMs); while the circuit is open the back-off decides instead. */
+  private scheduleUrgent(): void {
+    if (this.urgentFlushMs === undefined || this.state === "open") return;
+    this.schedule(this.urgentFlushMs);
   }
 
   /** Takes up to maxBatch records in their original order across the three priority buckets. */
-  private takeBatch(): Queued[] {
+  private takeBatch(limit = this.maxBatch): Queued[] {
     const batch: Queued[] = [];
-    while (batch.length < this.maxBatch) {
+    while (batch.length < limit) {
       let pick: Fifo | null = null;
       let pickSeq = Infinity;
       for (const queue of this.queues) {
@@ -403,8 +465,10 @@ export class BatchingSink implements LogSink {
     this.size += batch.length;
   }
 
-  private async drain(): Promise<void> {
-    while (this.size > 0) {
+  /** Writes at most `budget` records, a batch at a time, oldest first. What it does not cover waits for the next full batch or the interval. */
+  private async drain(budget: number): Promise<void> {
+    let left = budget;
+    while (this.size > 0 && left > 0) {
       if (this.state === "open") {
         if (this.now() < this.retryAt) {
           this.schedule(Math.max(1, this.retryAt - this.now()));
@@ -413,13 +477,15 @@ export class BatchingSink implements LogSink {
         this.state = "half-open";
       }
 
-      const batch = this.takeBatch();
+      const batch = this.takeBatch(Math.min(this.maxBatch, left));
       try {
         const records = batch.map((item) => item.record);
         if (this.inner.writeBatch) await this.inner.writeBatch(records);
         else for (const record of records) await this.inner.write(record);
+        left -= records.length;
         this.written += records.length;
         this.consecutiveFailures = 0;
+        this.notBefore = 0;
         this.backoffMs = this.baseBackoffMs;
         if (this.state !== "closed") {
           this.state = "closed";
@@ -436,10 +502,12 @@ export class BatchingSink implements LogSink {
           this.backoffMs = Math.min(this.backoffMs * 2, this.maxBackoffMs);
           this.emit({ type: "circuit_open", retryAt: this.retryAt });
         }
+        this.notBefore = this.state === "open" ? this.retryAt : this.now() + this.flushIntervalMs;
         this.schedule(this.state === "open" ? Math.max(1, this.retryAt - this.now()) : this.flushIntervalMs);
         return; // do not spin on a failing sink
       }
     }
+    if (this.size > 0) this.schedule(this.size >= this.maxBatch ? 0 : this.flushIntervalMs);
   }
 
   private safeFallback(record: LogRecord): void {

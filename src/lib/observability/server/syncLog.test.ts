@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SYNC_TABLES } from "@/lib/syncTables";
+import { metrics } from "../core/metrics";
 import { installMemoryLogger } from "../testing";
 import { categorizeRejection, logSyncPull, logSyncPush, summarizePush } from "./syncLog";
 
@@ -110,5 +111,26 @@ describe("logSyncPull", () => {
 
   it("does not throw on odd input", () => {
     expect(() => logSyncPull(null as never, 0, false)).not.toThrow();
+  });
+});
+
+describe("the counts behind the sync panel", () => {
+  const counter = () => metrics.counter("sync_requests_total");
+  const results = (rejected: number) => ({ Task: { upserted: 2, skipped: 0, rejected } });
+
+  it("counts a push that stored everything as a success, and one with refused rows as partial", () => {
+    const success = counter().value({ direction: "push", outcome: "success" });
+    const partial = counter().value({ direction: "push", outcome: "partial" });
+    logSyncPush(results(0), { applied: 0, ignored: 0 }, false);
+    logSyncPush(results(1), { applied: 0, ignored: 0 }, false);
+    expect(counter().value({ direction: "push", outcome: "success" }) - success).toBe(1);
+    expect(counter().value({ direction: "push", outcome: "partial" }) - partial).toBe(1);
+  });
+
+  it("counts a pull, whether or not anything was sent", () => {
+    const before = counter().value({ direction: "pull", outcome: "success" });
+    logSyncPull({ Task: [{}] }, 0, true);
+    logSyncPull({ Task: [] }, 0, true);
+    expect(counter().value({ direction: "pull", outcome: "success" }) - before).toBe(2);
   });
 });

@@ -21,6 +21,7 @@ const log = getLogger(null, "route");
 
 const requestsTotal = metrics.counter("http_requests_total", "HTTP requests handled, by method, route and status class.");
 const requestDuration = metrics.histogram("http_request_duration_ms", "HTTP request duration in milliseconds, by method and route.");
+const slowRequestsTotal = metrics.counter("http_slow_requests_total", "HTTP requests slower than their slow threshold, by route.");
 
 type Handler<Args extends unknown[]> = (...args: Args) => Response | Promise<Response>;
 
@@ -88,14 +89,18 @@ function finish(context: RequestContext, response: Response | undefined, thrown:
   };
   log.log(completionLevel(context.method, status), "HTTP_REQUEST_COMPLETED", fields);
 
-  const { slowRequestMs } = serverSettings();
-  if (durationMs >= slowRequestMs) {
-    log.warn("API_SLOW_REQUEST", {
+  // A sync request can carry a whole backup, so it has its own, more patient threshold and its own event.
+  const settings = serverSettings();
+  const isSync = context.route.startsWith("/api/sync/");
+  const thresholdMs = isSync ? settings.slowSyncMs : settings.slowRequestMs;
+  if (durationMs >= thresholdMs) {
+    slowRequestsTotal.inc({ route: context.route });
+    log.warn(isSync ? "SYNC_SLOW" : "API_SLOW_REQUEST", {
       httpMethod: context.method,
       httpPath: context.path,
       statusCode: status,
       durationMs,
-      thresholdMs: slowRequestMs,
+      thresholdMs,
       route: context.route,
       dbQueries: context.db.queries,
       dbMs: round2(context.db.totalMs),

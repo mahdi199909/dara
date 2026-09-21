@@ -1,6 +1,7 @@
 // Runs once when the Next.js server process starts (enabled by `experimental.instrumentationHook`
 // in next.config.mjs). It starts the process-level logging (the startup record, the crash and
-// unhandled-rejection records, the shutdown record) and the audit-retention job. The Edge runtime
+// unhandled-rejection records, the shutdown record), the log file / collector when configured, and the two
+// retention jobs (the audit trail, and the application log's files). The Edge runtime
 // (middleware) and the Android export never load this file — the export build deletes it
 // (scripts/prepare-android-export.mjs).
 export async function register(): Promise<void> {
@@ -9,5 +10,7 @@ export async function register(): Promise<void> {
     startServerObservability();
     const { startAuditRetentionJob } = await import("./lib/auditRetention");
     startAuditRetentionJob();
+    const { startLogRetentionJob } = await import("./lib/logRetention");
+    startLogRetentionJob();
   }
 }

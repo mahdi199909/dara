@@ -7,6 +7,7 @@
 // with a single DELETE by date; nothing else is touched. Every run is one line in the application log.
 import { prisma } from "./db";
 import { getLogger } from "./observability";
+import { recordJob } from "./observability/server/jobMetrics";
 
 const log = getLogger(null, "audit-retention");
 
@@ -35,6 +36,7 @@ export interface PurgeResult {
 export async function purgeExpiredAuditLogs(now: Date = new Date(), days: number | null = auditRetentionDays()): Promise<PurgeResult | null> {
   if (days === null) {
     log.debug("JOB_SKIPPED", { job: JOB, reason: "retention is off (AUDIT_RETENTION_DAYS)" });
+    recordJob(JOB, "skipped");
     return null;
   }
   const started = Date.now();
@@ -42,10 +44,14 @@ export async function purgeExpiredAuditLogs(now: Date = new Date(), days: number
   try {
     log.debug("JOB_STARTED", { job: JOB, retentionDays: days, cutoff: cutoff.toISOString() });
     const { count } = await prisma.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
-    log.log(count > 0 ? "INFO" : "DEBUG", "JOB_COMPLETED", { job: JOB, deleted: count, retentionDays: days, cutoff: cutoff.toISOString(), durationMs: Date.now() - started });
+    const durationMs = Date.now() - started;
+    log.log(count > 0 ? "INFO" : "DEBUG", "JOB_COMPLETED", { job: JOB, deleted: count, retentionDays: days, cutoff: cutoff.toISOString(), durationMs });
+    recordJob(JOB, "completed", durationMs);
     return { deleted: count, cutoff, retentionDays: days };
   } catch (error) {
-    log.error("JOB_FAILED", { job: JOB, error, retentionDays: days, durationMs: Date.now() - started });
+    const durationMs = Date.now() - started;
+    log.error("JOB_FAILED", { job: JOB, error, retentionDays: days, durationMs });
+    recordJob(JOB, "failed", durationMs);
     return null;
   }
 }

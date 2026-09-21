@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { metrics } from "../core/metrics";
 import { installMemoryLogger } from "../testing";
 import { beginRequest, runWithRequestContext } from "./requestContext";
 import { emailPseudonym, logForbidden, logLoginFailed, logLoginSuccess, logLogout, logRateLimited, logRegisterFailed, logRegisterSuccess, logSessionInvalid } from "./authEvents";
@@ -86,5 +87,34 @@ describe("auth events", () => {
     for (const event of ["AUTH_LOGIN_FAILED", "AUTH_RATE_LIMITED", "AUTH_SESSION_INVALID", "AUTH_FORBIDDEN", "AUTH_REGISTER_FAILED", "AUTH_LOGIN_SUCCESS"]) {
       expect(eventMeta(event)?.security, event).toBe(true);
     }
+  });
+});
+
+describe("the counts behind the authentication panel", () => {
+  const counter = () => metrics.counter("auth_events_total");
+  const email = "ali@example.com";
+
+  it("counts each kind of event by name", () => {
+    const before = (event: string) => counter().value({ event });
+    const start = Object.fromEntries(["login_failed", "rate_limited", "login_success", "register_success", "register_failed", "logout", "session_invalid", "forbidden"].map((e) => [e, before(e)]));
+
+    logLoginFailed({ email, reason: "wrong_password", ip: null });
+    logLoginFailed({ email, reason: "no_such_user", ip: null });
+    logRateLimited({ email, ip: null });
+    logLoginSuccess({ userId: "u1", ip: null });
+    logRegisterSuccess({ userId: "u2", ip: null });
+    logRegisterFailed({ email, reason: "email_taken", ip: null });
+    logLogout({ userId: "u1" });
+    logSessionInvalid("missing");
+    logForbidden({ userId: "u1", what: "admin" });
+
+    const delta = (event: string) => before(event) - start[event];
+    expect(delta("login_failed")).toBe(2);
+    for (const event of ["rate_limited", "login_success", "register_success", "register_failed", "logout", "session_invalid", "forbidden"]) expect(delta(event), event).toBe(1);
+  });
+
+  it("holds no address or person in its labels", () => {
+    logLoginFailed({ email, reason: "wrong_password", ip: "203.0.113.7" });
+    expect(JSON.stringify(counter().entries())).not.toMatch(/ali@|203\.0\.113/);
   });
 });

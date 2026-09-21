@@ -24,6 +24,12 @@ export interface LevelSnapshot {
   userOverrideCount: number;
 }
 
+export interface LevelEntries {
+  base: Level;
+  overrides: Array<{ key: string; level: Level; expiresAt: number | null }>;
+  users: Array<{ userId: string; level: Level; expiresAt: number | null }>;
+}
+
 export class LevelController {
   private base: Level;
   private readonly overrides = new Map<string, TimedLevel>();
@@ -109,6 +115,19 @@ export class LevelController {
       base: this.base,
       overrides: Object.fromEntries(this.overrides),
       userOverrideCount: this.userOverrides.size,
+    };
+  }
+
+  /**
+   * Everything in force, user ids included — for the admin API, which is owner-only. snapshot() keeps only a count of
+   * the per-user rules, because it also feeds the diagnostic report that leaves the device.
+   */
+  entries(): LevelEntries {
+    this.prune();
+    return {
+      base: this.base,
+      overrides: [...this.overrides].map(([key, rule]) => ({ key, level: rule.level, expiresAt: rule.expiresAt })),
+      users: [...this.userOverrides].map(([userId, rule]) => ({ userId, level: rule.level, expiresAt: rule.expiresAt })),
     };
   }
 

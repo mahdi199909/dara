@@ -5,7 +5,7 @@ calls. Its purpose: **if a person says a year later "my data is wrong", we can r
 happened** — without logging more than that, without leaking anything private, and without ever
 slowing down or breaking the application.
 
-Status of each part is marked **[done]** (phases 0 to 4, in the code today) or **[planned N]** (phase N
+Status of each part is marked **[done]** (phases 0 to 5, in the code today) or **[planned N]** (phase N
 of the rollout below). Nothing marked planned is claimed to exist.
 
 ## 1. Three layers, deliberately separate
@@ -231,11 +231,64 @@ The Android app now keeps its own log and ties it to the server's:
 Details: [android.md](android.md) (the file, identity, what is written, the report, the budget) and [sync.md](sync.md)
 (the cycle, the events, incident reconstruction, the rollout rule: **deploy the server before the APK**).
 
-Tests: the sink's rotation, retention, compression and failure handling (`fileSink.test.ts`), the install and flush
+Tests: the sink's rotation, retention, compression and failure handling (`core/rotatingFileSink.test.ts`), the install and flush
 behaviour (`install.test.ts`), the report and its redaction (`diagnostics.test.ts`), global errors
 (`globalErrors.test.ts`), the headers and their fallback (`remoteFetch.test.ts`), the cycle's events against a scripted
 server, the acceptance scenarios 4–6 (`src/local/syncLogging.test.ts`), the CORS guard (`nativeCors.test.ts`) and the
 whole path, phone to server (`src/testing/syncCorrelation.e2e.test.ts`).
+
+## 2e. Server destinations, administration and dashboards (phase 5) **[done]**
+
+**Where the server's records go.** stdout always (Docker rotates it), and, when configured:
+
+- a **rotated file** (`LOG_FILE_DIR`; the compose volume `hesabkon_logs` at `/app/logs`): the same `RotatingFileSink` as the
+  phone's, told different limits — 20 MB a file, gzip on rotation, kept `LOG_RETENTION_DAYS` days (default 14; 7, 30 and 90
+  are the usual choices; `0`/`off` keeps them until the size ceiling), never more than `LOG_FILE_MAX_MB` (300) together;
+- a **central collector** (`LOG_REMOTE_URL`, `LOG_REMOTE_TOKEN`, `LOG_REMOTE_MIN_LEVEL`, default WARN): one HTTP POST per
+  batch of newline-delimited JSON, which Vector, Fluent Bit, Logstash's `http` input and OpenObserve accept.
+
+Both sit behind a `BatchingSink` (bounded queue, retry spacing, circuit breaker), so a slow or full disk and a dead collector
+never reach a request; each failure is reported on the console at most once a minute, with its cause but never an address or
+a token. A timer-driven flush writes what was queued when it started — full batches, unless the interval has run out or an
+error is waiting — so a busy server sends a few full batches instead of a stream of tiny ones; on the way out (`exit`, which
+is what Next.js turns SIGTERM into) what the file's queue still holds is written synchronously, `SYSTEM_SHUTDOWN` included.
+
+**Retention.** The file sink deletes what expired whenever it rotates, and a daily job (`src/lib/logRetention.ts`) does it for a
+quiet server as well: `JOB_STARTED` / `JOB_COMPLETED` / `JOB_FAILED` and `jobs_total{job,outcome}`. The audit trail has its own,
+much longer retention ([audit.md](audit.md)).
+
+**Performance events.** The thresholds are configurable: `SLOW_API_THRESHOLD_MS` (1000), `SLOW_DB_THRESHOLD_MS` (300),
+`SLOW_SYNC_THRESHOLD_MS` (3000 — a sync request writes `SYNC_SLOW` instead of `API_SLOW_REQUEST`) and
+`SLOW_REPORT_THRESHOLD_MS` (2000); the older `LOG_SLOW_*` names still work. Every report — on the server and on the phone,
+one shared tracker (`core/reportRun.ts`) — writes `REPORT_GENERATION_STARTED` / `_COMPLETED` / `_FAILED` and `REPORT_SLOW` with
+the period, the number of rows and the duration, and never a figure. Backups and restores carry their duration; the phone's
+sync cycle writes `SYNC_SLOW` past `NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS` (8 s).
+
+**The owner's tools** (owner-only, `requireAdmin`; a panel for each on `/admin`):
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET` / `PUT` / `DELETE /api/admin/logging` | dynamic debugging: show and change the level for the whole server, one component (`SYNC=DEBUG`) or one account, with no restart. A verbose level always expires (30 minutes by default, 24 hours at most); everything can be put back to what the environment configured; each change is audited (`LOG_LEVEL_ADMIN_UPDATED`) and logged (`LOG_LEVEL_CHANGED`) |
+| `GET /api/admin/health` | requests, error rate, p50/p95, slow requests, database, sync, sign-in failures, jobs, reports, the log pipeline and the last problems |
+| `GET /api/admin/logs` | the support timeline, read from the rotated files: `user` (id or e-mail), `request`, `sync`, `entity`, `event`, `level`, `module`, `platform`, `version`, `code`, `since`, `until`, `limit`; redacted when written and again on the way out; reading it writes `LOG_QUERIED` |
+| `GET /api/metrics` | Prometheus text, `Authorization: Bearer $METRICS_TOKEN`; does not exist unless the token (16 characters or more) is set |
+
+**Dashboards.** The metrics behind the panels the specification asks for: total requests, error rate and latency
+(`http_requests_total`, `http_request_duration_ms`), slow requests (`http_slow_requests_total`), database errors
+(`db_queries_total{outcome}`), sync failures and duration (`sync_requests_total`, and the sync routes' entries in the two `http_*`
+metrics), authentication failures (`auth_events_total`), failed jobs (`jobs_total`), report performance (`reports_total`,
+`report_duration_ms`) — and every WARN-or-worse record by event name (`log_events_total{event,level}`), which covers notification
+and backup failures without a metric of their own. Filtering by user, version, module, event or error code is what the log file
+and the collector are for. All of it, with the configuration, the failure behaviour and the measured cost, is in
+[operations.md](operations.md).
+
+Tests: the shared file sink on a real folder (`nodeLogFileStore.test.ts`), the configuration (`logConfig.test.ts`), the HTTP sink
+against a real local collector (`httpLogSink.test.ts`), the wiring and its failure behaviour (`serverSinks.test.ts`), the retention
+job (`logRetention.test.ts`), the batching rules (`core/sink.test.ts`), the report tracker (`reportRun.test.ts`) and its use on the
+server and on the phone, level administration (`adminLogging.test.ts`), the timeline's filters and redaction (`logSearch.test.ts`),
+the health report (`healthReport.test.ts`), the metrics endpoint (`metricsEndpoint.test.ts`), the middleware's public paths
+(`src/middleware.test.ts`) and the whole of it against the real routes and a real database (`src/testing/adminObservability.e2e.test.ts`,
+`observabilityPipeline.e2e.test.ts`).
 
 ## 3. The record
 
@@ -281,8 +334,8 @@ and stamps them on every record of that request; the app starts sending them in 
 Production defaults to INFO, development DEBUG, tests ERROR. `LOG_LEVEL` may carry overrides
 (`info,SYNC=debug,FINANCE=info`); `LOG_LEVEL_OVERRIDES` adds more. An override key matches an event's
 **domain** (`SYNC`), **module** (`finance`) or a logger's **component** (`sync-runner`); the most
-specific wins. `LoggerCore.levels` changes any of these at runtime (with a TTL) — an admin endpoint
-that drives it is **[planned 5]**. Invalid tokens are reported and ignored; a typo can never switch
+specific wins. `LoggerCore.levels` changes any of these at runtime (with a TTL) — the owner's admin endpoint
+(`/api/admin/logging`, section 2e) drives it, and a verbose level always expires. Invalid tokens are reported and ignored; a typo can never switch
 logging off.
 
 ## 6. Sampling
@@ -305,7 +358,7 @@ real I/O sit behind a `BatchingSink`:
 
 The default runtime sink is the console (stdout JSON on a server, an expandable object in browser
 devtools / `chrome://inspect` for the Android WebView). The server keeps to stdout because Docker now
-rotates it; a phone file sink is **[planned 4]** and a server file/remote sink **[planned 5]**;
+rotates it; the phone's file sink (2d) and the server's rotated file and HTTP collector (2e) sit beside it, not in place of it;
 the provider-independent `LogSink` interface is what Loki, Elasticsearch or an OpenTelemetry exporter
 would implement.
 
@@ -316,7 +369,10 @@ cardinality) with a JSON snapshot and Prometheus text. The logger already counts
 and fails on (`logs_emitted_total`, `logs_sampled_out_total`, `log_sink_errors_total`,
 `log_internal_errors_total`), and phase 1 added `http_requests_total{method,route,status}`,
 `http_request_duration_ms{method,route}`, `db_queries_total{outcome}`, `db_query_duration_ms{operation}`
-and `db_slow_queries_total`. The admin endpoint that exposes them is **[planned 5]**.
+and `db_slow_queries_total`. Phase 5 added the counters behind the dashboards (sync, authentication, jobs, reports, slow requests, every WARN-or-worse event) and the endpoints that expose them (2e). The registry is one per process, kept on `globalThis` like the root logger: a Next.js
+server build holds `core/metrics.ts` more than once (the instrumentation hook is bundled apart from the routes), and a counter
+incremented in one copy — the logger's own, the jobs' — has to be seen by the health view and the metrics endpoint in another
+(found by running the real server; `core/metrics.test.ts` loads the module twice to keep it so).
 
 ## 9. Configuration
 
@@ -327,8 +383,13 @@ and `db_slow_queries_total`. The admin endpoint that exposes them is **[planned 
 | `LOG_FORMAT` | `json` (server default), `object` (browser default), `pretty` (dev) |
 | `LOG_STACK_TRACES` | keep stack traces on ERROR+ (default true; never shown to a person) |
 | `LOG_SAMPLE_DEBUG` | fraction (0–1) of DEBUG/TRACE kept |
-| `LOG_SLOW_REQUEST_MS` | a request at least this slow also writes `API_SLOW_REQUEST` (default 1000) |
-| `LOG_SLOW_QUERY_MS` | a database operation at least this slow writes `DB_SLOW_QUERY` (default 300) |
+| `SLOW_API_THRESHOLD_MS` (older: `LOG_SLOW_REQUEST_MS`) | a request at least this slow also writes `API_SLOW_REQUEST` (default 1000) |
+| `SLOW_DB_THRESHOLD_MS` (older: `LOG_SLOW_QUERY_MS`) | a database operation at least this slow writes `DB_SLOW_QUERY` (default 300) |
+| `SLOW_SYNC_THRESHOLD_MS` | a sync request at least this slow writes `SYNC_SLOW` (default 3000) |
+| `SLOW_REPORT_THRESHOLD_MS` | a report at least this slow also writes `REPORT_SLOW` (default 2000) |
+| `LOG_FILE_DIR`, `LOG_RETENTION_DAYS`, `LOG_FILE_MAX_MB` | the server's rotated log file, how long it is kept (default 14 days) and its size ceiling (300 MB) — see [operations.md](operations.md) |
+| `LOG_REMOTE_URL`, `LOG_REMOTE_TOKEN`, `LOG_REMOTE_MIN_LEVEL`, `LOG_REMOTE_TIMEOUT_MS` | a central collector (newline-delimited JSON over HTTP), and what it receives |
+| `METRICS_TOKEN` | switches on `GET /api/metrics` (Prometheus text); 16 characters or more |
 | `LOG_HASH_SECRET` | key for the e-mail pseudonyms in auth events (falls back to `JWT_SECRET`) |
 | `APP_ENV` / `NEXT_PUBLIC_APP_ENV` | `development` / `staging` / `production` |
 | `GIT_COMMIT`, `BUILD_NUMBER` (`NEXT_PUBLIC_*` on the client) | build identity on every record |
@@ -344,7 +405,7 @@ Client bundles only see `NEXT_PUBLIC_*` variables (inlined at build time).
 | 2 | audit evolution: additive columns, field-level diffs, the `audit.log()` facade beside `writeAuditLog`, closing the unaudited routes, backups, retention (see [audit.md](audit.md)) | **done** in the code; the server part takes effect after a deploy, the phone part with the next APK |
 | 3 | atomic money paths: real database transactions on the server and the phone; history and success logged only after commit; installment payment exactly once | **done** in the code (section 2c); the server part takes effect after a deploy, the phone part with the next APK |
 | 4 | Android client: device file sink, sync correlation headers and `sync_id`, local event ids and `sync_status`, widget/notification events, global error capture, diagnostic report | **done** in the code (section 2d); ships with the next APK — deploy the server first |
-| 5 | retention jobs, admin log-level/metrics endpoints, dashboards, benchmarks | planned |
+| 5 | the server's rotated file and central collector, log retention, spec-named slow thresholds and report events, the counters behind the dashboards, admin log-level / health / timeline / metrics endpoints and their admin panels, benchmarks | **done** in the code (section 2e, [operations.md](operations.md)); takes effect after a server deploy — the phone part (`SYNC_SLOW`, report events, backup durations) with the next APK |
 
 ## 11. Decisions taken by default in phase 0
 

@@ -94,6 +94,7 @@ export class LoggerCore {
   private readonly clock: () => number;
   private readonly reportInternalFn: (message: string, error?: unknown) => void;
   private readonly emittedByLevel: Record<Level, { inc(by?: number): void }>;
+  private readonly notable: Counter;
   private readonly sampledOut: Counter;
   private readonly sinkErrors: Counter;
   private readonly internalErrors: Counter;
@@ -118,6 +119,9 @@ export class LoggerCore {
     const registry = options.metrics ?? defaultMetrics;
     const emitted = registry.counter("logs_emitted_total", "Log records handed to the sinks, by level.");
     this.emittedByLevel = Object.fromEntries(LEVEL_ORDER.map((level) => [level, emitted.bind({ level })])) as LoggerCore["emittedByLevel"];
+    // What the failure panels of a dashboard are built from (sync failures, authentication failures, backup and notification
+    // failures, slow requests…): every WARN-or-worse record, counted by its event. Bounded by the event catalogue.
+    this.notable = registry.counter("log_events_total", "Records at WARN or above, by event and level.");
     this.sampledOut = registry.counter("logs_sampled_out_total", "Log records dropped by sampling.");
     this.sinkErrors = registry.counter("log_sink_errors_total", "Failed writes to a log sink, by sink.");
     this.internalErrors = registry.counter("log_internal_errors_total", "Log records that could not be built.");
@@ -208,6 +212,7 @@ export class LoggerCore {
 
       const record = this.buildRecord(level, event, meta?.description, fields, bound, context, moduleName, component);
       this.emittedByLevel[level].inc();
+      if (value >= LEVEL_VALUE.WARN) this.notable.inc({ event, level });
       this.dispatch(record);
     } catch (err) {
       this.internalError(err, level, event);

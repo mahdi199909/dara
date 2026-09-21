@@ -11,6 +11,9 @@ const SECRET = new TextEncoder().encode(
 
 const PUBLIC_PATHS = ["/login", "/register"];
 const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/quotes", "/api/app/version"];
+// /api/metrics has no session (a Prometheus scraper has none): the route guards itself with its own bearer token. Exactly
+// that path, not a prefix — nothing else may become public by starting with the same letters.
+const PUBLIC_API_PATHS = ["/api/metrics"];
 
 const log = getLogger("auth", "middleware");
 
@@ -72,7 +75,7 @@ export async function middleware(req: NextRequest) {
   const authed = session === "valid";
 
   if (pathname.startsWith("/api")) {
-    const isPublicApi = PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
+    const isPublicApi = PUBLIC_API_PATHS.includes(pathname) || PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
     if (isPublicApi || authed) return NextResponse.next();
     return unauthenticatedApiResponse(req, session === "missing" ? "missing" : "invalid");
   }

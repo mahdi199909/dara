@@ -41,7 +41,7 @@
 | `BACKUP-001` | EXPORT_FAILED | — | yes | yes | A backup file could not be produced. |
 | `BACKUP-002` | IMPORT_FAILED | — | no | yes | A backup file could not be restored. |
 | `BACKUP-003` | IMPORT_PARTIAL | — | no | reserved | A backup was restored, but some rows were refused. |
-| `REPORT-001` | GENERATION_FAILED | — | yes | reserved | A report could not be generated. |
+| `REPORT-001` | GENERATION_FAILED | — | yes | yes | A report could not be generated. |
 | `REPORT-002` | RANGE_INVALID | 400 | no | reserved | The requested report range is invalid. |
 | `RELEASE-001` | UPDATE_CHECK_FAILED | — | yes | yes | The app could not ask the server whether a newer version exists. |
 | `AUDIT-001` | WRITE_FAILED | — | no | yes | An audit entry could not be written (the operation itself is not affected). |

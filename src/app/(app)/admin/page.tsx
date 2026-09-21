@@ -7,6 +7,9 @@ import { useState } from "react";
 import { apiPatch, ApiClientError } from "@/lib/apiClient";
 import { APK_STATIC_URL } from "@/lib/appVersion";
 import { Card } from "@/components/ui/Card";
+import HealthSection from "@/components/admin/HealthSection";
+import LoggingSection from "@/components/admin/LoggingSection";
+import TimelineSection from "@/components/admin/TimelineSection";
 
 const STATUS_LABELS: Record<string, string> = {
   FREE: "رایگان",
@@ -260,10 +263,13 @@ function ReleaseSection() {
 
 export default function AdminPage() {
   return (
-    <div className="max-w-lg mx-auto p-4 space-y-4">
+    <div className="max-w-2xl mx-auto p-4 space-y-4">
       <h1 className="text-lg font-bold text-ink">پنل مدیریت</h1>
       <LicenseSection />
       <ReleaseSection />
+      <HealthSection />
+      <TimelineSection />
+      <LoggingSection />
     </div>
   );
 }

@@ -19,6 +19,16 @@ import { getLogger, syncErrorCode } from "../lib/observability";
 
 const log = getLogger("sync", "runner");
 
+/**
+ * A whole cycle (pull, then push, over a mobile network) slower than this also writes SYNC_SLOW. A build-time setting on
+ * a phone, which has no environment to read at run time: NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS (the server's own is SLOW_SYNC_THRESHOLD_MS).
+ */
+const DEFAULT_SLOW_SYNC_MS = 8000;
+function slowSyncMs(): number {
+  const configured = Number(process.env.NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS);
+  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SLOW_SYNC_MS;
+}
+
 export type SyncErrorKind = "network" | "auth" | "too-large" | "server" | "unknown";
 
 export interface SyncFailure {
@@ -216,5 +226,9 @@ export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyn
     pullFailures: outcome.pullFailures,
     durationMs: outcome.durationMs,
   });
+  const thresholdMs = slowSyncMs();
+  if (outcome.durationMs >= thresholdMs) {
+    log.warn("SYNC_SLOW", { ...ids, ok: outcome.ok, trigger: trace.trigger, pushed: outcome.pushedCount, pulled: outcome.pulledCount, durationMs: outcome.durationMs, thresholdMs });
+  }
   return outcome;
 }

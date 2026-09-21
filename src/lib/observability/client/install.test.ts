@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MemorySink } from "../core/sink";
 import { createTestLogger } from "../testing";
 import { getClientDeviceId, setClientDeviceId, setClientUser } from "./clientContext";
-import { ACTIVE_LOG_FILE } from "./fileSink";
+import { ACTIVE_LOG_FILE } from "../core/rotatingFileSink";
 import { getClientLogging, installClientLogging, type ClientLogging } from "./install";
-import { MemoryLogFileStore } from "./logFileStore";
+import { MemoryLogFileStore } from "../core/logFileStore";
 
 const WEBVIEW = "Mozilla/5.0 (Linux; Android 14; SM-S918B; wv) AppleWebKit/537.36 Chrome/126 Mobile Safari/537.36";
 

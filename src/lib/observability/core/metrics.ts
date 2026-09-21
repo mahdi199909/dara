@@ -85,9 +85,36 @@ export class Histogram {
     return Array.from(this.series, ([labels, s]) => ({ labels, count: s.count, sum: s.sum, buckets: [...s.buckets] }));
   }
 
+  /**
+   * An estimate of the q-th quantile (0.5 = median, 0.95) of one series, from its buckets, the way Prometheus's
+   * histogram_quantile does it: the bucket the rank falls in, placed proportionally inside it. Accurate to a bucket's
+   * width, which is what a dashboard needs. Returns null for a series with no observations; a rank beyond the last
+   * bucket (slower than the largest bound) is reported as that bound.
+   */
+  quantile(q: number, labels?: Labels): number | null {
+    const series = this.series.get(labelKey(labels));
+    return series ? quantileOf(series.buckets, series.count, q, this.buckets) : null;
+  }
+
   reset(): void {
     this.series.clear();
   }
+}
+
+/** The bucket-interpolated quantile, shared by Histogram.quantile and anything that already holds an entry (a snapshot). */
+export function quantileOf(buckets: readonly number[], count: number, q: number, bounds: readonly number[] = DURATION_BUCKETS_MS): number | null {
+  if (count <= 0) return null;
+  const rank = Math.min(Math.max(q, 0), 1) * count;
+  let cumulative = 0;
+  for (let i = 0; i < bounds.length; i++) {
+    const inBucket = buckets[i] ?? 0;
+    if (cumulative + inBucket >= rank && inBucket > 0) {
+      const lower = i === 0 ? 0 : bounds[i - 1];
+      return Math.round((lower + ((rank - cumulative) / inBucket) * (bounds[i] - lower)) * 100) / 100;
+    }
+    cumulative += inBucket;
+  }
+  return bounds[bounds.length - 1]; // beyond the last bound
 }
 
 export interface MetricsSnapshot {
@@ -163,5 +190,19 @@ export class MetricsRegistry {
   }
 }
 
-/** The process-wide registry. Tests that need isolation create their own MetricsRegistry. */
-export const metrics = new MetricsRegistry();
+/**
+ * The process-wide registry. Tests that need isolation create their own MetricsRegistry.
+ *
+ * It lives on globalThis under a registered symbol, not in a module variable, for the reason root.ts keeps the root logger
+ * there: a Next.js server build holds this module more than once (the instrumentation hook is bundled apart from the
+ * routes), and a counter incremented in one copy must be seen by the health view and the metrics endpoint in another.
+ * (Found by running the real server: the logger's own counters were counted in the hook's copy and read from the routes'.)
+ */
+const REGISTRY_KEY = Symbol.for("parva.observability.metrics.v1");
+
+function sharedRegistry(): MetricsRegistry {
+  const holder = globalThis as unknown as Record<symbol, MetricsRegistry | undefined>;
+  return (holder[REGISTRY_KEY] ??= new MetricsRegistry());
+}
+
+export const metrics = sharedRegistry();

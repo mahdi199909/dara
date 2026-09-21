@@ -37,8 +37,9 @@ every debounced save, so log lines there would rewrite the person's data on ever
 | File | Role |
 | --- | --- |
 | `install.ts` | `installClientLogging()`, called first thing at native launch (FirstRunGate), before the database opens: identity, the file sink, flush on background, global error capture |
-| `fileSink.ts` | `DeviceLogFileSink`: append batches, rotate, compress, prune |
-| `logFileStore.ts` | the storage behind it (Capacitor Filesystem; an in-memory twin for tests) |
+| `capacitorLogFileStore.ts` | the storage behind the file sink: Capacitor Filesystem, in the app's private folder |
+| `../core/rotatingFileSink.ts`, `../core/logFileStore.ts` | `RotatingFileSink` (append batches, rotate, compress, prune, search) and the storage interface with its in-memory twin for tests. **Shared with the server**, which keeps its own log with the same code (phase 5) |
+| `../core/bytes.ts` | base64 / UTF-8 / gzip helpers both stores use |
 | `identity.ts`, `clientContext.ts` | the device id, the Android version, the time zone; the account the records belong to |
 | `globalErrors.ts` | `window.onerror`, unhandled rejections, render errors |
 | `diagnostics.ts`, `shareReport.ts` | the diagnostic report |
@@ -115,6 +116,15 @@ day for the whole retention period); the queue holds at most about 1.4 MB.
 
 **Not measured:** battery, CPU and flash wear on a real phone. The design keeps them small — a few batched appends a
 minute, no network — but that has to be checked on a device before a release.
+
+### Performance events on the phone **[done, phase 5]**
+
+- **Reports** (`GET /api/reports`, `/api/reports/category-calendar` in the on-device dispatcher) write
+  `REPORT_GENERATION_STARTED` / `_COMPLETED` / `_FAILED` with the period, the number of rows and the duration — never a figure or a
+  name — and `REPORT_SLOW` past `NEXT_PUBLIC_SLOW_REPORT_THRESHOLD_MS` (a build-time setting, default 1500 ms).
+- **A slow sync cycle** writes `SYNC_SLOW` after its own closing `SYNC_COMPLETED`, past `NEXT_PUBLIC_SLOW_SYNC_THRESHOLD_MS`
+  (default 8000 ms, pull and push together).
+- **Backups and restores** carry their `duration_ms` (making the file; the share sheet that follows is the person's time).
 
 ### Rolling it out
 

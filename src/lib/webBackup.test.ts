@@ -198,6 +198,12 @@ describe("reportBackupToServer", () => {
     const file = buildBackupFile({ Task: [{ id: "t1", title: "کار خیلی خصوصی" }, { id: "t2", title: "x" }], Habit: [{ id: "h1" }], Reminder: [] });
     await reportBackupToServer(api, { kind: "export", tables: file.tables });
     expect(posts).toEqual([{ url: "/api/backup/record", body: { kind: "export", rows: 3, tables: { Task: 2, Habit: 1 } } }]);
+    posts.length = 0;
+    await reportBackupToServer(api, { kind: "export", tables: { Task: [{ id: "a" }, { id: "b" }] }, durationMs: 431.7 });
+    expect(posts[0].body).toMatchObject({ kind: "export", rows: 2, durationMs: 432 });
+    posts.length = 0;
+    await reportBackupToServer(api, { kind: "export", tables: {}, durationMs: Number.NaN });
+    expect(posts[0].body).not.toHaveProperty("durationMs");
     expect(JSON.stringify(posts)).not.toContain("خصوصی");
   });
 

@@ -1,7 +1,7 @@
-// Where the device's log files live. An interface, so the sink's rotation, retention and compression are
-// testable with no phone around; the real store is a thin layer over @capacitor/filesystem (already a
-// dependency — no new native plugin) and is only ever imported dynamically, so it never enters the web bundle.
-import { base64ToBytes, bytesToBase64, utf8Bytes } from "./bytes";
+// Where log files live: an interface, so the rotating sink's rotation, retention and compression are testable with no
+// disk (or phone) around, and the real stores are thin layers — @capacitor/filesystem on the phone
+// (client/capacitorLogFileStore.ts), node:fs on the server (server/nodeLogFileStore.ts).
+import { utf8Bytes } from "./bytes";
 
 export interface LogFileInfo {
   name: string;
@@ -17,6 +17,11 @@ export interface LogFileStore {
   list(): Promise<LogFileInfo[]>;
   /** Appends text to a file, creating it when missing. */
   append(name: string, text: string): Promise<void>;
+  /**
+   * The same, synchronously — for the last moments of a process that is exiting, when nothing asynchronous can finish.
+   * Optional: only the server's store has it (a phone's filesystem plugin is asynchronous by nature).
+   */
+  appendSync?(name: string, text: string): void;
   read(name: string): Promise<Uint8Array>;
   write(name: string, data: Uint8Array): Promise<void>;
   rename(from: string, to: string): Promise<void>;
@@ -27,11 +32,13 @@ export interface LogFileStore {
 // In memory: for tests, and as a stand-in anywhere a real folder is unavailable
 // ---------------------------------------------------------------------------------------------
 
+type Operation = "ensure" | "list" | "append" | "appendSync" | "read" | "write" | "rename" | "remove";
+
 export interface MemoryStoreFaults {
   /** Thrown by the next call to that operation (once), e.g. a full disk on append. */
-  once?: Partial<Record<"ensure" | "list" | "append" | "read" | "write" | "rename" | "remove", Error>>;
+  once?: Partial<Record<Operation, Error>>;
   /** Thrown by every call to that operation until cleared. */
-  always?: Partial<Record<"ensure" | "list" | "append" | "read" | "write" | "rename" | "remove", Error>>;
+  always?: Partial<Record<Operation, Error>>;
 }
 
 export class MemoryLogFileStore implements LogFileStore {
@@ -42,7 +49,7 @@ export class MemoryLogFileStore implements LogFileStore {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  private check(operation: keyof NonNullable<MemoryStoreFaults["once"]>): void {
+  private check(operation: Operation): void {
     this.calls.push(operation);
     const once = this.faults.once?.[operation];
     if (once) {
@@ -64,6 +71,15 @@ export class MemoryLogFileStore implements LogFileStore {
 
   async append(name: string, text: string): Promise<void> {
     this.check("append");
+    this.appendNow(name, text);
+  }
+
+  appendSync(name: string, text: string): void {
+    this.check("appendSync");
+    this.appendNow(name, text);
+  }
+
+  private appendNow(name: string, text: string): void {
     const added = utf8Bytes(text);
     const existing = this.files.get(name)?.data ?? new Uint8Array(0);
     const data = new Uint8Array(existing.length + added.length);
@@ -103,57 +119,4 @@ export class MemoryLogFileStore implements LogFileStore {
     for (const file of this.files.values()) total += file.data.length;
     return total;
   }
-}
-
-// ---------------------------------------------------------------------------------------------
-// The phone: the app's private storage through Capacitor
-// ---------------------------------------------------------------------------------------------
-
-/**
- * Files under `<app data>/<folder>/`. Private to the app, not visible to other apps or the file manager,
- * and removed with the app. Capacitor reads binary files as base64 and appends text with an encoding.
- */
-export function createCapacitorLogFileStore(folder = "logs"): LogFileStore {
-  const load = () => import("@capacitor/filesystem");
-  const pathOf = (name: string) => `${folder}/${name}`;
-
-  return {
-    async ensure() {
-      const { Filesystem, Directory } = await load();
-      try {
-        await Filesystem.mkdir({ path: folder, directory: Directory.Data, recursive: true });
-      } catch (error) {
-        // "Directory exists" comes back as an error on some platform versions; it is what we wanted.
-        if (!/exist/i.test(error instanceof Error ? error.message : String(error))) throw error;
-      }
-    },
-    async list() {
-      const { Filesystem, Directory } = await load();
-      const { files } = await Filesystem.readdir({ path: folder, directory: Directory.Data });
-      return files
-        .filter((file) => file.type === "file")
-        .map((file) => ({ name: file.name, size: file.size ?? 0, modifiedAt: typeof file.mtime === "number" ? file.mtime : 0 }));
-    },
-    async append(name, text) {
-      const { Filesystem, Directory, Encoding } = await load();
-      await Filesystem.appendFile({ path: pathOf(name), data: text, directory: Directory.Data, encoding: Encoding.UTF8 });
-    },
-    async read(name) {
-      const { Filesystem, Directory } = await load();
-      const { data } = await Filesystem.readFile({ path: pathOf(name), directory: Directory.Data });
-      return base64ToBytes(data as string);
-    },
-    async write(name, data) {
-      const { Filesystem, Directory } = await load();
-      await Filesystem.writeFile({ path: pathOf(name), data: bytesToBase64(data), directory: Directory.Data });
-    },
-    async rename(from, to) {
-      const { Filesystem, Directory } = await load();
-      await Filesystem.rename({ from: pathOf(from), to: pathOf(to), directory: Directory.Data, toDirectory: Directory.Data });
-    },
-    async remove(name) {
-      const { Filesystem, Directory } = await load();
-      await Filesystem.deleteFile({ path: pathOf(name), directory: Directory.Data });
-    },
-  };
 }

@@ -45,11 +45,27 @@ services:
       LOG_LEVEL_OVERRIDES: ${LOG_LEVEL_OVERRIDES:-}
       LOG_SLOW_REQUEST_MS: ${LOG_SLOW_REQUEST_MS:-1000}
       LOG_SLOW_QUERY_MS: ${LOG_SLOW_QUERY_MS:-300}
+      # The names the logging specification gives; when set they win over the two above. Empty = use the above / the default.
+      SLOW_API_THRESHOLD_MS: ${SLOW_API_THRESHOLD_MS:-}
+      SLOW_DB_THRESHOLD_MS: ${SLOW_DB_THRESHOLD_MS:-}
+      SLOW_SYNC_THRESHOLD_MS: ${SLOW_SYNC_THRESHOLD_MS:-3000}
+      SLOW_REPORT_THRESHOLD_MS: ${SLOW_REPORT_THRESHOLD_MS:-2000}
+      # Records are also kept in rotated, compressed files on the hesabkon_logs volume (the owner's timeline reads them).
+      LOG_FILE_DIR: /app/logs
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-14}
+      LOG_FILE_MAX_MB: ${LOG_FILE_MAX_MB:-300}
+      # Optional: a central collector, and the Prometheus endpoint (both off when empty). See doc/logging/operations.md.
+      LOG_REMOTE_URL: ${LOG_REMOTE_URL:-}
+      LOG_REMOTE_TOKEN: ${LOG_REMOTE_TOKEN:-}
+      LOG_REMOTE_MIN_LEVEL: ${LOG_REMOTE_MIN_LEVEL:-warn}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       # The audit trail (see doc/logging/audit.md).
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-730}
       AUDIT_MONEY_MODE: ${AUDIT_MONEY_MODE:-values}
     ports:
       - "3000:3000"
+    volumes:
+      - hesabkon_logs:/app/logs
     # Docker keeps container stdout in one ever-growing file unless told otherwise. Five files of
     # 20 MB per container is a hard ceiling on what the logs may occupy (~100 MB), oldest dropped first.
     logging:
@@ -60,3 +76,4 @@ services:
 
 volumes:
   hesabkon_pgdata:
+  hesabkon_logs:

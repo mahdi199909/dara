@@ -5,7 +5,7 @@
 // registered here should return the exact same JSON shape its web counterpart does.
 import { ZodError } from "zod";
 import { ApiError } from "@/lib/apiErrorBase";
-import { classifyError, getLogger, isErrorReported, type OperationBase } from "@/lib/observability";
+import { classifyError, getLogger, isErrorReported, startReport, type OperationBase } from "@/lib/observability";
 import { openLocalDb, type LocalDb } from "@/local/db";
 import { getLocalUserId } from "@/local/localUser";
 import { withLocalTransaction } from "@/local/transaction";
@@ -350,24 +350,45 @@ register("GET", "/api/dashboard", ({ db, userId }) => dashboardRepo.getDashboard
 // category-calendar" to them, so the Reports page's useSWR calls 404'd forever on-device and
 // the page never got past "در حال بارگذاری..." — see src/app/api/reports/route.ts and
 // src/app/api/reports/category-calendar/route.ts for the web shape this mirrors.
+//
+// Each report tells the log how long it took, over which period and how many rows it held (never a figure) —
+// REPORT_GENERATION_STARTED / _COMPLETED / _FAILED, and REPORT_SLOW past the threshold (see observability/core/reportRun.ts).
+// On a phone the threshold is a build-time setting: NEXT_PUBLIC_SLOW_REPORT_THRESHOLD_MS.
+const SLOW_REPORT_MS = Number(process.env.NEXT_PUBLIC_SLOW_REPORT_THRESHOLD_MS) || 1500;
+const reportLog = getLogger(null, "reports");
+
+function trackedReport<T>(name: string, range: { from: Date; to: Date }, compute: () => T): T {
+  const run = startReport(reportLog, name, range, { slowMs: SLOW_REPORT_MS, layer: "local" });
+  try {
+    const result = compute();
+    run.completed(result);
+    return result;
+  } catch (error) {
+    run.failed(error);
+    throw error;
+  }
+}
+
 register("GET", "/api/reports", ({ db, userId, query }) => {
   const { from, to, label } = resolveRange(query.get("preset"), query.get("from"), query.get("to"));
-  const report = computeTimeAndMoneyReport(db, userId, from, to);
-  const netWorth = computeNetWorth(db, userId);
-  const hiddenCost = computeHiddenCostReport(db, userId, from, to);
-  const habitsReport = computeHabitsReport(db, userId, from, to);
-  const topProductive = [...report.timeByCategory].filter((c) => c.kind === "PRODUCTIVE").sort((a, b) => b.minutes - a.minutes)[0];
-  const topCategoryLifetimeMinutes = topProductive ? sumCategoryLifetimeMinutes(db, userId, topProductive.categoryId) : 0;
-  const narrative = generateNarrative(report, hiddenCost, topCategoryLifetimeMinutes);
-  const comparison = comparePeriods(db, userId, from, to);
-  return { report, netWorth, hiddenCost, habitsReport, comparison, narrative, label, from, to };
+  return trackedReport("time_and_money", { from, to }, () => {
+    const report = computeTimeAndMoneyReport(db, userId, from, to);
+    const netWorth = computeNetWorth(db, userId);
+    const hiddenCost = computeHiddenCostReport(db, userId, from, to);
+    const habitsReport = computeHabitsReport(db, userId, from, to);
+    const topProductive = [...report.timeByCategory].filter((c) => c.kind === "PRODUCTIVE").sort((a, b) => b.minutes - a.minutes)[0];
+    const topCategoryLifetimeMinutes = topProductive ? sumCategoryLifetimeMinutes(db, userId, topProductive.categoryId) : 0;
+    const narrative = generateNarrative(report, hiddenCost, topCategoryLifetimeMinutes);
+    const comparison = comparePeriods(db, userId, from, to);
+    return { report, netWorth, hiddenCost, habitsReport, comparison, narrative, label, from, to };
+  });
 });
 register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
   const { jy: curJy, jm: curJm } = toJalali(new Date());
   const jy = Number(query.get("jy") ?? curJy);
   const jm = Number(query.get("jm") ?? curJm);
   const { start, end } = jalaliMonthRange(jy, jm);
-  const categories = computeCategoryCalendar(db, userId, start, end);
+  const categories = trackedReport("category_calendar", { from: start, to: end }, () => computeCategoryCalendar(db, userId, start, end));
   return { categories, jy, jm };
 });
 

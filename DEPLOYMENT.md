@@ -15,7 +15,10 @@ Copy `.env.example` to `.env` and fill in real values:
 | `APP_URL` | no | Used for cookie/redirect defaults; set to your real domain |
 | `TZ` | no | Timezone the server treats as "local" — day boundaries for habit check-ins, reports and the calendar follow it. Defaults to `Asia/Tehran` in the Dockerfile/compose file; if you run without Docker, set it yourself, otherwise days roll over at UTC midnight (03:30 Tehran) and a habit checked in on the web is stored under a different instant than the same day on the phone. |
 | `LOG_LEVEL` | no | Logging threshold, default `info` in production. Accepts overrides: `info,SYNC=debug`. See section 5d. |
-| `LOG_SLOW_REQUEST_MS`, `LOG_SLOW_QUERY_MS` | no | A request / a database call at least this slow is logged as a warning (defaults 1000 / 300 ms) |
+| `SLOW_API_THRESHOLD_MS`, `SLOW_DB_THRESHOLD_MS`, `SLOW_SYNC_THRESHOLD_MS`, `SLOW_REPORT_THRESHOLD_MS` | no | A request / a database call / a sync request / a report at least this slow is logged as a warning (defaults 1000 / 300 / 3000 / 2000 ms). The older `LOG_SLOW_REQUEST_MS` and `LOG_SLOW_QUERY_MS` still work. |
+| `LOG_FILE_DIR`, `LOG_RETENTION_DAYS`, `LOG_FILE_MAX_MB` | no | A rotated log file the owner's timeline reads (the compose file sets `/app/logs`, a volume), how many days it is kept (default 14; 7, 30 and 90 are common) and its size ceiling (300 MB). See section 5d. |
+| `LOG_REMOTE_URL`, `LOG_REMOTE_TOKEN`, `LOG_REMOTE_MIN_LEVEL` | no | Send records (default: warnings and above) to a central collector as newline-delimited JSON over HTTP. Unset = nothing leaves the server. |
+| `METRICS_TOKEN` | no | Switches on `GET /api/metrics` (Prometheus text, bearer token). At least 16 characters (`openssl rand -hex 32`); unset = the endpoint does not exist. |
 | `LOG_HASH_SECRET` | no | Key for the e-mail pseudonyms in login-failure log lines; defaults to `JWT_SECRET` |
 | `AUDIT_RETENTION_DAYS` | no | How long Settings → History entries are kept on the server: 730 days by default; `0`, `off` or `never` keeps everything. Old entries are pruned daily. See doc/logging/audit.md. |
 | `AUDIT_MONEY_MODE` | no | `values` (default), `redacted` or `flag`: whether audit entries keep real amounts, mask them, or only record that they changed |
@@ -172,6 +175,15 @@ afterwards (successful reads are only written at debug level).
 
 Changing the compose file's `logging:` section, like any compose change, takes effect when the containers are
 recreated (`docker compose up -d`).
+
+**A searchable history, retention and the owner's tools.** The compose file mounts a volume, `hesabkon_logs`, at `/app/logs`
+and sets `LOG_FILE_DIR` to it: the server then also keeps every record in rotated, compressed files (20 MB each, kept 14 days,
+never more than 300 MB together — `LOG_RETENTION_DAYS`, `LOG_FILE_MAX_MB`), and `/admin` gains a server-health panel, a
+per-user technical timeline that reads those files, and a panel that turns the log level of one component up for a while
+without a restart. With `METRICS_TOKEN` set, `GET /api/metrics` serves Prometheus text for Grafana. A collector
+(`LOG_REMOTE_URL`) is optional. Every setting, what happens when a disk or a collector fails, and the measured cost:
+[doc/logging/operations.md](doc/logging/operations.md). This release changes no table and no request the phone sends, so the server can be deployed on its own (the phone's part —
+`SYNC_SLOW`, report and backup durations — ships with the next APK); back up as always before deploying (5b).
 
 **Server first, then the APK.** From the logging work on, the Android app sends `traceparent`, `X-Parva-Device-Id` and
 `X-Parva-Sync-Id` with its sync and sign-in requests, so that the phone's log and the server's can be joined. The

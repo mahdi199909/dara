@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { LogRecord } from "../core/schema";
-import { BatchingSink } from "../core/sink";
 import { canGzip, gunzip, utf8Text } from "./bytes";
-import { ACTIVE_LOG_FILE, DeviceLogFileSink, type DeviceLogFileSinkOptions } from "./fileSink";
 import { MemoryLogFileStore } from "./logFileStore";
+import { ACTIVE_LOG_FILE, RotatingFileSink, type RotatingFileSinkOptions } from "./rotatingFileSink";
+import type { LogRecord } from "./schema";
+import { BatchingSink } from "./sink";
 
 const DAY = 24 * 60 * 60 * 1000;
 const START = Date.UTC(2026, 8, 21, 4, 0, 0);
@@ -22,11 +22,11 @@ function record(n: number, extra: Partial<LogRecord> = {}): LogRecord {
   };
 }
 
-function setup(options: Partial<DeviceLogFileSinkOptions> = {}) {
+function setup(options: Partial<RotatingFileSinkOptions> = {}) {
   const clock = { now: START };
   const store = new MemoryLogFileStore(() => clock.now);
   const problems: Array<{ kind: string; file?: string }> = [];
-  const sink = new DeviceLogFileSink({
+  const sink = new RotatingFileSink({
     store,
     now: () => clock.now,
     onProblem: (problem) => problems.push({ kind: problem.kind, file: problem.file }),
@@ -36,9 +36,9 @@ function setup(options: Partial<DeviceLogFileSinkOptions> = {}) {
 }
 
 const names = (store: MemoryLogFileStore) => [...store.files.keys()].sort();
-const eventsOf = async (sink: DeviceLogFileSink, max = 10_000) => (await sink.readRecent(max)).map((r) => (r.metadata as { n: number }).n);
+const eventsOf = async (sink: RotatingFileSink, max = 10_000) => (await sink.readRecent(max)).map((r) => (r.metadata as { n: number }).n);
 
-describe("DeviceLogFileSink: writing", () => {
+describe("RotatingFileSink: writing", () => {
   it("appends a batch as JSON lines with one write, and reads them back in order", async () => {
     const { sink, store } = setup();
     await sink.writeBatch([record(1), record(2), record(3)]);
@@ -156,7 +156,7 @@ describe("retention and the size ceiling", () => {
     const { store, clock } = setup();
     await store.append(ACTIVE_LOG_FILE, `${JSON.stringify(record(0))}\n`);
     clock.now += 9 * DAY;
-    const fresh = new DeviceLogFileSink({ store, now: () => clock.now, retentionMs: 7 * DAY });
+    const fresh = new RotatingFileSink({ store, now: () => clock.now, retentionMs: 7 * DAY });
     await fresh.writeBatch([record(1)]);
     expect(await eventsOf(fresh)).toEqual([1]);
   });
@@ -328,6 +328,130 @@ describe("cost", () => {
     const { sink, store } = setup();
     await sink.writeBatch([]);
     expect(store.calls).toEqual([]);
+  });
+});
+
+describe("searching the files (the support timeline)", () => {
+  const withUser = (n: number, userId: string) => record(n, { user_id: userId, event: n % 2 === 0 ? "HTTP_REQUEST_COMPLETED" : "SYNC_PUSH_SUCCESS" });
+
+  it("returns the records that match, oldest first, and reports how much it read", async () => {
+    const { sink } = setup({ compress: false });
+    for (let i = 0; i < 30; i++) await sink.writeBatch([withUser(i, i % 3 === 0 ? "user-a" : "user-b")]);
+    const found = await sink.search({ match: (r) => r.user_id === "user-a" });
+    expect(found.records.map((r) => (r.metadata as { n: number }).n)).toEqual([0, 3, 6, 9, 12, 15, 18, 21, 24, 27]);
+    expect(found.recordsScanned).toBe(30);
+    expect(found.truncated).toBe(false);
+  });
+
+  it("keeps the newest matches when there are more than the limit, and says it stopped", async () => {
+    const { sink } = setup({ maxFileBytes: 2048, compress: false });
+    for (let i = 0; i < 60; i++) await sink.writeBatch([withUser(i, "user-a")]);
+    const found = await sink.search({ limit: 5 });
+    expect(found.records.map((r) => (r.metadata as { n: number }).n)).toEqual([55, 56, 57, 58, 59]);
+    expect(found.truncated).toBe(true);
+  });
+
+  it("does not even open an archive that ends before the time asked for", async () => {
+    const { sink, store, clock } = setup({ maxFileBytes: 1024, compress: false });
+    for (let i = 0; i < 24; i++) await sink.writeBatch([withUser(i, "old")]);
+    clock.now += 2 * DAY;
+    for (let i = 100; i < 104; i++) await sink.writeBatch([{ ...withUser(i, "new"), timestamp: new Date(clock.now).toISOString() }]);
+    const before = store.calls.filter((call) => call === "read").length;
+    const found = await sink.search({ sinceMs: clock.now - DAY });
+    expect(found.records.every((r) => r.user_id === "new")).toBe(true);
+    expect(found.records).toHaveLength(4);
+    expect(store.calls.filter((call) => call === "read").length - before).toBeLessThan(names(store).length); // the old archives stayed closed
+  });
+
+  it("stops after the number of files it was allowed to read", async () => {
+    const { sink } = setup({ maxFileBytes: 1024, compress: false });
+    for (let i = 0; i < 40; i++) await sink.writeBatch([withUser(i, "user-a")]);
+    const found = await sink.search({ maxFiles: 2 });
+    expect(found.filesRead).toBe(2);
+    expect(found.truncated).toBe(true);
+    expect(found.records.length).toBeLessThan(40);
+  });
+
+  it("finds nothing, without error, in a folder with no logs", async () => {
+    const { sink } = setup();
+    expect(await sink.search({ match: () => true })).toMatchObject({ records: [], filesRead: 0, truncated: false });
+  });
+});
+
+describe("applying retention without writing (the daily job)", () => {
+  it("removes archives past the retention period even though nothing has been logged, and says how many", async () => {
+    const { sink, store, clock } = setup({ maxFileBytes: 1024, retentionMs: 7 * DAY, compress: false });
+    for (let i = 0; i < 24; i++) await sink.writeBatch([record(i)]);
+    const archives = names(store).filter((name) => name.startsWith("parva-")).length;
+    expect(archives).toBeGreaterThan(2);
+
+    clock.now += 8 * DAY; // no new records at all
+    expect(await sink.pruneNow()).toBe(archives + 1); // every archive, and the active file nobody has written to
+    expect(names(store)).toEqual([]);
+    expect(await sink.pruneNow()).toBe(0); // nothing more to do
+  });
+
+  it("counts what it removed on a first run too, when nothing has been written by this process yet", async () => {
+    const { sink, store, clock } = setup({ retentionMs: 7 * DAY });
+    store.files.set("parva-20260801T000000000Z.jsonl.gz", { data: new Uint8Array(50), modifiedAt: START - 50 * DAY });
+    store.files.set("parva-20260901T000000000Z.jsonl.gz", { data: new Uint8Array(50), modifiedAt: START - 20 * DAY });
+    store.files.set("parva-20260920T000000000Z.jsonl.gz", { data: new Uint8Array(50), modifiedAt: START - DAY });
+    clock.now = START;
+    expect(await sink.pruneNow()).toBe(2);
+    expect(names(store)).toEqual(["parva-20260920T000000000Z.jsonl.gz"]);
+  });
+
+  it("keeps what is still within the period", async () => {
+    const { sink, store, clock } = setup({ maxFileBytes: 1024, retentionMs: 7 * DAY, compress: false });
+    for (let i = 0; i < 24; i++) await sink.writeBatch([record(i)]);
+    clock.now += 3 * DAY;
+    expect(await sink.pruneNow()).toBe(0);
+    expect(names(store).length).toBeGreaterThan(2);
+  });
+});
+
+describe("appendSync (the last moments of a process that is exiting)", () => {
+  it("writes the records to the active file at once, as the same JSON lines, and they are read back with the rest", async () => {
+    const { sink, store } = setup();
+    await sink.writeBatch([record(1)]);
+    expect(sink.appendSync([record(2), record(3)])).toBe(2);
+    expect(store.calls.filter((call) => call === "appendSync")).toHaveLength(1);
+    expect(utf8Text(store.files.get(ACTIVE_LOG_FILE)!.data).trimEnd().split("\n").map((line) => JSON.parse(line).message)).toEqual(["record 1", "record 2", "record 3"]);
+    expect(await eventsOf(sink)).toEqual([1, 2, 3]);
+    expect(sink.stats().linesWritten).toBe(3);
+  });
+
+  it("does nothing for no records, and for a store that has no synchronous append", () => {
+    const { sink, store } = setup();
+    expect(sink.appendSync([])).toBe(0);
+    expect(store.calls).toEqual([]);
+    const noSync = new MemoryLogFileStore();
+    (noSync as { appendSync?: unknown }).appendSync = undefined;
+    expect(new RotatingFileSink({ store: noSync }).appendSync([record(1)])).toBe(0);
+    expect(noSync.files.size).toBe(0);
+  });
+
+  it("reports a failure and returns 0 instead of throwing on the way out", () => {
+    const { sink, store, problems } = setup();
+    store.faults.once = { appendSync: new Error("no space left on device") };
+    expect(sink.appendSync([record(1)])).toBe(0);
+    expect(problems).toEqual([{ kind: "write", file: ACTIVE_LOG_FILE }]);
+  });
+
+  it("makes the next write look at the real size of the file again, since this one did not count its bytes", async () => {
+    const { sink, store } = setup({ maxFileBytes: 1024, compress: false });
+    await sink.writeBatch([record(1)]);
+    sink.appendSync([record(2, { message: "x".repeat(600) })]);
+    await sink.writeBatch([record(3, { message: "y".repeat(600) })]); // would overflow the file: it must rotate first
+    expect(names(store).some((name) => name.startsWith("parva-"))).toBe(true);
+    expect(await eventsOf(sink)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("naming", () => {
+  it("is called what it is told to be called, and something sensible otherwise", () => {
+    expect(setup({ name: "server-file" }).sink.name).toBe("server-file");
+    expect(setup().sink.name).toBe("rotating-file");
   });
 });
 

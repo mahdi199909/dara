@@ -28,6 +28,8 @@ const recordSchema = z.object({
   /** Import only: rows the server already had, and rows it refused. */
   unchanged: z.number().int().min(0).max(10_000_000).optional(),
   rejected: z.number().int().min(0).max(10_000_000).optional(),
+  /** How long the browser took to make the file / to send it (its own measurement; up to an hour). */
+  durationMs: z.number().min(0).max(3_600_000).optional(),
 });
 
 async function POST(req: NextRequest) {
@@ -37,11 +39,11 @@ async function POST(req: NextRequest) {
 
     if (body.kind === "export") {
       await audit.log({ event: "BACKUP_EXPORTED", entityType: "Backup", metadata: { rows: body.rows, tables: body.tables, via: "web" }, req });
-      log.info("BACKUP_COMPLETED", { rows: body.rows, tables: body.tables, layer: "server" });
+      log.info("BACKUP_COMPLETED", { rows: body.rows, tables: body.tables, layer: "server", durationMs: body.durationMs });
     } else {
       const rejected = body.rejected ?? 0;
       await audit.log({ event: "BACKUP_IMPORTED", entityType: "Backup", metadata: { stored: body.rows, unchanged: body.unchanged ?? 0, rejected, tables: body.tables, via: "web" }, req });
-      log.log(rejected > 0 ? "WARN" : "INFO", rejected > 0 ? "RESTORE_PARTIAL" : "RESTORE_COMPLETED", { stored: body.rows, unchanged: body.unchanged ?? 0, rejected, tables: body.tables, layer: "server" });
+      log.log(rejected > 0 ? "WARN" : "INFO", rejected > 0 ? "RESTORE_PARTIAL" : "RESTORE_COMPLETED", { stored: body.rows, unchanged: body.unchanged ?? 0, rejected, tables: body.tables, layer: "server", durationMs: body.durationMs });
     }
     return NextResponse.json({ ok: true });
   } catch (err) {

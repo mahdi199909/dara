@@ -1,5 +1,7 @@
-// The phone's own log file: JSON lines in the app's private storage, rotated by size, kept for a week,
-// compressed once rotated, and never allowed to grow without bound.
+// A log file that looks after itself: JSON lines, rotated by size and age, compressed once rotated, kept for a set
+// number of days, and never allowed to grow without bound. It is the phone's own log (in the app's private storage,
+// see client/install.ts) and the server's (in LOG_FILE_DIR, see server/serverSinks.ts) — the same code, told
+// different limits and given a different store.
 //
 //   current.jsonl                 the file being written
 //   parva-20260921T042500123Z.jsonl.gz   a rotated one (plain .jsonl when the WebView cannot gzip); its name says when
@@ -10,10 +12,10 @@
 // application carry on — LOGGING FAILURE MUST NOT BECOME APPLICATION FAILURE. Rotation and clean-up problems
 // never stop appends; they are reported and the next opportunity tries again.
 //
-// The log is NOT kept in the SQLite database: that database is written out as one whole file on every debounced
-// save, so log lines there would rewrite the person's data on every log line and make it grow.
-import type { LogRecord } from "../core/schema";
-import type { LogSink } from "../core/sink";
+// (On the phone the log is NOT kept in the SQLite database: that database is written out as one whole file on every
+// debounced save, so log lines there would rewrite the person's data on every log line and make it grow.)
+import type { LogRecord } from "./schema";
+import type { LogSink } from "./sink";
 import { canGzip, gunzip, gzip, utf8Bytes, utf8Text } from "./bytes";
 import type { LogFileInfo, LogFileStore } from "./logFileStore";
 
@@ -22,7 +24,7 @@ const ARCHIVE_NAME = /^parva-(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export const DEVICE_LOG_DEFAULTS = {
+export const ROTATION_DEFAULTS = {
   /** A file is rotated when the next batch would take it past this. */
   maxFileBytes: 256 * 1024,
   /** Everything on disk together (the active file and every archive). Oldest archives go first. */
@@ -39,8 +41,10 @@ export const DEVICE_LOG_DEFAULTS = {
   maxLineBytes: 32 * 1024,
 } as const;
 
-export interface DeviceLogFileSinkOptions {
+export interface RotatingFileSinkOptions {
   store: LogFileStore;
+  /** What the sink is called in the logger's own bookkeeping (default "rotating-file"). */
+  name?: string;
   maxFileBytes?: number;
   maxTotalBytes?: number;
   retentionMs?: number;
@@ -51,10 +55,30 @@ export interface DeviceLogFileSinkOptions {
   compress?: boolean;
   now?: () => number;
   /** Something went wrong that the sink handled itself (a failed rotation, an unreadable archive). */
-  onProblem?: (problem: { kind: "rotate" | "compress" | "prune" | "read" | "init"; error: unknown; file?: string }) => void;
+  onProblem?: (problem: { kind: "rotate" | "compress" | "prune" | "read" | "init" | "write"; error: unknown; file?: string }) => void;
 }
 
-export interface DeviceLogStats {
+export interface LogSearch {
+  /** Which records to return (default: all). */
+  match?: (record: LogRecord) => boolean;
+  /** At most this many, the newest ones (default 500). */
+  limit?: number;
+  /** Only records at or after this time, in milliseconds since the epoch. */
+  sinceMs?: number;
+  /** Read at most this many files, newest first (default 60). */
+  maxFiles?: number;
+}
+
+export interface LogSearchResult {
+  /** Oldest first. */
+  records: LogRecord[];
+  filesRead: number;
+  recordsScanned: number;
+  /** More matches (or older files) existed than the limits allowed. */
+  truncated: boolean;
+}
+
+export interface RotatingFileStats {
   activeBytes: number;
   archives: number;
   archiveBytes: number;
@@ -128,8 +152,8 @@ function toLine(record: LogRecord, maxLineBytes: number): { line: string; trunca
   };
 }
 
-export class DeviceLogFileSink implements LogSink {
-  readonly name = "device-file";
+export class RotatingFileSink implements LogSink {
+  readonly name: string;
 
   private readonly store: LogFileStore;
   private readonly maxFileBytes: number;
@@ -140,7 +164,7 @@ export class DeviceLogFileSink implements LogSink {
   private readonly maxLineBytes: number;
   private readonly compress: boolean;
   private readonly now: () => number;
-  private readonly onProblem: NonNullable<DeviceLogFileSinkOptions["onProblem"]>;
+  private readonly onProblem: NonNullable<RotatingFileSinkOptions["onProblem"]>;
 
   /** Every operation runs after the one before it, so an append never overlaps a rotation or a read. */
   private tail: Promise<unknown> = Promise.resolve();
@@ -153,14 +177,15 @@ export class DeviceLogFileSink implements LogSink {
   private counters = { rotations: 0, compressed: 0, pruned: 0, linesWritten: 0, linesTruncated: 0 };
   private lastKnown = { archives: 0, archiveBytes: 0 };
 
-  constructor(options: DeviceLogFileSinkOptions) {
+  constructor(options: RotatingFileSinkOptions) {
+    this.name = options.name ?? "rotating-file";
     this.store = options.store;
-    this.maxFileBytes = Math.max(1024, options.maxFileBytes ?? DEVICE_LOG_DEFAULTS.maxFileBytes);
-    this.maxTotalBytes = Math.max(this.maxFileBytes * 2, options.maxTotalBytes ?? DEVICE_LOG_DEFAULTS.maxTotalBytes);
-    this.retentionMs = options.retentionMs ?? DEVICE_LOG_DEFAULTS.retentionMs;
-    this.maxActiveAgeMs = options.maxActiveAgeMs ?? DEVICE_LOG_DEFAULTS.maxActiveAgeMs;
-    this.maxArchives = options.maxArchives ?? DEVICE_LOG_DEFAULTS.maxArchives;
-    this.maxLineBytes = options.maxLineBytes ?? DEVICE_LOG_DEFAULTS.maxLineBytes;
+    this.maxFileBytes = Math.max(1024, options.maxFileBytes ?? ROTATION_DEFAULTS.maxFileBytes);
+    this.maxTotalBytes = Math.max(this.maxFileBytes * 2, options.maxTotalBytes ?? ROTATION_DEFAULTS.maxTotalBytes);
+    this.retentionMs = options.retentionMs ?? ROTATION_DEFAULTS.retentionMs;
+    this.maxActiveAgeMs = options.maxActiveAgeMs ?? ROTATION_DEFAULTS.maxActiveAgeMs;
+    this.maxArchives = options.maxArchives ?? ROTATION_DEFAULTS.maxArchives;
+    this.maxLineBytes = options.maxLineBytes ?? ROTATION_DEFAULTS.maxLineBytes;
     this.compress = options.compress ?? canGzip();
     this.now = options.now ?? Date.now;
     this.onProblem = options.onProblem ?? (() => undefined);
@@ -220,6 +245,26 @@ export class DeviceLogFileSink implements LogSink {
     });
   }
 
+  /**
+   * Writes the records to the active file right now, synchronously, and returns how many it wrote (0 when the store has
+   * no synchronous append, or the write failed — which is reported). For the last moments of a process that is exiting,
+   * when a queue that writes asynchronously can no longer be drained. It does not rotate: the file may end a little over
+   * its size limit, and the next start looks at its real size.
+   */
+  appendSync(records: LogRecord[]): number {
+    if (records.length === 0 || !this.store.appendSync) return 0;
+    try {
+      const lines = records.map((record) => toLine(record, this.maxLineBytes).line);
+      this.store.appendSync(ACTIVE_LOG_FILE, `${lines.join("\n")}\n`);
+      this.counters.linesWritten += records.length;
+      this.needsResync = true;
+      return records.length;
+    } catch (error) {
+      this.onProblem({ kind: "write", error, file: ACTIVE_LOG_FILE });
+      return 0;
+    }
+  }
+
   /** Waits for everything queued so far. */
   async flush(): Promise<void> {
     await this.enqueue(async () => undefined).catch(() => undefined);
@@ -252,7 +297,65 @@ export class DeviceLogFileSink implements LogSink {
     });
   }
 
-  stats(): DeviceLogStats {
+  /**
+   * Looks through the files for records that match, newest first, and stops at the limits. Meant for a support question
+   * ("what did this user's requests do yesterday?"), so it is bounded: an archive that ends before `sinceMs` is never
+   * opened, and at most `maxFiles` files are read. Matches come back oldest first, at most `limit` of the newest.
+   */
+  search(options: LogSearch = {}): Promise<LogSearchResult> {
+    const limit = Math.max(1, options.limit ?? 500);
+    const maxFiles = Math.max(1, options.maxFiles ?? 60);
+    const match = options.match ?? (() => true);
+    return this.enqueue(async () => {
+      await this.ensureReady();
+      const files = await this.store.list();
+      const archives = files.map(parseArchive).filter((a): a is Archive => a !== null).sort(byAge);
+      const names = archives.filter((a) => options.sinceMs === undefined || a.at >= options.sinceMs).map((a) => a.name);
+      if (files.some((f) => f.name === ACTIVE_LOG_FILE)) names.push(ACTIVE_LOG_FILE);
+
+      const newestFirst: LogRecord[] = [];
+      let filesRead = 0;
+      let scanned = 0;
+      let truncated = false;
+      for (let i = names.length - 1; i >= 0; i--) {
+        if (filesRead >= maxFiles) {
+          truncated = true;
+          break;
+        }
+        filesRead++;
+        const records = await this.readFile(names[i]);
+        for (let j = records.length - 1; j >= 0; j--) {
+          scanned++;
+          const record = records[j];
+          if (options.sinceMs !== undefined && Date.parse(record.timestamp) < options.sinceMs) continue;
+          if (!match(record)) continue;
+          if (newestFirst.length >= limit) {
+            truncated = true;
+            break;
+          }
+          newestFirst.push(record);
+        }
+        if (truncated) break;
+      }
+      return { records: newestFirst.reverse(), filesRead, recordsScanned: scanned, truncated };
+    });
+  }
+
+  /**
+   * Applies the retention period and the size ceiling now. A server that rotates rarely would otherwise keep an
+   * expired archive until the next rotation; the daily retention job calls this. Returns how many files went.
+   */
+  pruneNow(): Promise<number> {
+    return this.enqueue(async () => {
+      const before = this.counters.pruned; // before ensureReady: a first run's start-up clean-up counts too
+      await this.ensureReady();
+      await this.dropStaleActive();
+      await this.prune();
+      return this.counters.pruned - before;
+    });
+  }
+
+  stats(): RotatingFileStats {
     return {
       activeBytes: this.activeBytes,
       archives: this.lastKnown.archives,
@@ -274,18 +377,25 @@ export class DeviceLogFileSink implements LogSink {
     if (this.initialised) return;
     await this.store.ensure();
     await this.resync();
-    // A file nobody has written to for longer than the retention period is not a recent log: drop it.
+    await this.dropStaleActive();
+    await this.prune();
+    this.initialised = true;
+  }
+
+  /** A file nobody has written to for longer than the retention period is not a recent log: drop it. */
+  private async dropStaleActive(): Promise<void> {
     const active = (await this.store.list()).find((file) => file.name === ACTIVE_LOG_FILE);
     if (active && active.modifiedAt > 0 && this.now() - active.modifiedAt > this.retentionMs) {
       try {
         await this.store.remove(ACTIVE_LOG_FILE);
         this.activeBytes = 0;
+        this.activeSince = null;
+        this.activeLastAt = null;
+        this.counters.pruned++;
       } catch (error) {
         this.onProblem({ kind: "init", error, file: ACTIVE_LOG_FILE });
       }
     }
-    await this.prune();
-    this.initialised = true;
   }
 
   private activeIsOld(): boolean {
