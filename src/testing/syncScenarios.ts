@@ -3,6 +3,7 @@
 // comparing what the web app and the phone would each show.
 import { expect } from "vitest";
 import { syncWithServer, type SyncOutcome } from "@/lib/nativeOnboarding";
+import type { SyncTrigger } from "@/lib/syncTrace";
 import { setLinkedAccount } from "@/local/accountSwitch";
 import type { HttpResult, Phone, ServerHarness } from "@/testing/syncHarness";
 
@@ -28,7 +29,7 @@ export function linkPhone(phone: Phone, account: Account): void {
 }
 
 /** The real production entry point, run against this phone. */
-export async function syncPhone(phone: Phone, options: { deep?: boolean } = { deep: true }): Promise<SyncOutcome> {
+export async function syncPhone(phone: Phone, options: { deep?: boolean; trigger?: SyncTrigger } = { deep: true }): Promise<SyncOutcome> {
   phone.activate();
   return syncWithServer(options);
 }

@@ -5,7 +5,7 @@ calls. Its purpose: **if a person says a year later "my data is wrong", we can r
 happened** — without logging more than that, without leaking anything private, and without ever
 slowing down or breaking the application.
 
-Status of each part is marked **[done]** (phases 0 to 3, in the code today) or **[planned N]** (phase N
+Status of each part is marked **[done]** (phases 0 to 4, in the code today) or **[planned N]** (phase N
 of the rollout below). Nothing marked planned is claimed to exist.
 
 ## 1. Three layers, deliberately separate
@@ -214,6 +214,29 @@ with the transaction switched off, to confirm that they fail without it.
 **Deliberately not one transaction:** the rows of a sync push (each is applied on its own — a bad row must not block
 the good ones, see `SYNC_PARTIAL_SUCCESS`), the retention jobs, and effects outside the database (OS notifications).
 
+## 2d. The phone's log and the sync correlation (phase 4) **[done]**
+
+The Android app now keeps its own log and ties it to the server's:
+
+- a rotated, compressed JSON-lines file in the app's private storage, written in batches off the action path, capped
+  in size and age, that can fail without the app noticing (`src/lib/observability/client/`);
+- a random device id, the Android version, the time zone and — once linked — the server's user id on every record;
+- a `sync_id` and a W3C trace for every sync cycle, sent to the server as `X-Parva-Sync-Id` / `traceparent` /
+  `X-Parva-Device-Id`, so the phone's and the server's records of one cycle share ids, and the phone quotes the server's
+  `X-Request-Id`;
+- `sync_status: PENDING` and a `local_event_id` on every local write, OS-reminder and widget-queue events, and the
+  errors nobody catches (`SYSTEM_UNHANDLED_ERROR`, `UI_RENDER_ERROR`);
+- a diagnostic report the person can build and send from Settings.
+
+Details: [android.md](android.md) (the file, identity, what is written, the report, the budget) and [sync.md](sync.md)
+(the cycle, the events, incident reconstruction, the rollout rule: **deploy the server before the APK**).
+
+Tests: the sink's rotation, retention, compression and failure handling (`fileSink.test.ts`), the install and flush
+behaviour (`install.test.ts`), the report and its redaction (`diagnostics.test.ts`), global errors
+(`globalErrors.test.ts`), the headers and their fallback (`remoteFetch.test.ts`), the cycle's events against a scripted
+server, the acceptance scenarios 4–6 (`src/local/syncLogging.test.ts`), the CORS guard (`nativeCors.test.ts`) and the
+whole path, phone to server (`src/testing/syncCorrelation.e2e.test.ts`).
+
 ## 3. The record
 
 One JSON object per line. Optional fields are omitted when unknown (absent = null); `metadata` is
@@ -320,7 +343,7 @@ Client bundles only see `NEXT_PUBLIC_*` variables (inlined at build time).
 | 1 | server pipeline: request context (`request_id`, trace), `withApiLogging`, Prisma timing/slow/error classification, auth events, sync summaries, error codes in API responses, Docker log rotation | **done** in the code; takes effect on the server after a deploy |
 | 2 | audit evolution: additive columns, field-level diffs, the `audit.log()` facade beside `writeAuditLog`, closing the unaudited routes, backups, retention (see [audit.md](audit.md)) | **done** in the code; the server part takes effect after a deploy, the phone part with the next APK |
 | 3 | atomic money paths: real database transactions on the server and the phone; history and success logged only after commit; installment payment exactly once | **done** in the code (section 2c); the server part takes effect after a deploy, the phone part with the next APK |
-| 4 | Android/web client: device file sink, sync correlation headers, local event ids, widget/notification events, global error capture, diagnostics export | planned (ships with a new APK) |
+| 4 | Android client: device file sink, sync correlation headers and `sync_id`, local event ids and `sync_status`, widget/notification events, global error capture, diagnostic report | **done** in the code (section 2d); ships with the next APK — deploy the server first |
 | 5 | retention jobs, admin log-level/metrics endpoints, dashboards, benchmarks | planned |
 
 ## 11. Decisions taken by default in phase 0

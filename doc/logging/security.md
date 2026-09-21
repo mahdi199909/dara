@@ -103,6 +103,23 @@ could throw or explode.
 Developer-facing tools (support timeline, diagnostics export) only ever show the redacted view. The audit
 trail's own design — columns, the diff, the vocabulary, retention — is in [audit.md](audit.md).
 
+## The phone's log and its report **[done, phase 4]**
+
+- **The device id is random.** `dev_…` is made on the first launch and kept in the app's own preferences; it is not
+  derived from the phone (no IMEI, Android ID, model or serial number) and disappears with the app. `os_version` is the
+  major Android version only.
+- **What the correlation headers carry:** `traceparent`, `X-Parva-Device-Id`, `X-Parva-Sync-Id` — random ids, nothing
+  about the person or the data. The server validates them and drops anything malformed.
+- **The log file** is in the app's private storage (not visible to other apps or the file manager, removed with the
+  app). It holds what any application log holds: ids, counts, durations, codes — never a title, note, amount, e-mail
+  address, password or token. `user_id` is the server's opaque id, not an e-mail address.
+- **The diagnostic report** is built only when the person asks, is cleaned once more (masking of e-mail addresses,
+  tokens and secrets that somehow reached a record) and leaves the phone only through the share sheet, to wherever the
+  person chooses. The app uploads nothing by itself; an automatic upload of errors and sync-failure summaries is a
+  separate decision that has not been taken.
+- **Errors nobody catches** are written with their stack and the script's file name (no path, no query) — an error
+  message that quotes a value passes through the same redaction as every other message.
+
 ## IP addresses and users
 
 `user_id` is an opaque id, never an e-mail address. IP addresses are recorded only for security

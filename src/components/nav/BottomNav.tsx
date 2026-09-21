@@ -39,11 +39,19 @@ export default function BottomNav({ userName }: { userName: string }) {
       // so try one last sync first (capped: being offline must not trap someone on this screen).
       try {
         const { syncWithServer } = await import("@/lib/nativeOnboarding");
-        await Promise.race([syncWithServer({ deep: true }), new Promise((resolve) => setTimeout(resolve, 10_000))]);
+        await Promise.race([syncWithServer({ deep: true, trigger: "logout" }), new Promise((resolve) => setTimeout(resolve, 10_000))]);
       } catch {
         // best effort
       }
       dispatchLocal("POST", "/api/local/logout");
+      // The phone's records stop naming this account, and the log file must hold everything before the page is replaced.
+      try {
+        const [{ setClientUser }, { getClientLogging }] = await Promise.all([import("@/lib/observability/client/clientContext"), import("@/lib/observability/client/install")]);
+        setClientUser(undefined);
+        await getClientLogging()?.flush();
+      } catch {
+        // logging must never keep someone from signing out
+      }
       // Must complete before navigating away: browserSqlJs.ts buffers writes in memory and
       // flushes to disk on a 300ms debounce (plus a pagehide safety net that can't actually block
       // the navigation below from tearing the page down first). Without waiting here, a hard

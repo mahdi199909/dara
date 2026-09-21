@@ -173,6 +173,12 @@ afterwards (successful reads are only written at debug level).
 Changing the compose file's `logging:` section, like any compose change, takes effect when the containers are
 recreated (`docker compose up -d`).
 
+**Server first, then the APK.** From the logging work on, the Android app sends `traceparent`, `X-Parva-Device-Id` and
+`X-Parva-Sync-Id` with its sync and sign-in requests, so that the phone's log and the server's can be joined. The
+server's CORS answer (`src/lib/nativeCors.ts`) lists them since phase 1. An updated app keeps working against an older
+server — it retries once without the headers — but without the correlation, so deploy this release to the server before
+publishing the APK that needs it (see 5c).
+
 The **audit trail** (Settings → History) is a different thing from these logs: it lives in the database and is
 kept for two years by default. A release that changes its table (the audit columns added in the logging work) adds
 nullable columns with `prisma db push` at container start — no row is touched, but back up first as always. Query

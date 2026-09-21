@@ -20,6 +20,7 @@ import type { ParsedIcsEvent } from "@/lib/icsParser";
 import { Preferences } from "@capacitor/preferences";
 import { TABLE_LABELS_FA } from "@/lib/backupLabels";
 import WebBackupTab from "@/components/settings/WebBackupTab";
+import DiagnosticReportCard from "@/components/settings/DiagnosticReportCard";
 import { pickWidgetTextTone, widgetTextColor } from "@/lib/widgetContrast";
 import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
@@ -1034,7 +1035,7 @@ function SyncStatusCard() {
 
   async function handleSyncNow() {
     const { syncWithServer } = await import("@/lib/nativeOnboarding");
-    await syncWithServer({ deep: true });
+    await syncWithServer({ deep: true, trigger: "manual" });
   }
 
   if (!loaded || !license?.token) return null;
@@ -1467,6 +1468,8 @@ function BackupTab() {
           </div>
         )}
       </Card>
+
+      <DiagnosticReportCard />
     </div>
   );
 }

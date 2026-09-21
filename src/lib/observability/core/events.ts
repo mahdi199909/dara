@@ -196,6 +196,7 @@ const STANDALONE = {
   SYNC_PARTIAL_SUCCESS: s("WARN", "A sync finished, but the server refused some rows.", { protected: true }),
   SYNC_PAYLOAD_REJECTED: s("WARN", "The server refused a row or a whole request body.", { protected: true }),
   SYNC_SIZE_LIMIT_EXCEEDED: s("WARN", "A sync request exceeded the size limit and was split or refused.", { protected: true }),
+  SYNC_CORRELATION_UNSUPPORTED: s("INFO", "The server did not accept the phone's correlation headers (an older server); requests go without them for a while."),
 
   // --- Notifications
   NOTIFICATION_CREATED: s("INFO", "An in-app notification was created."),

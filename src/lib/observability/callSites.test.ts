@@ -33,7 +33,7 @@ import { writeLocalAuditLog } from "@/local/audit";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "@/local/db";
 import { createNodeSqliteDriver } from "@/local/drivers/nodeSqlite";
 import { requestNotificationPermission, scheduleReminderNotification, syncScheduledReminderNotifications, cancelReminderNotification, rescheduleReminderNotification } from "@/local/nativeNotifications";
-import { runSync } from "@/local/syncRunner";
+import { resetSyncRunnerState, runSync } from "@/local/syncRunner";
 import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { drainWidgetQueue } from "@/local/widgetQueue";
 import { installMemoryLogger } from "./testing";
@@ -111,7 +111,7 @@ describe("audit writers", () => {
     writeLocalAuditLog(fakeDb, { userId: "local", action: "CREATE", entityType: "Task", entityId: "t1", newValue: { title: "x" } });
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toContain('INSERT INTO "AuditLog"');
-    expect(run.mock.calls[0][1]).toHaveLength(13); // the nine legacy columns + event, source, localEventId, changes
+    expect(run.mock.calls[0][1]).toHaveLength(14); // the nine legacy columns + event, source, deviceId, localEventId, changes
 
     run.mockImplementation(() => {
       throw new Error("database or disk is full");
@@ -145,6 +145,7 @@ describe("a failed sync", () => {
     return openLocalDb(await createNodeSqliteDriver(":memory:"));
   }
   const license = { token: "jwt", remoteUserId: "remote_1", lastPushedAt: null, lastPulledAt: null };
+  beforeEach(() => resetSyncRunnerState()); // (a cycle that follows a failed one is a retry: each test starts from a clean slate)
 
   it("going offline is a WARN with SYNC-001 — routine on a phone, but never silent", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
@@ -168,7 +169,10 @@ describe("a failed sync", () => {
     await runSync(await freshDb(), { ...license, token: "jwt-must-not-leak" });
     const text = JSON.stringify(record("SYNC_FAILED"));
     expect(text).not.toContain("jwt-must-not-leak");
-    expect(record("SYNC_FAILED").metadata).toEqual({ kind: "network", pulledCount: 0, pushedCount: 0 });
+    // counts, the kind, which attempt it was and why the cycle started — and the cycle's own id, as a field of the record
+    expect(record("SYNC_FAILED").metadata).toEqual({ kind: "network", pulledCount: 0, pushedCount: 0, attempt: 1, trigger: "unknown" });
+    expect(record("SYNC_FAILED").sync_id).toMatch(/^sync_[0-9A-HJKMNP-TV-Z]{26}$/);
+    expect(record("SYNC_FAILED").trace_id).toMatch(/^[0-9a-f]{32}$/);
   });
 });
 

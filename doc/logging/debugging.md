@@ -91,8 +91,16 @@ Everywhere (phase 0):
 | `DB_LOCAL_FLUSH_CALLBACK_FAILED` | ERROR | the handler that runs after the device database is saved failed | `browserSqlJs` |
 | `IMPORT_ROW_FAILED` | WARN | a backup row could not be inserted on this pass (it may be retried); table + id only | `importAllData` |
 | `WIDGET_QUEUE_FAILED` | ERROR | a queued widget action failed and stays queued (`WIDGET-001`); never what was typed | `widgetQueue`, boot/resume |
+| `WIDGET_ACTION_RECEIVED` / `WIDGET_QUEUE_PROCESSED` | DEBUG | how many widget actions were found in the queue (and how many were malformed), and how many were applied or failed (phase 4) | `widgetQueue` |
 | `WIDGET_REFRESH_FAILED` | ERROR | a widget repaint or its data failed (`WIDGET-002`); `metadata.step` says which | `widgetRefresh` |
 | `LOCAL_NOTIFICATION_FAILED` / `_PERMISSION_FAILED` | ERROR / WARN | scheduling, moving or cancelling an OS reminder failed (`NOTIF-001`), or permission was not granted (`NOTIF-002`); `operation`, reminder id | `nativeNotifications` |
+| `LOCAL_NOTIFICATION_SCHEDULED` / `_RESCHEDULED` / `_CANCELLED` / `_RECONCILED` | DEBUG | an OS reminder was scheduled / moved / cancelled / the OS's schedule was aligned with the database: reminder id and `scheduledFor`, never the text (phase 4) | `nativeNotifications` |
+| `SYNC_STARTED`, `SYNC_PULL_*`, `SYNC_PUSH_*`, `SYNC_SUCCESS`, `SYNC_COMPLETED`, `SYNC_RETRY`, `SYNC_PARTIAL_SUCCESS`, `SYNC_PAYLOAD_REJECTED`, `SYNC_SIZE_LIMIT_EXCEEDED`, `SYNC_CONFLICT`, `SYNC_PENDING`, `SYNC_RERUN_QUEUED` | INFO / DEBUG / WARN | the phone's side of every sync cycle, all carrying the cycle's `sync_id` and `trace_id`; see [sync.md](sync.md) (phase 4) | `syncRunner`, `sync.ts`, `syncScheduler` |
+| `SYNC_CORRELATION_UNSUPPORTED` | INFO | the server did not accept the phone's correlation headers (an older server); requests go without them for half an hour | `remoteFetch` |
+| `SYSTEM_STARTED` (phone) | INFO | the app was launched | `FirstRunGate` |
+| `SYSTEM_UNHANDLED_ERROR` (phone) | CRITICAL / ERROR | an uncaught exception (`window.onerror`) / an unhandled promise rejection, with the stack; `metadata.kind`, `source`, `line`; repeats are counted, not written (`suppressedSince`) (phase 4) | `globalErrors` |
+| `UI_RENDER_ERROR` | ERROR | a screen failed to render: `boundary` (segment / global), `digest`, stack (phase 4) | `app/error.tsx`, `global-error.tsx` |
+| `EXPORT_COMPLETED` / `EXPORT_FAILED` (`kind: diagnostic-report`) | INFO / ERROR | the person built a diagnostic report: record count, file size (phase 4) | `shareReport` |
 | `CAPITAL_SNAPSHOT_FAILED`, `CATEGORY_DEFAULTS_FAILED`, `SETTINGS_THEME_SYNC_FAILED`, `SYSTEM_DEEP_LINK_FAILED` | ERROR / WARN | boot/resume tasks that failed without stopping the app | `FirstRunGate`, `WidgetQueueDrainer`, … |
 | `RELEASE_READ_FAILED`, `RELEASE_UPDATE_CHECK_FAILED` | WARN | the release override row could not be read (built-in release used) / the app could not ask about updates (`RELEASE-001`) | `appRelease`, update banner |
 | `LOG_LEVEL_CHANGED` | INFO | a level was changed at runtime | `Logger.setLevel/setOverride` |
@@ -115,6 +123,16 @@ entry is only written for something that committed (on the phone it is stored in
 with the rollback). `error_code` `DB-003` means the transaction machinery itself failed (a timeout, a lost
 connection): look at `DB_TRANSACTION_FAILED` next to it. A failure logged as WARN with a 4xx status is the caller's
 mistake (an installment paid twice is a 409), not a fault.
+
+**"The expense is on the phone but not on the web."** [sync.md](sync.md) has the whole path; in short: find the phone's
+`<OP>_SUCCESS` line by `entity_id` (it has `local_event_id` and `sync_status: PENDING`), then the `SYNC_PUSH_SUCCESS` whose
+`sentIds` contain that id — that gives the `sync_id` and the server's request ids — then search the server's log for the
+`sync_id`. No push contains the id: the change never left the phone (`SYNC_FAILED` / `SYNC_RETRY` after the write say why).
+
+**A person's phone misbehaves and you cannot see it.** Ask for the diagnostic report (Settings → the backup tab →
+گزارش تشخیصی): a JSON file, one record per line, that they send you themselves. Filter it by `level`, look at `counts` for
+the errors at a glance, follow `sync_id` / `request_id` into the server's log. It contains events, counts and ids — never
+titles, amounts or e-mail addresses.
 
 **Sync keeps failing on one phone.** Find `SYNC_FAILED` and read `metadata.kind`:
 `network` (`SYNC-001`) offline/blocked; `auth` (`SYNC-003`) the server refuses the session — sign out and in;

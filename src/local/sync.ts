@@ -7,6 +7,8 @@
 // Uses raw fetch() against REMOTE_API_BASE, like src/lib/remoteAuth.ts — never apiClient.ts,
 // whose fetcher/apiPost/etc. always route to the local dispatcher on native regardless of URL.
 import { REMOTE_API_BASE } from "@/lib/remoteAuth";
+import { remoteFetch } from "@/lib/remoteFetch";
+import type { SyncTrace } from "@/lib/syncTrace";
 import { SELF_REFERENCE_COLUMN, SYNC_TABLES, TOMBSTONE_TABLES, type SyncTableConfig } from "@/lib/syncTables";
 import { toBoolean, toIsoDate } from "@/lib/syncNormalize";
 import { buildBatches } from "@/lib/syncBatching";
@@ -19,7 +21,7 @@ import { applyRemoteTombstone, hasLocalTombstoneAtOrAfter, listLocalTombstonesSi
 import { applyRemoteProfile, readLocalProfilePayload } from "./profileSyncLocal";
 import { getLogger } from "../lib/observability";
 
-const log = getLogger("sync", "pull");
+const log = getLogger("sync", "wire");
 
 type Row = Record<string, unknown>;
 
@@ -28,12 +30,51 @@ type Row = Record<string, unknown>;
 export class SyncHttpError extends Error {
   status: number;
   bodySnippet: string;
-  constructor(status: number, what: string, bodySnippet: string) {
+  /** The server's X-Request-Id for the failed request, when it sent one: the key to its own log line. */
+  requestId?: string;
+  constructor(status: number, what: string, bodySnippet: string, requestId?: string) {
     super(`sync ${what} failed: ${status}`);
     this.name = "SyncHttpError";
     this.status = status;
     this.bodySnippet = bodySnippet;
+    this.requestId = requestId;
   }
+}
+
+/** The server's own id for a request it answered (exposed to the app through CORS); undefined from older servers and test doubles. */
+function serverRequestId(res: Response): string | undefined {
+  return res.headers?.get?.("x-request-id") ?? undefined;
+}
+
+/** What every sync record of one cycle carries, so all of it can be found with the cycle's id. */
+function traceFields(trace: SyncTrace | undefined): { syncId?: string; traceId?: string } {
+  return trace ? { syncId: trace.syncId, traceId: trace.traceId } : {};
+}
+
+const MAX_LOGGED_IDS_PER_TABLE = 20;
+const MAX_LOGGED_IDS = 60;
+
+/** Row counts per table, e.g. { Task: 3, Habit: 1 }. */
+function countsByTable(perTable: Array<{ table: string; rows: Row[] }>): Record<string, number> {
+  return Object.fromEntries(perTable.map((entry) => [entry.table, entry.rows.length]));
+}
+
+/**
+ * The ids of the rows that left the phone in a push, per table, capped. Ids are random values and say nothing
+ * about a row's content; they are what lets "did this expense go through?" be answered from the log alone.
+ */
+function cappedIds(perTable: Array<{ table: string; rows: Row[] }>): { ids: Record<string, string[]>; truncated: boolean } {
+  const ids: Record<string, string[]> = {};
+  let total = 0;
+  let truncated = false;
+  for (const { table, rows } of perTable) {
+    const room = Math.max(0, Math.min(MAX_LOGGED_IDS_PER_TABLE, MAX_LOGGED_IDS - total));
+    const taken = rows.slice(0, room).map((row) => String(row.id));
+    if (taken.length > 0) ids[table] = taken;
+    total += taken.length;
+    if (rows.length > taken.length) truncated = true;
+  }
+  return { ids, truncated };
 }
 
 async function httpError(res: Response, what: string): Promise<SyncHttpError> {
@@ -43,7 +84,7 @@ async function httpError(res: Response, what: string): Promise<SyncHttpError> {
   } catch {
     // body unreadable — the status alone is still useful
   }
-  return new SyncHttpError(res.status, what, snippet);
+  return new SyncHttpError(res.status, what, snippet, serverRequestId(res));
 }
 
 function authHeaders(token: string): HeadersInit {
@@ -137,6 +178,8 @@ export interface PushOptions {
   maxBatchBytes?: number;
   maxBatchRows?: number;
   overlapMs?: number;
+  /** The cycle this push belongs to: its id goes on every record written and to the server as headers. */
+  trace?: SyncTrace;
 }
 
 export interface PushResult {
@@ -155,6 +198,10 @@ export interface PushResult {
   protocol: number | null;
   batches: number;
   tombstonesSent: number;
+  /** How long the requests took, in total. */
+  durationMs: number;
+  /** The server's X-Request-Id for each request that was answered (none from an older server). */
+  serverRequestIds: string[];
 }
 
 const META_PROFILE_PUSHED_AT = "profilePushedAt";
@@ -189,7 +236,7 @@ export async function pushLocalChanges(
   const profile: ProfilePayload = readLocalProfilePayload(db, LOCAL_USER_ID, getSyncMeta(db, META_PROFILE_PUSHED_AT));
   const hasProfile = !!(profile.name || profile.settings);
 
-  const empty: PushResult = { pushed: {}, skipped: 0, rejected: 0, issues: [], pushedAt, protocol: null, batches: 0, tombstonesSent: 0 };
+  const empty: PushResult = { pushed: {}, skipped: 0, rejected: 0, issues: [], pushedAt, protocol: null, batches: 0, tombstonesSent: 0, durationMs: 0, serverRequestIds: [] };
   if (perTable.length === 0 && tombstones.length === 0 && !hasProfile) return empty;
 
   // Even with nothing but deletions/profile to say, one request still has to go out.
@@ -197,6 +244,20 @@ export async function pushLocalChanges(
   if (batches.length === 0) batches.push({ tables: {}, bytes: 0, rows: 0 });
 
   const result: PushResult = { ...empty, batches: batches.length, tombstonesSent: tombstones.length, protocol: 0 };
+  const trace = options.trace;
+  const recordCount = perTable.reduce((sum, entry) => sum + entry.rows.length, 0);
+  const requestsStartedAt = performance.now();
+  // Counts and sizes only; never a row. (The ids of the rows are written once the server has answered, below.)
+  log.debug("SYNC_PUSH_STARTED", {
+    ...traceFields(trace),
+    layer: "local",
+    recordCount,
+    batches: batches.length,
+    payloadBytes: batches.reduce((sum, batch) => sum + batch.bytes, 0),
+    tombstones: tombstones.length,
+    profile: hasProfile,
+    tables: countsByTable(perTable),
+  });
 
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
@@ -207,12 +268,24 @@ export async function pushLocalChanges(
       ...(i === 0 && tombstones.length > 0 ? { tombstones } : {}),
       ...(i === 0 && hasProfile ? { profile } : {}),
     };
-    const res = await fetch(`${REMOTE_API_BASE}/api/sync/push`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders(token) },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw await httpError(res, "push");
+    const res = await remoteFetch(
+      `${REMOTE_API_BASE}/api/sync/push`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
+        body: JSON.stringify(body),
+      },
+      trace
+    );
+    const requestId = serverRequestId(res);
+    if (requestId) result.serverRequestIds.push(requestId);
+    if (!res.ok) {
+      // The proxy in front of the server refuses a body over its limit with a bare 413; batching is meant to keep us well under it.
+      if (res.status === 413) {
+        log.warn("SYNC_SIZE_LIMIT_EXCEEDED", { ...traceFields(trace), layer: "local", errorCode: "SYNC-004", batch: i + 1, batches: batches.length, batchRows: batch.rows, batchBytes: batch.bytes, serverRequestId: requestId });
+      }
+      throw await httpError(res, "push");
+    }
 
     const json = (await res.json()) as {
       protocol?: number;
@@ -246,6 +319,36 @@ export async function pushLocalChanges(
     setSyncMeta(db, META_TOMBSTONES_ACKED_AT, pushedAt);
     setSyncMeta(db, META_PROFILE_PUSHED_AT, pushedAt);
   }
+
+  result.durationMs = Math.round((performance.now() - requestsStartedAt) * 100) / 100;
+  const pushedTotal = Object.values(result.pushed).reduce((sum, n) => sum + n, 0);
+  if (result.rejected > 0) {
+    // Which rows the server refused and why (its reason, capped): the one place ids are always written.
+    log.warn("SYNC_PAYLOAD_REJECTED", {
+      ...traceFields(trace),
+      layer: "local",
+      errorCode: "SYNC-005",
+      rejected: result.rejected,
+      rows: result.issues.slice(0, 20).map((issue) => ({ table: issue.table, id: issue.id, reason: issue.reason })),
+    });
+  }
+  const { ids, truncated } = cappedIds(perTable);
+  // INFO when something left the phone (the ids let "did entity X go through?" be answered from the log), DEBUG when it was only a check-in.
+  log.log(pushedTotal > 0 || result.rejected > 0 || tombstones.length > 0 ? "INFO" : "DEBUG", "SYNC_PUSH_SUCCESS", {
+    ...traceFields(trace),
+    layer: "local",
+    durationMs: result.durationMs,
+    batches: batches.length,
+    recordCount,
+    pushed: pushedTotal,
+    skipped: result.skipped,
+    rejected: result.rejected,
+    tombstonesSent: tombstones.length,
+    protocol: result.protocol,
+    serverRequestIds: result.serverRequestIds,
+    sentIds: ids,
+    ...(truncated ? { sentIdsTruncated: true } : {}),
+  });
   return result;
 }
 
@@ -287,26 +390,35 @@ function keepFiredReminderFlags(local: Row, incoming: Row): Row {
  * only ever insert; an existing row is left alone since there's no timestamp to compare. Throws
  * on a genuine failure (most likely a not-yet-inserted FK target from later in this same batch) —
  * applyRowsWithRetry decides how to react to that. */
-function upsertRowIfNewer(db: LocalDb, table: string, row: Row, hasUpdatedAt: boolean): boolean {
+function upsertRowIfNewer(db: LocalDb, table: string, row: Row, hasUpdatedAt: boolean, onOverwrite?: (existing: Row, incoming: Row) => void): "created" | "updated" | null {
   const existing = hasUpdatedAt
     ? db.get<Row>(`SELECT ${table === "Reminder" ? "*" : '"updatedAt"'} FROM "${table}" WHERE "id" = ?`, [row.id])
     : db.get<{ id: string }>(`SELECT "id" FROM "${table}" WHERE "id" = ?`, [row.id]);
 
   if (existing) {
-    if (!hasUpdatedAt) return false;
-    if (new Date((existing as Row).updatedAt as string) >= new Date(row.updatedAt as string)) return false;
+    if (!hasUpdatedAt) return null;
+    if (new Date((existing as Row).updatedAt as string) >= new Date(row.updatedAt as string)) return null;
+    onOverwrite?.(existing as Row, row);
     const next = table === "Reminder" ? keepFiredReminderFlags(existing as Row, row) : row;
     const nonId = Object.keys(next).filter((c) => c !== "id");
     db.run(`UPDATE "${table}" SET ${nonId.map((c) => `"${c}" = ?`).join(",")} WHERE "id" = ?`, [...nonId.map((c) => next[c]), row.id]);
-  } else {
-    const columns = Object.keys(row);
-    db.run(`INSERT INTO "${table}" (${columns.map((c) => `"${c}"`).join(",")}) VALUES (${columns.map(() => "?").join(",")})`, columns.map((c) => row[c]));
+    return "updated";
   }
-  return true;
+  const columns = Object.keys(row);
+  db.run(`INSERT INTO "${table}" (${columns.map((c) => `"${c}"`).join(",")}) VALUES (${columns.map(() => "?").join(",")})`, columns.map((c) => row[c]));
+  return "created";
 }
 
-function applyRowsWithRetry(db: LocalDb, table: string, rows: Row[], hasUpdatedAt: boolean): { applied: number; failures: RowFailure[] } {
+function applyRowsWithRetry(
+  db: LocalDb,
+  table: string,
+  rows: Row[],
+  hasUpdatedAt: boolean,
+  onOverwrite?: (existing: Row, incoming: Row) => void
+): { applied: number; created: number; updated: number; failures: RowFailure[] } {
   let applied = 0;
+  let created = 0;
+  let updated = 0;
   let pending = rows;
   const lastError = new Map<string, string>();
 
@@ -315,7 +427,12 @@ function applyRowsWithRetry(db: LocalDb, table: string, rows: Row[], hasUpdatedA
     let progressed = false;
     for (const row of pending) {
       try {
-        if (upsertRowIfNewer(db, table, row, hasUpdatedAt)) applied++;
+        const outcome = upsertRowIfNewer(db, table, row, hasUpdatedAt, onOverwrite);
+        if (outcome) {
+          applied++;
+          if (outcome === "created") created++;
+          else updated++;
+        }
         progressed = true; // resolved either way (applied or correctly skipped as stale) — not stuck on an FK ordering issue
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -335,12 +452,20 @@ function applyRowsWithRetry(db: LocalDb, table: string, rows: Row[], hasUpdatedA
 
   const failures = pending.map((row) => ({ table, id: String(row.id), reason: lastError.get(String(row.id)) ?? "unknown error" }));
   for (const f of failures) log.warn("SYNC_PULL_ROW_FAILED", { errorCode: "SYNC-008", layer: "local", entityType: table, entityId: f.id, reason: f.reason });
-  return { applied, failures };
+  return { applied, created, updated, failures };
 }
 
 export interface PullOptions {
   /** How far back before the stored cursor to re-read — see PULL_OVERLAP_*. */
   overlapMs?: number;
+  /** The cycle this pull belongs to: its id goes on every record written and to the server as headers. */
+  trace?: SyncTrace;
+  /**
+   * When this device last pushed. A row the server sends that is newer than this device's copy AND whose local copy
+   * changed after this moment overwrites a change that was never sent: SYNC_CONFLICT (the newer edit wins). Null
+   * (never pushed: the first sync of an account) means there is nothing to compare against, so nothing is called a conflict.
+   */
+  lastPushedAt?: string | null;
 }
 
 export interface PullResult {
@@ -353,13 +478,26 @@ export interface PullResult {
   profileApplied: { settingsApplied: boolean; nameApplied: boolean };
   /** 0 = an older server that sends neither tombstones nor profile data. */
   protocol: number;
+  /** Rows the server sent (most of them already here), and how many of those created or changed a row on this device. */
+  received: number;
+  created: number;
+  updated: number;
+  /** Rows the server's newer copy replaced although this device had changed them since it last pushed. */
+  conflicts: number;
+  durationMs: number;
+  /** The server's X-Request-Id for the request (none from an older server). */
+  serverRequestId?: string;
 }
 
 export async function pullRemoteChanges(db: LocalDb, token: string, lastPulledAt: string | null, options: PullOptions = {}): Promise<PullResult> {
   const since = lastPulledAt ? isoMinus(lastPulledAt, options.overlapMs ?? PULL_OVERLAP_SHORT_MS) : null;
   const url = `${REMOTE_API_BASE}/api/sync/pull${since ? `?since=${encodeURIComponent(since)}` : ""}`;
-  const res = await fetch(url, { headers: authHeaders(token) });
+  const trace = options.trace;
+  const startedAt = performance.now();
+  log.debug("SYNC_PULL_STARTED", { ...traceFields(trace), layer: "local", firstEver: since === null, overlapMs: options.overlapMs ?? PULL_OVERLAP_SHORT_MS });
+  const res = await remoteFetch(url, { headers: authHeaders(token) }, trace);
   if (!res.ok) throw await httpError(res, "pull");
+  const requestId = serverRequestId(res);
 
   const body = (await res.json()) as {
     protocol?: number;
@@ -372,6 +510,12 @@ export async function pullRemoteChanges(db: LocalDb, token: string, lastPulledAt
   const failures: RowFailure[] = [];
   let tombstonesApplied = 0;
   let profileApplied = { settingsApplied: false, nameApplied: false };
+  let created = 0;
+  let updated = 0;
+  const received = Object.values(body.tables ?? {}).reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0);
+  const conflictIds: Record<string, string[]> = {};
+  let conflicts = 0;
+  const lastPushed = options.lastPushedAt ? new Date(options.lastPushedAt).getTime() : null;
 
   // The whole pull lands together or not at all (synchronous, so nothing else on the phone runs in between).
   withLocalTransaction(db, () => {
@@ -397,11 +541,40 @@ export async function pullRemoteChanges(db: LocalDb, token: string, lastPulledAt
 
       const localRows = config.ownership.type === "direct" ? remoteRows.map((row) => ({ ...row, userId: LOCAL_USER_ID })) : remoteRows;
 
-      const { applied, failures: failed } = applyRowsWithRetry(db, config.table, localRows, config.hasUpdatedAt);
+      const { applied, created: made, updated: changed, failures: failed } = applyRowsWithRetry(db, config.table, localRows, config.hasUpdatedAt, (existing, incoming) => {
+        // The server's newer copy is about to replace this one. If this one had changed since the last push, that change was never sent.
+        if (lastPushed === null || !(new Date(String(existing.updatedAt)).getTime() > lastPushed)) return;
+        conflicts++;
+        const list = (conflictIds[config.table] ??= []);
+        if (list.length < MAX_LOGGED_IDS_PER_TABLE) list.push(String(incoming.id));
+      });
       if (applied > 0) pulled[config.table] = applied;
+      created += made;
+      updated += changed;
       failures.push(...failed);
     }
   });
 
-  return { pulled, syncedAt: body.syncedAt, tombstonesApplied, failures, profileApplied, protocol: body.protocol ?? 0 };
+  const durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
+  const appliedTotal = Object.values(pulled).reduce((sum, n) => sum + n, 0);
+  if (conflicts > 0) {
+    // Both sides changed the same row and the newer edit won: which rows, so "my edit disappeared" can be traced to here.
+    log.info("SYNC_CONFLICT", { ...traceFields(trace), layer: "local", errorCode: "SYNC-006", conflicts, winner: "server", ids: conflictIds });
+  }
+  log.log(appliedTotal > 0 || tombstonesApplied > 0 || failures.length > 0 ? "INFO" : "DEBUG", "SYNC_PULL_SUCCESS", {
+    ...traceFields(trace),
+    layer: "local",
+    durationMs,
+    received,
+    recordCount: appliedTotal,
+    created,
+    updated,
+    deleted: tombstonesApplied,
+    failures: failures.length,
+    tables: pulled,
+    protocol: body.protocol ?? 0,
+    serverRequestId: requestId,
+  });
+
+  return { pulled, syncedAt: body.syncedAt, tombstonesApplied, failures, profileApplied, protocol: body.protocol ?? 0, received, created, updated, conflicts, durationMs, serverRequestId: requestId };
 }

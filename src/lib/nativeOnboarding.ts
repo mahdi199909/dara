@@ -7,6 +7,11 @@ import { fetcher, apiPost } from "./apiClient";
 import { remoteLogin, remoteRegister, fetchRemoteLicenseStatus } from "./remoteAuth";
 import { cacheVersionGate } from "./versionGate";
 import { updateSyncStatus } from "./syncStatus";
+import { setClientUser } from "./observability/client/clientContext";
+import { getLogger } from "./observability";
+import { moreInformativeTrigger, type SyncTrigger } from "./syncTrace";
+
+const log = getLogger("sync", "single-flight");
 import type { LicenseCache } from "@/local/repositories/licenseCache";
 import type { SyncOutcome } from "@/local/syncRunner";
 
@@ -53,6 +58,7 @@ export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCac
     }
     accountSwitch.setLinkedAccount(db, { remoteUserId: user.id, email: user.email });
   }
+  setClientUser(user.id); // the phone's records name the account the server knows the person by
 
   const status = await fetchRemoteLicenseStatus(token);
   await cacheVersionGate(status);
@@ -71,7 +77,7 @@ export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCac
   // that already has server data (from the web app, or a previous device) — the user expects to
   // see it the moment first-run finishes, not after some later resume cycle. syncWithServer
   // swallows its own errors, so a failure here still lets first-run itself succeed.
-  await syncWithServer({ deep: true });
+  await syncWithServer({ deep: true, trigger: "first-run" });
 
   return license;
 }
@@ -152,11 +158,14 @@ export async function refreshLicenseStatus(): Promise<void> {
 let inFlight: Promise<SyncOutcome> | null = null;
 let rerunRequested = false;
 let deepRequested = false;
+let triggerRequested: SyncTrigger | undefined;
 
-export function syncWithServer(options: { deep?: boolean } = {}): Promise<SyncOutcome> {
+export function syncWithServer(options: { deep?: boolean; trigger?: SyncTrigger } = {}): Promise<SyncOutcome> {
   if (options.deep) deepRequested = true;
+  triggerRequested = moreInformativeTrigger(triggerRequested, options.trigger);
   if (inFlight) {
     rerunRequested = true;
+    log.debug("SYNC_RERUN_QUEUED", { layer: "local", trigger: options.trigger });
     return inFlight;
   }
   inFlight = (async () => {
@@ -177,6 +186,8 @@ export function syncWithServer(options: { deep?: boolean } = {}): Promise<SyncOu
 async function syncOnce(): Promise<SyncOutcome> {
   const deep = deepRequested;
   deepRequested = false;
+  const trigger = triggerRequested;
+  triggerRequested = undefined;
   const { emptyOutcome, runSync, classifySyncError } = await import("@/local/syncRunner");
   try {
     const cached = await getCachedLicense();
@@ -194,7 +205,7 @@ async function syncOnce(): Promise<SyncOutcome> {
     const outcome = await runSync(
       db,
       { token: cached.token, remoteUserId: cached.remoteUserId, lastPushedAt: cached.lastPushedAt, lastPulledAt: cached.lastPulledAt },
-      { deep }
+      { deep, trigger }
     );
     updateSyncStatus({ last: outcome });
     return outcome;

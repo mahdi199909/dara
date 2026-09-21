@@ -11,6 +11,7 @@
 import { LOCAL_USER_ID, mergeDuplicateCategories } from "./localUser";
 import { setLastPulledAt, setLastPushedAt } from "./repositories/licenseCache";
 import { PULL_OVERLAP_DEEP_MS, PULL_OVERLAP_SHORT_MS, SyncHttpError, pullRemoteChanges, pushLocalChanges, type RowIssue } from "./sync";
+import { createSyncTrace, isRoutineTrigger, type SyncTrigger } from "../lib/syncTrace";
 import { reconcileReminderNotifications } from "./reminderNotifications";
 import { META_LAST_ERROR, META_LAST_OK_AT, setSyncMeta } from "./syncMeta";
 import type { LocalDb } from "./db";
@@ -44,6 +45,13 @@ export interface SyncOutcome {
   /** 0 = the server predates deletion/profile sync; null = never reached it this time. */
   serverProtocol: number | null;
   finishedAt: string;
+  /** The id of this cycle: the value to search for in the phone's log and, as sync_id, in the server's. */
+  syncId?: string;
+  durationMs?: number;
+  /** What the pull created and changed on this device, and how many unsent local changes a newer server copy replaced. */
+  created?: number;
+  updated?: number;
+  conflicts?: number;
 }
 
 export function emptyOutcome(): SyncOutcome {
@@ -94,16 +102,43 @@ export interface RunSyncOptions {
    * cheap insurance, used on app open/resume and manual sync, against a change another device
    * pushed late (an edit made offline carries its old edit time, which a tight cursor would skip). */
   deep?: boolean;
+  /** Why this cycle started (for the log): an app open is worth an INFO line, a timer tick is not. */
+  trigger?: SyncTrigger;
+}
+
+/** How many cycles in a row have failed: a cycle that starts after a failure is a retry, and says so. */
+let consecutiveFailures = 0;
+let lastFailureKind: SyncErrorKind | undefined;
+
+/** Tests: forget earlier cycles. */
+export function resetSyncRunnerState(): void {
+  consecutiveFailures = 0;
+  lastFailureKind = undefined;
 }
 
 export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyncOptions = {}): Promise<SyncOutcome> {
   const outcome = emptyOutcome();
-  try {
-    const firstEver = !license.lastPulledAt && !license.lastPushedAt;
+  const trace = createSyncTrace({ trigger: options.trigger, deep: options.deep });
+  const ids = { syncId: trace.syncId, traceId: trace.traceId, layer: "local" as const };
+  outcome.syncId = trace.syncId;
+  const startedAt = performance.now();
+  const firstEver = !license.lastPulledAt && !license.lastPushedAt;
+  const attempt = consecutiveFailures + 1;
 
+  // Counts, ids and durations only — never what was in a row. A cycle started by the timer or a background write is routine
+  // and logs at DEBUG; one the person started, or opened the app for, logs at INFO.
+  if (attempt > 1) log.warn("SYNC_RETRY", { ...ids, attempt, previousKind: lastFailureKind, trigger: trace.trigger });
+  log.log(isRoutineTrigger(trace.trigger) ? "DEBUG" : "INFO", "SYNC_STARTED", { ...ids, trigger: trace.trigger, deep: trace.deep, firstEver, attempt });
+
+  try {
     const pull = await pullRemoteChanges(db, license.token, license.lastPulledAt, {
       overlapMs: options.deep ? PULL_OVERLAP_DEEP_MS : PULL_OVERLAP_SHORT_MS,
+      trace,
+      lastPushedAt: license.lastPushedAt,
     });
+    outcome.created = pull.created;
+    outcome.updated = pull.updated;
+    outcome.conflicts = pull.conflicts;
     setLastPulledAt(db, pull.syncedAt);
     outcome.pulledCount = Object.values(pull.pulled).reduce((s, n) => s + n, 0);
     outcome.deletionsPulled = pull.tombstonesApplied;
@@ -120,7 +155,7 @@ export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyn
       reconcileReminderNotifications(db);
     }
 
-    const push = await pushLocalChanges(db, license.token, license.remoteUserId, license.lastPushedAt);
+    const push = await pushLocalChanges(db, license.token, license.remoteUserId, license.lastPushedAt, { trace });
     setLastPushedAt(db, push.pushedAt);
     outcome.pushedCount = Object.values(push.pushed).reduce((s, n) => s + n, 0);
     outcome.deletionsPushed = push.tombstonesSent;
@@ -129,6 +164,8 @@ export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyn
     if (push.protocol !== null) outcome.serverProtocol = push.protocol;
 
     outcome.ok = true;
+    consecutiveFailures = 0;
+    lastFailureKind = undefined;
     setSyncMeta(db, META_LAST_OK_AT, new Date().toISOString());
     setSyncMeta(db, META_LAST_ERROR, null);
   } catch (err) {
@@ -136,16 +173,48 @@ export async function runSync(db: LocalDb, license: SyncLicense, options: RunSyn
     setSyncMeta(db, META_LAST_ERROR, outcome.error.message);
     // Going offline is routine on a phone (WARN); anything else is a real problem (ERROR). Only
     // counts are logged — never what was in the rows.
+    consecutiveFailures++;
+    lastFailureKind = outcome.error.kind;
     log.log(outcome.error.kind === "network" ? "WARN" : "ERROR", "SYNC_FAILED", {
+      ...ids,
       error: err,
       errorCode: syncErrorCode(outcome.error.kind),
-      layer: "local",
       kind: outcome.error.kind,
       status: outcome.error.status,
       pulledCount: outcome.pulledCount,
       pushedCount: outcome.pushedCount,
+      attempt,
+      trigger: trace.trigger,
+      // The server's own id for the request that failed: the key to its side of this failure.
+      serverRequestId: err instanceof SyncHttpError ? err.requestId : undefined,
     });
   }
   outcome.finishedAt = new Date().toISOString();
+  outcome.durationMs = Math.round((performance.now() - startedAt) * 100) / 100;
+
+  const deleted = outcome.deletionsPulled + outcome.deletionsPushed;
+  const changed = outcome.pulledCount > 0 || outcome.pushedCount > 0 || deleted > 0 || outcome.rejectedCount > 0;
+  if (outcome.ok) {
+    if (outcome.rejectedCount > 0) {
+      log.warn("SYNC_PARTIAL_SUCCESS", { ...ids, errorCode: "SYNC-005", rejected: outcome.rejectedCount, pushed: outcome.pushedCount, pulled: outcome.pulledCount, durationMs: outcome.durationMs });
+    } else {
+      log.log(changed ? "INFO" : "DEBUG", "SYNC_SUCCESS", { ...ids, trigger: trace.trigger, durationMs: outcome.durationMs });
+    }
+  }
+  // The end of every cycle, whatever happened: the counts a "what did this sync do?" question needs.
+  log.log(changed ? "INFO" : "DEBUG", "SYNC_COMPLETED", {
+    ...ids,
+    ok: outcome.ok,
+    trigger: trace.trigger,
+    created: outcome.created ?? 0,
+    updated: outcome.updated ?? 0,
+    pushed: outcome.pushedCount,
+    pulled: outcome.pulledCount,
+    deleted,
+    rejected: outcome.rejectedCount,
+    conflicts: outcome.conflicts ?? 0,
+    pullFailures: outcome.pullFailures,
+    durationMs: outcome.durationMs,
+  });
   return outcome;
 }

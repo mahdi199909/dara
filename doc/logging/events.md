@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-260 events in 39 domains.
+261 events in 39 domains.
 
 ## AUTH
 
@@ -314,24 +314,25 @@ Default module: `sync`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `SYNC_COMPLETED` | INFO | — | reserved | A sync cycle reached its end; counts and duration are in the fields. |
-| `SYNC_CONFLICT` | INFO | — | reserved | The same row changed on two sides; the newer edit won. |
+| `SYNC_COMPLETED` | INFO | — | yes | A sync cycle reached its end; counts and duration are in the fields. |
+| `SYNC_CONFLICT` | INFO | — | yes | The same row changed on two sides; the newer edit won. |
+| `SYNC_CORRELATION_UNSUPPORTED` | INFO | — | yes | The server did not accept the phone's correlation headers (an older server); requests go without them for a while. |
 | `SYNC_FAILED` | ERROR | protected | yes | A sync cycle did not finish. |
 | `SYNC_PARTIAL_SUCCESS` | WARN | protected | yes | A sync finished, but the server refused some rows. |
-| `SYNC_PAYLOAD_REJECTED` | WARN | protected | reserved | The server refused a row or a whole request body. |
-| `SYNC_PENDING` | DEBUG | — | reserved | A local write is waiting for the next sync. |
+| `SYNC_PAYLOAD_REJECTED` | WARN | protected | yes | The server refused a row or a whole request body. |
+| `SYNC_PENDING` | DEBUG | — | yes | A local write is waiting for the next sync. |
 | `SYNC_PULL_FAILED` | WARN | protected | reserved | Fetching changes from the server failed. |
 | `SYNC_PULL_ROW_FAILED` | WARN | protected | yes | A row the server sent could not be stored on the device. |
-| `SYNC_PULL_STARTED` | DEBUG | — | reserved | Fetching changes from the server. |
+| `SYNC_PULL_STARTED` | DEBUG | — | yes | Fetching changes from the server. |
 | `SYNC_PULL_SUCCESS` | DEBUG | — | yes | Server changes were fetched and applied. |
 | `SYNC_PUSH_FAILED` | WARN | protected | reserved | Sending local changes to the server failed. |
-| `SYNC_PUSH_STARTED` | DEBUG | — | reserved | Sending local changes to the server. |
+| `SYNC_PUSH_STARTED` | DEBUG | — | yes | Sending local changes to the server. |
 | `SYNC_PUSH_SUCCESS` | DEBUG | — | yes | Local changes were sent and accepted. |
-| `SYNC_RERUN_QUEUED` | DEBUG | — | reserved | A sync was requested while one was running; one more run is queued. |
+| `SYNC_RERUN_QUEUED` | DEBUG | — | yes | A sync was requested while one was running; one more run is queued. |
 | `SYNC_RETRY` | WARN | protected | yes | A failed sync will be tried again. |
-| `SYNC_SIZE_LIMIT_EXCEEDED` | WARN | protected | reserved | A sync request exceeded the size limit and was split or refused. |
-| `SYNC_STARTED` | INFO | — | reserved | A sync cycle began (the trigger is in the fields). |
-| `SYNC_SUCCESS` | INFO | — | reserved | A sync cycle finished without any failure. |
+| `SYNC_SIZE_LIMIT_EXCEEDED` | WARN | protected | yes | A sync request exceeded the size limit and was split or refused. |
+| `SYNC_STARTED` | INFO | — | yes | A sync cycle began (the trigger is in the fields). |
+| `SYNC_SUCCESS` | INFO | — | yes | A sync cycle finished without any failure. |
 
 ## DB
 
@@ -385,8 +386,8 @@ Default module: `backup`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `EXPORT_COMPLETED` | INFO | — | reserved | A data export finished. |
-| `EXPORT_FAILED` | ERROR | protected | reserved | A data export failed. |
+| `EXPORT_COMPLETED` | INFO | — | yes | A data export finished. |
+| `EXPORT_FAILED` | ERROR | protected | yes | A data export failed. |
 | `EXPORT_STARTED` | INFO | — | reserved | A data export started. |
 
 ## IMPORT
@@ -450,12 +451,12 @@ Default module: `notifications`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `LOCAL_NOTIFICATION_CANCELLED` | DEBUG | high-volume | reserved | A scheduled reminder was cancelled. |
+| `LOCAL_NOTIFICATION_CANCELLED` | DEBUG | high-volume | yes | A scheduled reminder was cancelled. |
 | `LOCAL_NOTIFICATION_FAILED` | ERROR | protected | yes | A reminder could not be scheduled, moved or cancelled with the operating system. |
 | `LOCAL_NOTIFICATION_PERMISSION_FAILED` | WARN | protected | yes | Notification permission could not be requested or was not granted. |
-| `LOCAL_NOTIFICATION_RECONCILED` | DEBUG | — | reserved | The operating system's schedule was aligned with the database. |
-| `LOCAL_NOTIFICATION_RESCHEDULED` | DEBUG | high-volume | reserved | A scheduled reminder was moved. |
-| `LOCAL_NOTIFICATION_SCHEDULED` | DEBUG | high-volume | reserved | A reminder was scheduled with the operating system. |
+| `LOCAL_NOTIFICATION_RECONCILED` | DEBUG | — | yes | The operating system's schedule was aligned with the database. |
+| `LOCAL_NOTIFICATION_RESCHEDULED` | DEBUG | high-volume | yes | A scheduled reminder was moved. |
+| `LOCAL_NOTIFICATION_SCHEDULED` | DEBUG | high-volume | yes | A reminder was scheduled with the operating system. |
 
 ## WIDGET
 
@@ -463,10 +464,10 @@ Default module: `widgets`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `WIDGET_ACTION_RECEIVED` | DEBUG | — | reserved | A home-screen widget action arrived. |
+| `WIDGET_ACTION_RECEIVED` | DEBUG | — | yes | A home-screen widget action arrived. |
 | `WIDGET_QUEUE_ADDED` | DEBUG | — | reserved | A widget action was queued. |
 | `WIDGET_QUEUE_FAILED` | ERROR | protected | yes | A queued widget action failed; it stays queued and the rest of the queue continues. |
-| `WIDGET_QUEUE_PROCESSED` | DEBUG | — | reserved | Queued widget actions were applied to the database. |
+| `WIDGET_QUEUE_PROCESSED` | DEBUG | — | yes | Queued widget actions were applied to the database. |
 | `WIDGET_REFRESH_FAILED` | ERROR | — | yes | A home-screen widget could not be repainted or its data could not be prepared. |
 
 ## LICENSE
@@ -512,7 +513,7 @@ Default module: `system`
 | `LOG_INTERNAL_ERROR` | ERROR | protected | yes | A log record could not be built; a reduced record was written instead. |
 | `LOG_LEVEL_CHANGED` | INFO | protected | yes | A log level was changed at runtime. |
 | `LOG_QUEUE_OVERFLOW` | WARN | protected | reserved | The log queue was full and records were dropped. |
-| `LOG_SINK_FAILED` | ERROR | protected | reserved | A log sink failed to write; logging continues without it. |
+| `LOG_SINK_FAILED` | ERROR | protected | yes | A log sink failed to write; logging continues without it. |
 
 ## AUDIT
 
@@ -528,5 +529,5 @@ Default module: `ui`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
-| `UI_RENDER_ERROR` | ERROR | protected | reserved | A screen failed to render. |
+| `UI_RENDER_ERROR` | ERROR | protected | yes | A screen failed to render. |
 

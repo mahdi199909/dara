@@ -6,6 +6,7 @@
 // (it needs raw fetch(), not the JSON-error-shape handling `handle()` below provides). Every
 // other /api/* call in the app goes through apiClient.ts's local-dispatcher branching instead.
 import { ApiClientError } from "./apiClient";
+import { remoteFetch } from "./remoteFetch";
 
 // Overridable at build time (e.g. for a staging backend) via NEXT_PUBLIC_REMOTE_API_BASE.
 // Production backend moved off Railway to a dedicated VPS on 2026-09-15 (dara.mganic.ir's DNS
@@ -43,8 +44,10 @@ export interface RemoteAuthResult {
   token: string;
 }
 
+// (Login, registration and the license check go through remoteFetch: the same request also carries this phone's
+// device id and a trace id, so the server's record of it can be found from the phone's log — see remoteFetch.ts.)
 export function remoteLogin(email: string, password: string): Promise<RemoteAuthResult> {
-  return fetch(`${REMOTE_API_BASE}/api/auth/login`, {
+  return remoteFetch(`${REMOTE_API_BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
@@ -53,7 +56,7 @@ export function remoteLogin(email: string, password: string): Promise<RemoteAuth
 }
 
 export function remoteRegister(name: string, email: string, password: string): Promise<RemoteAuthResult> {
-  return fetch(`${REMOTE_API_BASE}/api/auth/register`, {
+  return remoteFetch(`${REMOTE_API_BASE}/api/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, email, password }),
@@ -76,7 +79,7 @@ export interface RemoteLicenseStatus {
 }
 
 export function fetchRemoteLicenseStatus(token: string): Promise<RemoteLicenseStatus> {
-  return fetch(`${REMOTE_API_BASE}/api/license/status`, {
+  return remoteFetch(`${REMOTE_API_BASE}/api/license/status`, {
     headers: { Authorization: `Bearer ${token}` },
   }).then((res) => handle<RemoteLicenseStatus>(res));
 }

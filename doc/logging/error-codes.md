@@ -24,8 +24,8 @@
 | `SYNC-002` | SERVER_ERROR | — | yes | yes | The server answered a sync request with a 5xx status. |
 | `SYNC-003` | AUTH_REJECTED | — | no | yes | The server refused the device's session (401/403). |
 | `SYNC-004` | PAYLOAD_TOO_LARGE | — | yes | yes | A sync request exceeded the proxy's body-size limit (413). |
-| `SYNC-005` | ROW_REJECTED | — | no | reserved | The server refused an individual row (bad reference, invalid value, other account). |
-| `SYNC-006` | CONFLICT | — | no | reserved | The same row changed on two sides; the newer edit won. |
+| `SYNC-005` | ROW_REJECTED | — | no | yes | The server refused an individual row (bad reference, invalid value, other account). |
+| `SYNC-006` | CONFLICT | — | no | yes | The same row changed on two sides; the newer edit won. |
 | `SYNC-007` | PROTOCOL_MISMATCH | — | no | reserved | Device and server speak different sync protocol versions. |
 | `SYNC-008` | LOCAL_APPLY_FAILED | — | yes | yes | A row the server sent could not be stored on the device. |
 | `SYNC-009` | UNKNOWN | — | yes | yes | A sync failure that fits no other code. |

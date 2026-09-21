@@ -25,23 +25,29 @@ function isNativePlatform(): boolean {
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-async function backgroundSync(): Promise<void> {
+async function backgroundSync(trigger: "local-write" | "poll"): Promise<void> {
   try {
     const { syncWithServer } = await import("./nativeOnboarding");
-    const outcome = await syncWithServer();
+    const outcome = await syncWithServer({ trigger });
     if (outcome.pulledCount > 0 || outcome.deletionsPulled > 0) mutate(() => true, undefined, { revalidate: true });
   } catch (err) {
     // syncWithServer never throws by design; this only catches something unexpected around it.
-    log.error("SYNC_FAILED", { error: err, errorCode: "SYNC-009", layer: "local", trigger: "background" });
+    log.error("SYNC_FAILED", { error: err, errorCode: "SYNC-009", layer: "local", trigger });
   }
 }
 
+let pendingWrites = 0;
+
 export function noteLocalWrite(): void {
   if (!isNativePlatform()) return;
+  pendingWrites++;
+  // A write is waiting for the next sync: the phone-side half of "the expense is on the phone but not on the web" (scenario: offline).
+  log.debug("SYNC_PENDING", { layer: "local", syncStatus: "PENDING", pendingWrites, debounceMs: DEBOUNCE_MS });
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
-    void backgroundSync();
+    pendingWrites = 0;
+    void backgroundSync("local-write");
   }, DEBOUNCE_MS);
 }
 
@@ -51,7 +57,7 @@ export function startForegroundPolling(): () => void {
   if (!isNativePlatform()) return () => {};
   const id = setInterval(() => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-    void backgroundSync();
+    void backgroundSync("poll");
   }, POLL_INTERVAL_MS);
   return () => clearInterval(id);
 }

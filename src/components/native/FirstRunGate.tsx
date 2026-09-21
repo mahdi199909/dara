@@ -18,6 +18,7 @@ import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStat
 import { checkVersionGate, refreshVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { APP_NAME } from "@/lib/appVersion";
 import { getLogger } from "@/lib/observability";
+import { setClientUser } from "@/lib/observability/client/clientContext";
 import { ApiClientError } from "@/lib/apiClient";
 import type { LocalDb } from "@/local/db";
 
@@ -99,6 +100,16 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       return;
     }
     (async () => {
+      // Logging to the phone's own file starts before anything else, so a failure during startup is on record too
+      // (see src/lib/observability/client/install.ts). It never blocks getting into the app.
+      try {
+        const { installClientLogging } = await import("@/lib/observability/client/install");
+        await installClientLogging();
+        log.info("SYSTEM_STARTED", { layer: "local", trigger: "launch" });
+      } catch (err) {
+        log.warn("LOG_SINK_FAILED", { error: err, layer: "local", trigger: "boot" });
+      }
+
       // The on-device database driver is loaded once here, before anything (including the
       // cached-license check right below) tries to read/write local data — see
       // src/local/drivers/browserSqlJs.ts and setLocalDbDriver in src/lib/localDispatcher.ts.
@@ -168,6 +179,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
         .catch((err) => log.warn("LOCAL_NOTIFICATION_PERMISSION_FAILED", { error: err, errorCode: "NOTIF-002", layer: "local", trigger: "boot" }));
 
       const license = await getCachedLicense();
+      setClientUser(license?.remoteUserId); // from here on the phone's records name the account the server knows
       setReady(!!license);
 
       // Cache-only first (no network wait — same instant-boot posture as the rest of this
@@ -182,7 +194,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       // refreshVersionGate is the public update check (no login needed), so a phone that only ever
       // worked offline is locked out of an unsupported build just like a signed-in one.
       void Promise.all([refreshLicenseStatus(), refreshVersionGate()]).then(recheckVersionGate);
-      void syncWithServer({ deep: true }).then(async (outcome) => {
+      void syncWithServer({ deep: true, trigger: "boot" }).then(async (outcome) => {
         // The UI may already be showing the previous state by the time this lands.
         if (outcome.pulledCount > 0 || outcome.deletionsPulled > 0) {
           const { mutate } = await import("swr");

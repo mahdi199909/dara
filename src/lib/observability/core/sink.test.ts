@@ -248,6 +248,64 @@ describe("BatchingSink", () => {
     return sink.close();
   });
 
+  describe("urgentFlushMs: an error should be written down soon, not at the next interval", () => {
+    it("is off by default: an error waits for the interval like anything else", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 5_000 });
+      sink.write(record({ level: "ERROR" }));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(inner.written).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(4_100);
+      expect(inner.written).toHaveLength(1);
+    });
+
+    it("brings the flush forward for a protected record, and takes the records that were waiting with it", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 30_000, urgentFlushMs: 500 });
+      sink.write(record({ message: "routine" }));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(inner.written).toHaveLength(0); // an ordinary record waits
+
+      sink.write(record({ level: "ERROR", message: "boom" }));
+      await vi.advanceTimersByTimeAsync(499);
+      expect(inner.written).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(inner.written.map((r) => r.message)).toEqual(["routine", "boom"]);
+    });
+
+    it("is not triggered by an ordinary record", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 30_000, urgentFlushMs: 100 });
+      sink.write(record({ level: "WARN" }));
+      sink.write(record({ level: "INFO" }));
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(inner.written).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(25_100);
+      expect(inner.written).toHaveLength(2);
+    });
+
+    it("never pushes back a flush that is already due sooner", async () => {
+      const inner = new RecordingSink();
+      const sink = new BatchingSink(inner, { flushIntervalMs: 200, urgentFlushMs: 500 });
+      sink.write(record()); // due in 200 ms
+      sink.write(record({ level: "ERROR" })); // an urgent flush would be 500 ms away: the earlier one stays
+      await vi.advanceTimersByTimeAsync(210);
+      expect(inner.written).toHaveLength(2);
+    });
+
+    it("leaves the timing to the back-off while the circuit is open: an error does not bring the retry forward", async () => {
+      const inner = new RecordingSink();
+      inner.failNext = 100;
+      const sink = new BatchingSink(inner, { flushIntervalMs: 10, failureThreshold: 1, baseBackoffMs: 60_000, urgentFlushMs: 100, now: () => 0 });
+      sink.write(record({ message: "first" }));
+      await sink.flush(); // fails: the circuit opens for a minute
+      inner.failNext = 0;
+      sink.write(record({ level: "ERROR", message: "important" }));
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(inner.written).toHaveLength(0); // still backing off
+    });
+  });
+
   it("drains on close and closes the inner sink once", async () => {
     let closed = 0;
     const inner: LogSink = { name: "inner", write: () => {}, close: async () => void closed++ };

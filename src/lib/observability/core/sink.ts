@@ -143,6 +143,12 @@ export interface BatchingOptions {
   reportIntervalMs?: number;
   /** Sees ERROR-and-above records immediately while the circuit is open (typically the console). */
   fallback?: LogSink | null;
+  /**
+   * When set, a protected record (ERROR and above by default) brings the next flush forward to at most this many
+   * milliseconds away: a phone that is about to be killed after a crash should have written the error down.
+   * Default: no such urgency.
+   */
+  urgentFlushMs?: number;
   /** Which records may never be sacrificed; default: ERROR and above. */
   isProtected?: (record: LogRecord) => boolean;
   now?: () => number;
@@ -207,6 +213,7 @@ export class BatchingSink implements LogSink {
   private readonly maxBackoffMs: number;
   private readonly reportIntervalMs: number;
   private readonly fallback: LogSink | null;
+  private readonly urgentFlushMs: number | undefined;
   private readonly isProtected: (record: LogRecord) => boolean;
   private readonly now: () => number;
   private readonly timers: NonNullable<BatchingOptions["timers"]>;
@@ -218,6 +225,7 @@ export class BatchingSink implements LogSink {
   private seq = 0;
 
   private timer: unknown = null;
+  private timerDueAt = 0;
   private flushing: Promise<void> | null = null;
 
   private state: CircuitState = "closed";
@@ -243,6 +251,7 @@ export class BatchingSink implements LogSink {
     this.maxBackoffMs = options.maxBackoffMs ?? 60_000;
     this.reportIntervalMs = options.reportIntervalMs ?? 60_000;
     this.fallback = options.fallback ?? null;
+    this.urgentFlushMs = options.urgentFlushMs;
     this.isProtected = options.isProtected ?? ((record) => LEVEL_VALUE[record.level] >= LEVEL_VALUE.ERROR);
     this.now = options.now ?? Date.now;
     this.timers = options.timers ?? defaultTimers;
@@ -262,6 +271,7 @@ export class BatchingSink implements LogSink {
     this.queues[priority].push({ seq: ++this.seq, record });
     this.size++;
     this.schedule(this.size >= this.maxBatch ? 0 : this.flushIntervalMs);
+    if (priority === 2) this.scheduleUrgent();
   }
 
   async flush(): Promise<void> {
@@ -343,10 +353,26 @@ export class BatchingSink implements LogSink {
 
   private schedule(delayMs: number): void {
     if (this.timer !== null) return;
+    this.timerDueAt = this.now() + delayMs;
     this.timer = this.timers.set(() => {
       this.timer = null;
       void this.flush();
     }, delayMs);
+  }
+
+  /** Brings a pending flush forward (see urgentFlushMs); while the circuit is open the back-off decides instead. */
+  private scheduleUrgent(): void {
+    if (this.urgentFlushMs === undefined || this.state === "open") return;
+    const dueAt = this.now() + this.urgentFlushMs;
+    if (this.timer !== null) {
+      if (this.timerDueAt <= dueAt) return;
+      this.timers.clear(this.timer);
+    }
+    this.timerDueAt = dueAt;
+    this.timer = this.timers.set(() => {
+      this.timer = null;
+      void this.flush();
+    }, this.urgentFlushMs);
   }
 
   /** Takes up to maxBatch records in their original order across the three priority buckets. */

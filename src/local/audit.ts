@@ -5,9 +5,16 @@
 import type { LocalDb } from "./db";
 import { buildAuditChanges, getLogger, newId, resolveAuditIdentity, serializeChanges, type AuditChanges } from "../lib/observability";
 import { afterLocalCommit } from "./transaction";
+import { getClientDeviceId } from "../lib/observability/client/clientContext";
+import { SYNC_TABLES } from "../lib/syncTables";
 
 // No fixed module: each event takes the module of its own domain (TASK_UPDATE_SUCCESS → tasks, AUDIT_WRITE_FAILED → audit).
 const log = getLogger(null, "local-writer");
+
+/** Whether a change to this kind of entity travels to the server on the next sync (so, until then, it is PENDING). */
+function syncsToServer(entityType: string): boolean {
+  return entityType === "Settings" || SYNC_TABLES.some((table) => table.table === entityType);
+}
 
 interface LocalAuditParams {
   userId: string;
@@ -35,8 +42,8 @@ export function writeLocalAuditLog(db: LocalDb, params: LocalAuditParams): void 
   try {
     changes = params.changes !== undefined ? params.changes : buildAuditChanges(params.oldValue, params.newValue);
     db.run(
-      `INSERT INTO "AuditLog" ("id", "userId", "action", "entityType", "entityId", "oldValue", "newValue", "metadata", "event", "source", "localEventId", "changes", "createdAt")
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO "AuditLog" ("id", "userId", "action", "entityType", "entityId", "oldValue", "newValue", "metadata", "event", "source", "deviceId", "localEventId", "changes", "createdAt")
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
         params.userId,
@@ -48,6 +55,7 @@ export function writeLocalAuditLog(db: LocalDb, params: LocalAuditParams): void 
         params.metadata !== undefined ? JSON.stringify(params.metadata) : null,
         identity.event,
         "local",
+        getClientDeviceId() ?? null,
         localEventId,
         serializeChanges(changes),
         new Date().toISOString(),
@@ -65,6 +73,8 @@ export function writeLocalAuditLog(db: LocalDb, params: LocalAuditParams): void 
         entityId: params.entityId,
         operation: identity.action,
         localEventId,
+        // The change is in this phone's database and reaches the server with the next sync: until then it is pending.
+        syncStatus: syncsToServer(identity.entityType) ? "PENDING" : undefined,
         changedFields: changes?.changedFields,
         layer: "local",
       })

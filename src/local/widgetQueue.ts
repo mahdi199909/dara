@@ -92,6 +92,8 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
   }
 
   const valid = entries.filter(isQueuedCapture);
+  // The native half (the widget's own Java code) cannot write to the app's log; this is where its actions first become visible.
+  if (valid.length > 0) log.debug("WIDGET_ACTION_RECEIVED", { layer: "local", queue: "capture", count: valid.length, malformed: entries.length - valid.length });
   let applied = 0;
   // Entries that fail stay queued for the next drain instead of being wiped along with the
   // ones that succeeded — this used to unconditionally clear the whole queue after the loop, so
@@ -129,6 +131,7 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
   } else {
     await Preferences.remove({ key: QUEUE_KEY });
   }
+  if (valid.length > 0) log.debug("WIDGET_QUEUE_PROCESSED", { layer: "local", queue: "capture", applied, failed: failed.length });
   return applied;
 }
 
@@ -152,6 +155,7 @@ async function drainHabitCheckInQueue(db: LocalDb, userId: string): Promise<numb
   }
 
   const valid = entries.filter(isQueuedHabitCheckIn);
+  if (valid.length > 0) log.debug("WIDGET_ACTION_RECEIVED", { layer: "local", queue: "habit_checkin", count: valid.length, malformed: entries.length - valid.length });
   let applied = 0;
   // Same fix as drainCaptureQueue above — keep failed entries queued for retry instead of
   // wiping them along with the ones that succeeded.
@@ -172,6 +176,7 @@ async function drainHabitCheckInQueue(db: LocalDb, userId: string): Promise<numb
   } else {
     await Preferences.remove({ key: HABIT_CHECKIN_QUEUE_KEY });
   }
+  if (valid.length > 0) log.debug("WIDGET_QUEUE_PROCESSED", { layer: "local", queue: "habit_checkin", applied, failed: failed.length });
   return applied;
 }
 
