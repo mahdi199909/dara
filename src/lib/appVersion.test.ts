@@ -68,8 +68,16 @@ describe("the announced release", () => {
   });
 
   it("lets an admin announce a higher version, force a minimum and use another link", () => {
-    const info = resolveAppRelease({ latestVersionCode: 10500, minSupportedVersionCode: 10400, downloadUrl: " https://example.org/app.apk " });
-    expect(info).toEqual({ latestVersionName: "1.5.0", latestVersionCode: 10500, minSupportedVersionCode: 10400, downloadUrl: "https://example.org/app.apk" });
+    // Relative to the real built-in version (not a hardcoded absolute code) so this stays a
+    // genuine "admin announces something newer than the code" case across future version bumps.
+    const higherCode = LATEST_APP_VERSION_CODE + 100;
+    const info = resolveAppRelease({ latestVersionCode: higherCode, minSupportedVersionCode: LATEST_APP_VERSION_CODE, downloadUrl: " https://example.org/app.apk " });
+    expect(info).toEqual({
+      latestVersionName: versionNameFromCode(higherCode),
+      latestVersionCode: higherCode,
+      minSupportedVersionCode: LATEST_APP_VERSION_CODE,
+      downloadUrl: "https://example.org/app.apk",
+    });
   });
 
   it("never lets the minimum exceed the newest version", () => {

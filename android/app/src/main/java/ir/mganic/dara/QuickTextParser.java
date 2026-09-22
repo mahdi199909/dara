@@ -123,20 +123,44 @@ final class QuickTextParser {
         return out.trim();
     }
 
+    private static final String PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+    private static final String ARABIC_INDIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+
+    /** Same conversion as toAsciiDigits in src/lib/money.ts, applied first for the same reason
+     * parser.ts's own parse() does — every \d in the patterns below is ASCII-only (Java regex,
+     * same as JS regex, never matches ۰-۹ or ٠-٩), and an Android Persian-locale keyboard types
+     * ۰-۹ by default, so without this every duration/amount pattern here silently never matched
+     * anything a person actually typed. */
+    private static String toAsciiDigits(String input) {
+        StringBuilder sb = new StringBuilder(input.length());
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            int p = PERSIAN_DIGITS.indexOf(c);
+            if (p >= 0) {
+                sb.append((char) ('0' + p));
+                continue;
+            }
+            int a = ARABIC_INDIC_DIGITS.indexOf(c);
+            sb.append(a >= 0 ? (char) ('0' + a) : c);
+        }
+        return sb.toString();
+    }
+
     static Result parse(String rawInput) {
-        String remaining = rawInput == null ? "" : rawInput.trim();
+        String normalized = rawInput == null ? "" : toAsciiDigits(rawInput).trim();
+        String remaining = normalized;
 
         DurationMatch durationMatch = extractDuration(remaining);
         if (durationMatch != null) remaining = durationMatch.remaining;
 
         // Same precedence as parser.ts: خرید strips from the remaining text (after duration is
-        // already out of the way), a WASTE keyword (checked against the ORIGINAL text, same as
-        // parser.ts's `normalized`) wins over it if both are somehow present.
+        // already out of the way), a WASTE keyword (checked against the full normalized text,
+        // before duration/خرید stripping) wins over it if both are somehow present.
         Matcher purchase = PURCHASE_KEYWORD.matcher(remaining);
         boolean hadPurchaseKeyword = purchase.find();
         if (hadPurchaseKeyword) remaining = strip(remaining, purchase);
 
-        String categoryHint = extractCategoryHint(rawInput == null ? "" : rawInput);
+        String categoryHint = extractCategoryHint(normalized);
         if (categoryHint == null && hadPurchaseKeyword) categoryHint = "خرید";
 
         String title = cleanTitle(remaining);
