@@ -19,6 +19,9 @@ export interface CapturePrefill {
   flowType: "COST" | "INCOME"; // the parser has no income signal (yet) — money mentioned this way defaults to a cost
   /** A category NAME the caller matches against the person's real categories — never invented, never applied on its own. */
   categoryHint: string | null;
+  /** A project NAME or a fragment of one — the caller fuzzy-matches it against the person's real
+   * projects, and only ever creates a new one after the person confirms (see SmartCaptureConfirm). */
+  projectHint: string | null;
 }
 
 function atMidnight(date: Date): Date {
@@ -63,5 +66,36 @@ export function buildCapturePrefill(rawInput: string, now: Date = new Date()): C
     amount: parsed.amount,
     flowType: "COST",
     categoryHint: parsed.categoryHint,
+    projectHint: parsed.projectHint,
   };
+}
+
+interface MatchableCategory {
+  id: string;
+  name: string;
+  isActive: boolean;
+  projectId?: string | null;
+}
+
+/** Same exact-or-substring match CaptureForm has always used for a plain category hint. */
+export function matchCategoryHint<T extends MatchableCategory>(hint: string, categories: T[]): T | null {
+  return categories.find((c) => c.isActive && (c.name === hint || c.name.includes(hint))) ?? null;
+}
+
+/** A project hint is looser than a category one on purpose — the person may only remember a
+ * fragment of the project's name ("پروژه اتاق" for a project actually called "بازسازی اتاق"), so
+ * this also matches on any single shared word, not just a substring either direction. Only
+ * candidates a project actually generated (categoryId's `projectId` set) are eligible — a category
+ * that merely happens to share a word with the hint but isn't a project's own category must never
+ * silently tag an entry to a project it has nothing to do with. */
+export function matchProjectHint<T extends MatchableCategory>(hint: string, categories: T[]): T | null {
+  const candidates = categories.filter((c) => c.isActive && c.projectId);
+  const exact = candidates.find((c) => c.name === hint || c.name.includes(hint) || hint.includes(c.name));
+  if (exact) return exact;
+
+  const hintWords = hint.split(/\s+/).filter(Boolean);
+  return candidates.find((c) => {
+    const nameWords = c.name.split(/\s+/).filter(Boolean);
+    return hintWords.some((w) => nameWords.includes(w));
+  }) ?? null;
 }

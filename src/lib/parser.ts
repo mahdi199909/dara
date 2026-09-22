@@ -9,6 +9,11 @@ export interface ParsedCapture {
   date: Date | null;
   hasExplicitTime: boolean;
   categoryHint: string | null;
+  /** A project name (or a fragment of one — "پروژه اتاق" for a project actually named "بازسازی
+   * اتاق") pulled out of "پروژه ..." / "... برای پروژه ..." — fuzzy-matched against the person's
+   * real projects by the caller (src/lib/smartCapture.ts), same "hint, not a fact" contract as
+   * categoryHint. */
+  projectHint: string | null;
   suggestedType: CaptureType;
 }
 
@@ -87,11 +92,36 @@ function extractDuration(text: string): { minutes: number; remaining: string } |
 // capture note types the way they'd say it out loud, and "تومن" is by far the more common of the two.
 const TOMAN_WORD = /توم[ا]?ن/;
 
+// Small spoken number-words that precede a scale word ("یک میلیون", "پنج هزار") — deliberately
+// NOT the teens (یازده..نوزده): several of those share a leading substring with a smaller word in
+// this same map ("دو" inside "دوازده", "سه" inside "سیزده"...), and without careful longest-match
+// ordering that reads "دوازده میلیون" as "دو" + a stray "ازده". A spoken amount almost never needs
+// a teen anyway ("دوازده میلیون" is rare next to "دوازده تا" for a count) — round tens cover the
+// realistic range without that ambiguity.
+const NUMBER_WORDS: Record<string, number> = {
+  "یک": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5,
+  "شش": 6, "هفت": 7, "هشت": 8, "نه": 9, "ده": 10,
+  "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50,
+  "شصت": 60, "هفتاد": 70, "هشتاد": 80, "نود": 90, "صد": 100,
+};
+// Longest word first, so "بیست" is tried before any word it might otherwise partially collide
+// with in the alternation — cheap insurance even though the current set has no real overlaps.
+const NUMBER_WORD_PATTERN = Object.keys(NUMBER_WORDS)
+  .sort((a, b) => b.length - a.length)
+  .join("|");
+
 function extractAmount(text: string): { amount: number; remaining: string } | null {
   // Requires a scale word so it never collides with a bare duration number, e.g. "۱.۵ میلیون"
   let m = text.match(new RegExp(`(\\d+(?:[.,]\\d+)*)\\s*(میلیارد|میلیون|هزار)\\s*(${TOMAN_WORD.source})?`));
   if (m) {
     const amount = parseAmount(`${m[1]} ${m[2]}`);
+    if (amount !== null) return { amount, remaining: stripMatch(text, m) };
+  }
+
+  // Spoken number-word + scale word, e.g. "یک میلیون", "پنج هزار تومن"
+  m = text.match(new RegExp(`(${NUMBER_WORD_PATTERN})\\s*(میلیارد|میلیون|هزار)\\s*(${TOMAN_WORD.source})?`));
+  if (m) {
+    const amount = parseAmount(`${NUMBER_WORDS[m[1]]} ${m[2]}`);
     if (amount !== null) return { amount, remaining: stripMatch(text, m) };
   }
 
@@ -184,6 +214,30 @@ function extractCategoryHint(text: string): string | null {
   return null;
 }
 
+// "خرید" (purchase) is a strong enough signal to name its own category hint and be pulled out of
+// the title — "خرید رنگ" reading as a bare title "رنگ" (paint) tagged هزینه/خرید is clearer than
+// leaving the verb sitting in there. Unlike the WASTE_CATEGORY_KEYWORDS above (left in place —
+// nothing asked for those to change), this one strips the matched word from the remaining text.
+function extractPurchaseKeyword(text: string): { remaining: string } | null {
+  const m = text.match(/خرید/);
+  if (!m) return null;
+  return { remaining: stripMatch(text, m) };
+}
+
+// "پروژه X" / "برای پروژه X" trailing the rest of the line, once everything else (duration,
+// amount, date, time) has already been stripped out of it — a project mention reads as the last
+// clause in every example this was built for ("خرید رنگ پروژه اتاق", "... برای پروژه بازسازی").
+// The hint is fuzzy — it may be the project's exact name or just a fragment of it ("اتاق" for a
+// project actually named "بازسازی اتاق") — src/lib/smartCapture.ts does the real matching once it
+// has the person's actual project list.
+function extractProjectHint(text: string): { hint: string; remaining: string } | null {
+  const m = text.match(/(?:برای\s+)?پروژه[یِ‌]?\s+([^,،]+?)\s*$/);
+  if (!m) return null;
+  const hint = m[1].trim();
+  if (!hint) return null;
+  return { hint, remaining: stripMatch(text, m) };
+}
+
 function cleanTitle(text: string): string {
   return text
     .replace(/\s+و\s+/g, " ")
@@ -208,6 +262,15 @@ export function parseQuickCapture(rawInput: string, now: Date = new Date()): Par
   const timeResult = extractTime(remaining);
   if (timeResult) remaining = timeResult.remaining;
 
+  // Project mention, then the "خرید" keyword — both read off what's left after every other
+  // signal (duration/amount/date/time) is already stripped, and in that order: "خرید رنگ پروژه
+  // اتاق" only reduces cleanly to "رنگ" if the trailing "پروژه اتاق" clause comes off first.
+  const projectResult = extractProjectHint(remaining);
+  if (projectResult) remaining = projectResult.remaining;
+
+  const purchaseResult = extractPurchaseKeyword(remaining);
+  if (purchaseResult) remaining = purchaseResult.remaining;
+
   let date: Date | null = null;
   const hasExplicitTime = !!timeResult;
   if (dateResult || timeResult) {
@@ -219,7 +282,10 @@ export function parseQuickCapture(rawInput: string, now: Date = new Date()): Par
     }
   }
 
-  const categoryHint = extractCategoryHint(normalized);
+  // A WASTE keyword (اینستاگرام, یوتیوب, ...) is a more specific signal than the bare fact of a
+  // purchase, so it wins if somehow both are present in the same line.
+  const categoryHint = extractCategoryHint(normalized) ?? (purchaseResult ? "خرید" : null);
+  const projectHint = projectResult?.hint ?? null;
   const title = cleanTitle(remaining) || "بدون عنوان";
 
   const durationMinutes = durationResult ? durationResult.minutes : null;
@@ -239,6 +305,7 @@ export function parseQuickCapture(rawInput: string, now: Date = new Date()): Par
     date,
     hasExplicitTime,
     categoryHint,
+    projectHint,
     suggestedType,
   };
 }

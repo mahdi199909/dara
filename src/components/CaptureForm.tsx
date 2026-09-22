@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { apiPost, fetcher, ApiClientError } from "@/lib/apiClient";
+import { fetcher, ApiClientError } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
-import { notifySaved } from "@/lib/savedToast";
-import { refreshAllCaches } from "@/lib/refreshCaches";
+import { saveCapture, hhmm, type CaptureSummary } from "@/lib/captureSave";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
 import TimePicker from "@/components/ui/TimePicker";
@@ -16,22 +15,7 @@ import { CAPTURE_TYPES, CAPTURE_TYPE_LABELS, VALUE_TYPES, VALUE_TYPE_LABELS, typ
 
 type FlowType = "COST" | "INCOME";
 
-// Plain ASCII "HH:MM", 24-hour — matches TimePicker's own value format, which submit()
-// below feeds straight into `new Date(\`${day10}T${startTime}:00\`)`. Not jalali.ts's formatTime:
-// that one applies toPersianDigits, which would break that exact Date-string parse.
-function hhmm(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/** What CaptureForm just submitted, for the Companion's immediate reaction (see its Home
- * wiring) — deliberately omits a "virtual asset" case, since that reaction already exists
- * (UpgradeToast, watching /api/virtual-assets/latest-effect) and would otherwise double up. */
-export interface CaptureSummary {
-  kind: "PRODUCTIVE" | "EXPENSE" | "WASTE";
-  minutes?: number;
-  amount?: number;
-}
+export type { CaptureSummary };
 
 export default function CaptureForm({
   onDone,
@@ -127,11 +111,6 @@ export default function CaptureForm({
     setProjectId(cat.projectId ?? null);
   }
 
-  function dayIso(d: Date) {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     await save(false);
@@ -145,79 +124,21 @@ export default function CaptureForm({
     setOverlap(null);
 
     try {
-      const amountNum = amount ? Number(amount) : undefined;
-      const day10 = dayIso(day);
-
-      if (entityType === "TASK") {
-        const dueDate = new Date(`${day10}T00:00:00`);
-        const startAt = startTime ? new Date(`${day10}T${startTime}:00`) : undefined;
-        const endAt = endTime ? new Date(`${day10}T${endTime}:00`) : undefined;
-        // Only when a time was actually entered — a bare day with no time isn't a strong enough
-        // signal either way, and would wrongly mark every same-day task "done" once midnight passes.
-        const referenceTime = endAt ?? startAt;
-        const status = referenceTime ? (referenceTime < new Date() ? "DONE" : "TODO") : undefined;
-
-        await apiPost("/api/tasks", {
-          title,
-          categoryId: categoryId ?? undefined,
-          projectId: projectId ?? undefined,
-          dueDate: dueDate.toISOString(),
-          valueType,
-          status,
-          directCost: flowType === "COST" ? amountNum : undefined,
-          incomeAmount: flowType === "INCOME" ? amountNum : undefined,
-          startAt: startAt?.toISOString(),
-          endAt: endAt?.toISOString(),
-          allowOverlap: allowOverlap || undefined,
-        });
-      } else {
-        let startAt: Date;
-        let endAt: Date;
-        let allDay: boolean;
-
-        if (startTime) {
-          startAt = new Date(`${day10}T${startTime}:00`);
-          endAt = endTime ? new Date(`${day10}T${endTime}:00`) : new Date(startAt.getTime() + 60 * 60000);
-          allDay = false;
-        } else {
-          startAt = new Date(`${day10}T00:00:00`);
-          endAt = new Date(`${day10}T23:59:59`);
-          allDay = true;
-        }
-
-        const { event } = await apiPost<{ event: { id: string } }>("/api/events", {
-          title,
-          startAt: startAt.toISOString(),
-          endAt: endAt.toISOString(),
-          allDay,
-          categoryId: categoryId ?? undefined,
-          projectId: projectId ?? undefined,
-          valueType,
-          directCost: flowType === "COST" ? amountNum : undefined,
-          incomeAmount: flowType === "INCOME" ? amountNum : undefined,
-          allowOverlap: allowOverlap || undefined,
-        });
-        // Same "already happened" default as a Task, expressed the way events track
-        // completion — a fresh EventCompletion row rather than a status field.
-        if (startTime && endAt < new Date()) {
-          await apiPost(`/api/events/${event.id}/complete`, { occurrenceDate: startAt.toISOString() });
-        }
-      }
-
-      refreshAllCaches();
-      notifySaved();
-
       const pickedCategory = categoryId ? categories.find((c: any) => c.id === categoryId) : null;
-      const durationMin = startTime && endTime ? Math.round((new Date(`${day10}T${endTime}:00`).getTime() - new Date(`${day10}T${startTime}:00`).getTime()) / 60000) : undefined;
-      let summary: CaptureSummary | undefined;
-      if (flowType === "COST" && amountNum && amountNum > 0) {
-        summary = { kind: "EXPENSE", amount: amountNum };
-      } else if (pickedCategory?.kind === "WASTE") {
-        summary = { kind: "WASTE" };
-      } else if (pickedCategory?.kind === "PRODUCTIVE" && durationMin && durationMin > 0) {
-        summary = { kind: "PRODUCTIVE", minutes: durationMin };
-      }
-
+      const summary = await saveCapture({
+        title,
+        entityType,
+        valueType,
+        categoryId,
+        projectId,
+        categoryKind: pickedCategory?.kind ?? null,
+        day,
+        startTime,
+        endTime,
+        flowType,
+        amount: amount ? Number(amount) : undefined,
+        allowOverlap,
+      });
       onDone(summary);
     } catch (err) {
       const refusal = overlapRefusal(err);

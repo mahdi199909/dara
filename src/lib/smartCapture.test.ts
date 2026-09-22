@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCapturePrefill } from "./smartCapture";
+import { buildCapturePrefill, matchCategoryHint, matchProjectHint } from "./smartCapture";
 
 const NOW = new Date(2026, 4, 10, 14, 30, 0); // 1405/02/20, a Sunday, "right now" is 14:30
 
@@ -51,6 +51,39 @@ describe("buildCapturePrefill", () => {
     const withMoney = buildCapturePrefill("۵۰۰ تومن خرج ناهار شد", NOW);
     expect(withMoney.amount).toBe(500);
     expect(withMoney.flowType).toBe("COST");
+  });
+
+  it("carries a project hint through, unresolved (the caller matches or creates it)", () => {
+    const r = buildCapturePrefill("خرید رنگ پروژه اتاق", NOW);
+    expect(r.projectHint).toBe("اتاق");
+    expect(r.categoryHint).toBe("خرید");
+    expect(r.title).toBe("رنگ");
+
+    const noProject = buildCapturePrefill("خرید نان", NOW);
+    expect(noProject.projectHint).toBeNull();
+  });
+
+  it("matchCategoryHint: exact and substring, never an inactive or unrelated category", () => {
+    const cats = [
+      { id: "1", name: "شبکه‌های اجتماعی", isActive: true },
+      { id: "2", name: "خرید", isActive: true },
+      { id: "3", name: "قدیمی", isActive: false },
+    ];
+    expect(matchCategoryHint("خرید", cats)?.id).toBe("2");
+    expect(matchCategoryHint("شبکه‌های اجتماعی", cats)?.id).toBe("1");
+    expect(matchCategoryHint("قدیمی", cats)).toBeNull();
+    expect(matchCategoryHint("چیزی که وجود ندارد", cats)).toBeNull();
+  });
+
+  it("matchProjectHint: a fragment of the project's own name still matches, a random category never does", () => {
+    const cats = [
+      { id: "p1", name: "بازسازی اتاق", isActive: true, projectId: "proj-1" },
+      { id: "c1", name: "اتاق کار", isActive: true, projectId: null }, // shares a word, but isn't a project
+    ];
+    expect(matchProjectHint("اتاق", cats)?.id).toBe("p1"); // fragment of the project's name
+    expect(matchProjectHint("بازسازی", cats)?.id).toBe("p1"); // the other fragment
+    expect(matchProjectHint("بازسازی اتاق", cats)?.id).toBe("p1"); // the exact name
+    expect(matchProjectHint("چیز نامرتبط", cats)).toBeNull();
   });
 
   it("the user's own example round-trips: today, a duration, and a تومن amount", () => {

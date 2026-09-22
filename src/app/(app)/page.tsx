@@ -7,6 +7,7 @@ import { fetcher, apiPost } from "@/lib/apiClient";
 import { useHabits } from "@/lib/hooks";
 import CaptureFormModal from "@/components/CaptureFormModal";
 import type { CaptureSummary } from "@/components/CaptureForm";
+import SmartCaptureConfirm from "@/components/SmartCaptureConfirm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import PersonalDashboard from "@/components/home/PersonalDashboard";
@@ -99,6 +100,9 @@ export default function HomePage() {
   // Set only by the smart-capture text field (src/lib/smartCapture.ts) — cleared whenever any
   // other capture entry point opens the same modal, so its fields never leak into a blank/gap open.
   const [smartPrefill, setSmartPrefill] = useState<CapturePrefill | null>(null);
+  // The "این ثبت بشه؟" summary shown right after a smart-capture parse, before the full form —
+  // see openSmartCapture below. Only one of this and showCapture is ever open at a time.
+  const [confirmPrefill, setConfirmPrefill] = useState<CapturePrefill | null>(null);
   const [reaction, setReaction] = useState<CaptureReaction | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
@@ -136,12 +140,11 @@ export default function HomePage() {
     setShowCapture(true);
   }
 
-  // The smart-capture text field: parse the typed line (src/lib/smartCapture.ts) and open the
-  // very same form filled in with what it found — the person still reviews and submits it themselves.
+  // The smart-capture text field: parse the typed line (src/lib/smartCapture.ts) and show a
+  // one-glance "این ثبت بشه؟" summary rather than the full form — اصلاح still opens that same
+  // form, pre-filled, for anyone who wants to check or change something first.
   function openSmartCapture(text: string) {
-    setCaptureRange(null);
-    setSmartPrefill(buildCapturePrefill(text));
-    setShowCapture(true);
+    setConfirmPrefill(buildCapturePrefill(text));
   }
 
   // The Companion's own reaction (a temporary delta message) — see phraseCaptureReaction.
@@ -151,12 +154,21 @@ export default function HomePage() {
     setShowCapture(false);
     setCaptureRange(null);
     setSmartPrefill(null);
+    setConfirmPrefill(null);
     mutate();
     mutateDayActivity();
     if (summary) {
       setReaction(summary);
       setTimeout(() => setReaction(null), 3000);
     }
+  }
+
+  // اصلاح on the smart-capture summary — hand the same prefill to the full form instead of saving it as-is.
+  function editSmartCapture() {
+    setCaptureRange(null);
+    setSmartPrefill(confirmPrefill);
+    setConfirmPrefill(null);
+    setShowCapture(true);
   }
 
   return (
@@ -231,6 +243,15 @@ export default function HomePage() {
           {activeHabits.length > 0 && <HabitAdherenceChart series={series} currentStreak={currentStreak} />}
         </div>
       </div>
+
+      {confirmPrefill && (
+        <SmartCaptureConfirm
+          prefill={confirmPrefill}
+          onConfirmed={handleCaptureDone}
+          onEdit={editSmartCapture}
+          onCancel={() => setConfirmPrefill(null)}
+        />
+      )}
 
       <CaptureFormModal
         open={showCapture}
