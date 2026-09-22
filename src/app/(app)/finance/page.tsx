@@ -15,6 +15,7 @@ import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
 import { notifySaved } from "@/lib/savedToast";
 import { InstallmentPlanCard, NewInstallmentPlanForm } from "@/components/finance/InstallmentPlans";
+import { detectRecurringTransactions, recurringSpendThisMonth, type RecurringCandidate } from "@/lib/recurringTransactions";
 
 const TABS = [
   { key: "transactions", label: "تراکنش‌ها" },
@@ -42,6 +43,7 @@ function FinancePageInner() {
       <h1 className="text-lg font-bold text-ink">مالی</h1>
 
       <FinanceSummary />
+      <RecurringTransactionSuggestions />
 
       <div className="flex gap-2">
         {TABS.map((t) => (
@@ -94,6 +96,97 @@ function FinanceSummary() {
         <StatItem label="دارایی غیر نقد شونده" value={format(nonLiquid, { withSuffix: true })} />
       </Card>
     </div>
+  );
+}
+
+/**
+ * "این هر ماه تکرار می‌شود، ثبت شود؟" — src/lib/recurringTransactions.ts finds ad-hoc (never an
+ * installment/task/event/activity's own transaction) entries repeating in the same category at a
+ * similar amount, and offers to log this month's occurrence in one tap. Nothing here ever writes
+ * on its own — تأیید posts the same /api/transactions call a person typing it in by hand would,
+ * and "فعلاً نه" only hides a candidate for this page view (not persisted — see the component's
+ * own note on why that's an acceptable v1 scope rather than a real dismissal record).
+ */
+function RecurringTransactionSuggestions() {
+  const { data, mutate } = useSWR<{ transactions: any[] }>("/api/transactions", fetcher);
+  const { format } = useCurrencyUnit();
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [loggingId, setLoggingId] = useState<string | null>(null);
+
+  const detected = detectRecurringTransactions(
+    (data?.transactions ?? []).map((t: any) => ({
+      id: t.id,
+      description: t.description,
+      amount: t.amount,
+      date: new Date(t.date),
+      type: t.type,
+      categoryId: t.categoryId,
+      accountId: t.accountId,
+      installmentId: t.installmentId,
+      taskId: t.taskId,
+      eventId: t.eventId,
+      activityId: t.activityId,
+    }))
+  );
+  const monthlySpend = recurringSpendThisMonth(detected);
+  const suggestions = detected.filter((c) => c.thisMonthAmount == null && !dismissed.has(c.categoryId));
+
+  if (monthlySpend === 0 && suggestions.length === 0) return null;
+
+  async function logNow(c: RecurringCandidate) {
+    setLoggingId(c.categoryId);
+    try {
+      await apiPost("/api/transactions", {
+        type: c.type,
+        amount: c.averageAmount,
+        accountId: c.accountId,
+        categoryId: c.categoryId,
+        description: c.title,
+        date: new Date().toISOString(),
+      });
+      notifySaved();
+      mutate();
+    } catch {
+      // The button's own disabled/loading state already communicates "still trying"; a failed
+      // log just leaves the suggestion in place to try again, same as any other save failure here.
+    } finally {
+      setLoggingId(null);
+    }
+  }
+
+  return (
+    <Card className="p-4 space-y-3">
+      {monthlySpend > 0 && (
+        <p className="text-sm text-ink">
+          این ماه <span className="font-bold">{format(monthlySpend, { withSuffix: true })}</span> صرفِ تکرارشونده‌ها شد.
+        </p>
+      )}
+      {suggestions.map((c) => (
+        <div key={c.categoryId} className="flex items-center justify-between gap-2 pt-2 border-t border-line first:border-0 first:pt-0">
+          <div className="min-w-0">
+            <p className="text-sm text-ink truncate">{c.title}</p>
+            <p className="text-xs text-muted mt-0.5">هر ماه تکرار می‌شود · {format(c.averageAmount, { withSuffix: true })}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setDismissed((prev) => new Set(prev).add(c.categoryId))}
+              className="text-xs text-muted px-2 py-1.5"
+            >
+              فعلاً نه
+            </button>
+            <button
+              type="button"
+              disabled={loggingId === c.categoryId}
+              onClick={() => logNow(c)}
+              className="text-xs font-medium text-on-accent bg-accent rounded-lg px-3 py-1.5 disabled:opacity-40"
+            >
+              {loggingId === c.categoryId ? "..." : "ثبت کن"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </Card>
   );
 }
 
