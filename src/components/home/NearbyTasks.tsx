@@ -45,7 +45,7 @@ export default function NearbyTasks() {
   }
 
   return (
-    <Link href="/finance" className="flex-[2] min-h-0 flex flex-col overflow-hidden">
+    <Link href="/finance" className="flex-[5] min-h-0 flex flex-col overflow-hidden">
       {/* CSS resolves percentage padding-top against the container's WIDTH, not its height (a
           long-standing box-model quirk) — an 8%-of-height top offset has no plain-CSS equivalent,
           so this uses a fixed rem gap instead (still non-px, per the brief's own allowance for

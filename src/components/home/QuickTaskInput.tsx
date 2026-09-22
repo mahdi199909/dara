@@ -56,13 +56,13 @@ export default function QuickTaskInput({
   }
 
   return (
-    <div className="flex-[4] min-h-0 flex items-center gap-[3%] px-[4%] border-t border-line" dir="rtl">
+    <div className="flex-[8] min-h-0 flex items-end gap-[3%] px-[4%] border-t border-line" dir="rtl">
       {reaction ? (
-        <p className="flex-1 min-w-0 h-[55%] flex items-center px-4 rounded-full bg-canvas text-xs font-medium text-accent leading-snug line-clamp-2">
+        <p className="flex-1 min-w-0 h-[42%] flex items-center px-4 rounded-full bg-canvas text-xs font-medium text-accent leading-snug line-clamp-2">
           {phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state?.remainingMinutes ?? 0 })}
         </p>
       ) : (
-        <div className="flex-1 min-w-0 h-[55%] flex items-center gap-2 rounded-full bg-canvas shadow-sm px-4">
+        <div className="flex-1 min-w-0 h-[42%] flex items-center gap-2 rounded-full bg-canvas shadow-sm px-4">
           {/* Icon first so it sits at the input's own right edge (RTL: first child = rightmost),
               right where the placeholder/typed text starts, matching a leading-icon search field. */}
           <button
@@ -91,13 +91,13 @@ export default function QuickTaskInput({
         </div>
       )}
 
-      {/* ~90% of the capsule's own height (h-[55%] of this row), not of the row itself — a
-          same-size button would read oversized next to a 55%-tall input. */}
+      {/* ~90% of the capsule's own height (h-[42%] of this row), not of the row itself — a
+          same-size button would read oversized next to a 42%-tall input. */}
       <button
         type="button"
         onClick={handlePlus}
         aria-label="ثبت کار"
-        className="shrink-0 aspect-square h-[50%] rounded-full bg-accent text-on-accent flex items-center justify-center shadow-sm active:scale-95 transition"
+        className="shrink-0 aspect-square h-[38%] rounded-full bg-accent text-on-accent flex items-center justify-center shadow-sm active:scale-95 transition"
       >
         <PlusIcon className="w-[38%] h-[38%]" strokeWidth={2.5} />
       </button>

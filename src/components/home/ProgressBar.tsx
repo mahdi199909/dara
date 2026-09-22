@@ -2,7 +2,6 @@
 
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
-import { toPersianDigits } from "@/lib/money";
 
 interface DaySegmentDto {
   kind: "PRODUCTIVE" | "NEUTRAL" | "WASTE" | "UNLOGGED" | "REMAINING";
@@ -39,14 +38,9 @@ export default function ProgressBar() {
   const { data } = useSWR<{ battery: DayBatteryDto }>("/api/day-battery", fetcher);
   const battery = data?.battery;
   const capacity = battery?.capacityMinutes ?? 0;
-  const logged = battery?.loggedMinutes ?? 0;
-  const percent = capacity > 0 ? Math.min(100, Math.round((logged / capacity) * 100)) : 0;
 
   return (
-    <div className="flex-1 min-h-0 flex items-center gap-2 px-[6%]" dir="rtl">
-      <span className="shrink-0 text-sm font-bold text-ink" aria-label={`٪${toPersianDigits(percent)} از روز ثبت شده`}>
-        {toPersianDigits(percent)}٪
-      </span>
+    <div className="flex-[2] min-h-0 flex items-start pt-[10px] px-[6%]" dir="rtl">
       <div className="flex-1 h-[25%] min-h-[6px] rounded-full overflow-hidden flex bg-canvas" role="img" aria-label="پیشرفت امروز">
         {battery?.segments.map((seg, i) => {
           const isUnlogged = seg.kind === "UNLOGGED";

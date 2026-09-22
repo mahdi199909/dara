@@ -21,7 +21,7 @@ export default function PersonalDashboard({
   onSmartCapture: (text: string) => void;
 }) {
   return (
-    <div className="shrink-0 h-[29vh] rounded-2xl bg-surface border border-line shadow-card overflow-hidden flex flex-col">
+    <div className="shrink-0 h-[25vh] rounded-2xl bg-surface border border-line shadow-card overflow-hidden flex flex-col">
       <NearbyTasks />
       <QuickTaskInput reaction={reaction} onOpenCapture={onOpenCapture} onLogGap={onLogGap} onSmartCapture={onSmartCapture} />
       <ProgressBar />
