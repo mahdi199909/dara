@@ -58,6 +58,7 @@ export const DATA_EXPORT_TABLES = [
   "Settings",
   "Project",
   "Category",
+  "Budget",
   "Task",
   "Habit",
   "Activity",

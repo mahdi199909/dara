@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-272 events in 40 domains.
+281 events in 41 domains.
 
 ## AUTH
 
@@ -118,6 +118,22 @@ Default module: `categories`
 | `CATEGORY_UPDATE_FAILED` | ERROR | protected | yes | Category update failed. |
 | `CATEGORY_UPDATE_STARTED` | DEBUG | — | reserved | Category update started. |
 | `CATEGORY_UPDATE_SUCCESS` | INFO | — | yes | Category update success. |
+
+## BUDGET
+
+Default module: `finance`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `BUDGET_CREATE_FAILED` | ERROR | protected | yes | Budget create failed. |
+| `BUDGET_CREATE_STARTED` | DEBUG | — | reserved | Budget create started. |
+| `BUDGET_CREATE_SUCCESS` | INFO | — | yes | Budget create success. |
+| `BUDGET_DELETE_FAILED` | ERROR | protected | yes | Budget delete failed. |
+| `BUDGET_DELETE_STARTED` | DEBUG | — | reserved | Budget delete started. |
+| `BUDGET_DELETE_SUCCESS` | INFO | — | yes | Budget delete success. |
+| `BUDGET_UPDATE_FAILED` | ERROR | protected | yes | Budget update failed. |
+| `BUDGET_UPDATE_STARTED` | DEBUG | — | reserved | Budget update started. |
+| `BUDGET_UPDATE_SUCCESS` | INFO | — | yes | Budget update success. |
 
 ## NOTE
 

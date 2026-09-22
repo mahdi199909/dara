@@ -4,6 +4,7 @@ export const TABLE_LABELS_FA: Record<string, string> = {
   Settings: "تنظیمات",
   Project: "پروژه",
   Category: "دسته‌بندی",
+  Budget: "بودجه",
   Task: "کار",
   Habit: "عادت",
   Activity: "فعالیت",

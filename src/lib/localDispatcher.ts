@@ -12,6 +12,7 @@ import { withLocalTransaction } from "@/local/transaction";
 import * as tasksRepo from "@/local/repositories/tasks";
 import * as categoriesRepo from "@/local/repositories/categories";
 import * as projectsRepo from "@/local/repositories/projects";
+import * as budgetsRepo from "@/local/repositories/budgets";
 import * as notesRepo from "@/local/repositories/notes";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
@@ -53,6 +54,7 @@ import { jalaliMonthRange, toJalali } from "@/lib/jalali";
 import { createTaskSchema, updateTaskSchema } from "@/lib/schemas/tasks";
 import { createCategorySchema, updateCategorySchema, reorderCategoriesSchema } from "@/lib/schemas/categories";
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
+import { createBudgetSchema } from "@/lib/schemas/budgets";
 import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
@@ -103,6 +105,11 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
   "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
+  // Upsert-by-categoryId (see the route/repo's own comment) — this transaction-level label always
+  // says CREATE even on the update path; the real audit log (written inside the repo function)
+  // picks CREATE vs UPDATE correctly, this is only the transaction's own internal log name.
+  "POST /api/budgets": { operation: "BUDGET_CREATE", entityType: "Budget" },
+  "DELETE /api/budgets/:id": { operation: "BUDGET_DELETE", entityType: "Budget" },
   "POST /api/accounts": { operation: "ACCOUNT_CREATE", entityType: "FinanceAccount" },
   "PATCH /api/accounts/:id": { operation: "ACCOUNT_UPDATE", entityType: "FinanceAccount" },
   "DELETE /api/accounts/:id": { operation: "ACCOUNT_DELETE", entityType: "FinanceAccount" },
@@ -207,6 +214,11 @@ register("PATCH", "/api/projects/:id", ({ db, userId, params, body }) => ({
   project: projectsRepo.updateProject(db, userId, params.id, updateProjectSchema.parse(body)),
 }));
 register("DELETE", "/api/projects/:id", ({ db, userId, params }) => projectsRepo.deleteProject(db, userId, params.id));
+
+// --- Budgets --------------------------------------------------------------------------------
+register("GET", "/api/budgets", ({ db, userId }) => ({ budgets: budgetsRepo.listBudgets(db, userId) }));
+register("POST", "/api/budgets", ({ db, userId, body }) => ({ budget: budgetsRepo.createBudget(db, userId, createBudgetSchema.parse(body)) }));
+register("DELETE", "/api/budgets/:id", ({ db, userId, params }) => budgetsRepo.deleteBudget(db, userId, params.id));
 
 // --- Accounts ------------------------------------------------------------------------------
 register("GET", "/api/accounts", ({ db, userId }) => ({ accounts: accountsRepo.listAccounts(db, userId) }));

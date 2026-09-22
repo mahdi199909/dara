@@ -47,6 +47,7 @@ export interface SyncTableConfig {
 export const SYNC_TABLES: SyncTableConfig[] = [
   { table: "Project", model: "project", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Category", model: "category", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
+  { table: "Budget", model: "budget", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Task", model: "task", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Habit", model: "habit", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Activity", model: "activity", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },

@@ -52,6 +52,7 @@ model User {
   shownInsights       ShownInsight[]
   syncTombstones      SyncTombstone[]
   dailyNotes          DailyNote[]
+  budgets             Budget[]
 }
 
 model Settings {
@@ -153,6 +154,7 @@ model Category {
   events       Event[]
   transactions Transaction[]
   habits       Habit[]
+  budget       Budget?
 
   @@index([userId])
   @@index([parentCategoryId])
@@ -183,6 +185,31 @@ model Project {
   events            Event[]
   category          Category?          @relation("ProjectCategory")
   virtualAssetEntry VirtualAssetEntry?
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Budgets — idea #5 (premium-feature-ideas.md): a soft monthly cap per category, never a
+// blocking or shaming one (pain→path→pride still applies — see the UI's own note).
+// ---------------------------------------------------------------------------
+
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Unique alone (not just per-user) is enough to mean "one cap per category": a category
+  // already belongs to exactly one user, so there is no cross-user collision to additionally
+  // guard against — this is also what a true one-to-one relation on the Category side requires.
+  categoryId String   @unique
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  // Toman, always positive — "حداکثر ۳ میلیون خرید".
+  monthlyCap Float
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([userId])
 }

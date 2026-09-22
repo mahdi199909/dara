@@ -58,6 +58,9 @@ export const AUDIT_VOCABULARY: readonly AuditVocabularyEntry[] = [
   entry("Category", "UPDATE", "CATEGORY_UPDATED", "CATEGORY_UPDATE_SUCCESS"),
   entry("Category", "DELETE", "CATEGORY_DELETED", "CATEGORY_DELETE_SUCCESS"),
   entry("Category", "REORDER", "CATEGORIES_REORDERED", "CATEGORY_REORDER_SUCCESS"),
+  entry("Budget", "CREATE", "BUDGET_CREATED", "BUDGET_CREATE_SUCCESS"),
+  entry("Budget", "UPDATE", "BUDGET_UPDATED", "BUDGET_UPDATE_SUCCESS"),
+  entry("Budget", "DELETE", "BUDGET_DELETED", "BUDGET_DELETE_SUCCESS"),
 
   // Calendar and habits
   entry("Event", "CREATE", "EVENT_CREATED", "EVENT_CREATE_SUCCESS"),

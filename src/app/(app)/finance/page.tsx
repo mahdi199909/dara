@@ -4,7 +4,9 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
-import { useCategories, useAccounts } from "@/lib/hooks";
+import { useCategories, useAccounts, useBudgets } from "@/lib/hooks";
+import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
+import { computeBudgetProgress } from "@/lib/budgetProgress";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali, toJalali } from "@/lib/jalali";
 import { toPersianDigits } from "@/lib/money";
@@ -21,6 +23,7 @@ const TABS = [
   { key: "transactions", label: "تراکنش‌ها" },
   { key: "accounts", label: "حساب‌ها" },
   { key: "installments", label: "اقساط" },
+  { key: "budgets", label: "بودجه‌ها" },
 ] as const;
 
 // useSearchParams needs a Suspense boundary for the static (Android) export.
@@ -62,6 +65,7 @@ function FinancePageInner() {
       {tab === "transactions" && <TransactionsTab />}
       {tab === "accounts" && <AccountsTab />}
       {tab === "installments" && <InstallmentsTab highlightPlanId={searchParams.get("plan")} />}
+      {tab === "budgets" && <BudgetsTab />}
     </div>
   );
 }
@@ -752,5 +756,174 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
           <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} highlighted={plan.id === highlightPlanId} />
         ))}
     </div>
+  );
+}
+
+/**
+ * «سقفِ ماهانه» یک دسته با نوار پیشرفت. سقف از طریق POST /api/budgets تنظیم می‌شود که یک upsert
+ * روی categoryId است — یک دکمهٔ ادیت جدا معنا ندارد چون هر دسته حداکثر یک بودجه دارد؛ فرم ویرایش
+ * همان فرم افزودن است، از پیش با سقف فعلی پر شده. رنگ هشدار نزدیکِ سقف از توکن‌های signal/signal-soft
+ * است، نه waste — رسیدن به سقف باید خنثی/آگاهی‌بخش باشد، نه جریمه (قاعدهٔ ضدشرمساری این اپ).
+ */
+function BudgetsTab() {
+  const { budgets, mutate } = useBudgets();
+  const { categories } = useCategories();
+  const { data: txData } = useSWR<{ transactions: any[] }>("/api/transactions", fetcher);
+  const [showForm, setShowForm] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<any | null>(null);
+  const { format } = useCurrencyUnit();
+
+  const progressByCategory = new Map(
+    computeBudgetProgress(
+      budgets.map((b: any) => ({ categoryId: b.categoryId, monthlyCap: b.monthlyCap })),
+      (txData?.transactions ?? []).map((t: any) => ({ type: t.type, categoryId: t.categoryId, amount: t.amount, date: new Date(t.date) }))
+    ).map((p) => [p.categoryId, p] as const)
+  );
+
+  async function remove(id: string) {
+    if (!confirm("این بودجه حذف شود؟")) return;
+    try {
+      await apiDelete(`/api/budgets/${id}`);
+      mutate();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "حذف بودجه ناموفق بود.");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <button
+        onClick={() => {
+          setEditingBudget(null);
+          setShowForm((v) => !v);
+        }}
+        className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
+      >
+        <PlusIcon className="w-4 h-4" />
+        بودجه جدید
+      </button>
+
+      {(showForm || editingBudget) && (
+        <BudgetForm
+          categories={categories}
+          existingBudgets={budgets}
+          editingBudget={editingBudget}
+          onDone={() => {
+            setShowForm(false);
+            setEditingBudget(null);
+            mutate();
+          }}
+          onCancel={() => {
+            setShowForm(false);
+            setEditingBudget(null);
+          }}
+        />
+      )}
+
+      <div className="grid grid-cols-1 gap-3">
+        {budgets.map((b: any) => {
+          const p = progressByCategory.get(b.categoryId);
+          const pct = Math.min(100, p?.pct ?? 0);
+          const near = p?.isNear ?? false;
+          return (
+            <Card key={b.id} className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex items-center gap-1.5">
+                  <span>{b.category?.icon}</span>
+                  <p className="font-bold text-ink truncate">{b.category?.name}</p>
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingBudget(b);
+                    }}
+                    aria-label="ویرایش"
+                    className="p-1.5 rounded-lg text-muted hover:bg-canvas"
+                  >
+                    <EditIcon className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => remove(b.id)} aria-label="حذف" className="p-1.5 rounded-lg text-waste hover:bg-canvas">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className={`h-1.5 rounded-full overflow-hidden mt-3 ${near ? "bg-signal-soft" : "bg-canvas"}`} role="img" aria-label="پیشرفت بودجه">
+                <div className={`h-full rounded-full ${near ? "bg-signal" : "bg-accent"}`} style={{ width: `${pct}%` }} />
+              </div>
+              <p className={`text-xs mt-1.5 ${near ? "text-signal" : "text-muted"}`}>
+                {format(p?.spent ?? 0, { withSuffix: true })} از {format(b.monthlyCap, { withSuffix: true })}
+              </p>
+            </Card>
+          );
+        })}
+        {budgets.length === 0 && !showForm && <EmptyState message="هنوز بودجه‌ای تعریف نکرده‌اید." />}
+      </div>
+    </div>
+  );
+}
+
+function BudgetForm({
+  categories,
+  existingBudgets,
+  editingBudget,
+  onDone,
+  onCancel,
+}: {
+  categories: any[];
+  existingBudgets: any[];
+  editingBudget: any | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [categoryId, setCategoryId] = useState<string | null>(editingBudget?.categoryId ?? null);
+  const [cap, setCap] = useState(editingBudget ? String(editingBudget.monthlyCap) : "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // A category that already has a budget can't be picked again from scratch — its own card IS
+  // that budget, reachable via ویرایش — but the category currently being edited must stay offered.
+  const budgetedIds = new Set(existingBudgets.filter((b) => b.id !== editingBudget?.id).map((b) => b.categoryId));
+  const pickable = selectableCategories(categories, (c: any) => c.valueType !== "ASSET" && !budgetedIds.has(c.id));
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!categoryId || !cap) return;
+    setLoading(true);
+    setError("");
+    try {
+      await apiPost("/api/budgets", { categoryId, monthlyCap: Number(cap) });
+      notifySaved();
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ثبت بودجه ناموفق بود.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <form onSubmit={submit} className="space-y-3">
+        {editingBudget ? (
+          <p className="text-sm text-ink flex items-center gap-1.5">
+            <span>{editingBudget.category?.icon}</span>
+            {editingBudget.category?.name}
+          </p>
+        ) : (
+          <CategoryChipPicker categories={pickable} selectedId={categoryId} onPick={(c) => setCategoryId(c?.id ?? null)} emptyHint="همهٔ دسته‌های هزینه‌ای قبلاً بودجه گرفته‌اند." />
+        )}
+        <MoneyInput value={cap} onChange={setCap} placeholder="سقف ماهانه" required />
+        {error && <p className="text-xs text-waste">{error}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={loading || !categoryId} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
+            ثبت بودجه
+          </button>
+          <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
+            انصراف
+          </button>
+        </div>
+      </form>
+    </Card>
   );
 }
