@@ -79,6 +79,7 @@ const REPORT_TABS = [
   { key: "finance", label: "مالی" },
   { key: "habits", label: "عادت‌ها" },
   { key: "hiddenCost", label: "هزینه پنهان" },
+  { key: "notes", label: "نوشته‌ها" },
   { key: "categoryCalendar", label: "تقویم دسته‌بندی‌ها" },
 ] as const;
 
@@ -241,6 +242,8 @@ function ReportsPageInner() {
         <FinanceTab data={data} />
       ) : tab === "hiddenCost" ? (
         <HiddenCostTab hiddenCost={data.hiddenCost} />
+      ) : tab === "notes" ? (
+        <NotesTab data={data} />
       ) : (
         <HabitsTab habitsReport={data.habitsReport} />
       )}
@@ -327,29 +330,34 @@ function LedgerRow({
   );
 }
 
-function NotesBox({ from, to }: { from: string; to: string }) {
-  const { data } = useSWR<{ notes: { id: string; day: string; content: string }[] }>(
-    `/api/notes?from=${dayKeyIso(new Date(from))}&to=${dayKeyIso(new Date(to))}`,
+/** Its own tab (like FinanceTab) rather than folded into the summary — a period can carry enough
+ * notes that burying them under the ledger numbers would make both harder to scan. */
+function NotesTab({ data }: { data: any }) {
+  const { data: notesData } = useSWR<{ notes: { id: string; day: string; content: string }[] }>(
+    `/api/notes?from=${dayKeyIso(new Date(data.from))}&to=${dayKeyIso(new Date(data.to))}`,
     fetcher
   );
-  const notes = data?.notes ?? [];
-  if (notes.length === 0) return null;
+  const notes = notesData?.notes ?? [];
 
   return (
-    <div>
-      <p className="text-[11px] font-bold text-muted mb-1">نوشته‌ها</p>
-      <Card className="p-4 space-y-4">
-        {notes.map((note) => {
-          const day = parseDayKey(note.day);
-          return (
-            <div key={note.id}>
-              {day && <p className="text-[11px] text-muted mb-1">{formatJalali(day, { long: true })}</p>}
-              <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap break-words">{note.content}</p>
-            </div>
-          );
-        })}
-      </Card>
-    </div>
+    <Card className="p-5">
+      <h3 className="font-bold text-ink text-sm mb-3">نوشته‌ها</h3>
+      {notes.length === 0 ? (
+        <EmptyState message="برای این بازه نوشته‌ای ثبت نشده." />
+      ) : (
+        <div className="space-y-4">
+          {notes.map((note) => {
+            const day = parseDayKey(note.day);
+            return (
+              <div key={note.id} className="pb-4 border-b border-line last:border-0 last:pb-0">
+                {day && <p className="text-[11px] text-muted mb-1">{formatJalali(day, { long: true })}</p>}
+                <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap break-words">{note.content}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -370,8 +378,6 @@ function SummaryTab({ data }: { data: any }) {
       {data.narrative && (
         <p className="text-sm leading-8 text-ink">{data.narrative}</p>
       )}
-
-      <NotesBox from={data.from} to={data.to} />
 
       <ComparisonRing current={data.report.productiveMin} previous={cmp?.previous.productiveMin ?? 0} label="زمان مفید" />
 
