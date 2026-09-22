@@ -22,6 +22,14 @@ export function phraseSpend(minutes: number, tomans: number, label: string): str
   return `${duration} بابت «${label}» پرداخت کردی.`;
 }
 
+/** "خرجِ پولی" — the money-first counterpart to phraseSpend's Act 1, for a period whose biggest
+ * real number is what was SPENT (a transaction), not time logged against a category — someone who
+ * mostly tracks money, not minutes. narrative.ts only reaches for this when there's no real time
+ * to report at all, so a narrative never blends "X ساعت" and "Y تومان" as if they were one act. */
+export function phraseMoneySpend(tomans: number, label: string): string {
+  return `این بازه بیشترین خرجت «${label}» بود — ${formatToman(tomans, { withSuffix: true })}.`;
+}
+
 /** "انباشت" (added clause only) — one of the two «پنهان» moments: time just added to a specific
  * thing, framed as feeding a hidden asset the user is quietly building. Split out from
  * phraseBuild below so UpgradeToast can pair this exact sentence with its own milestone-progress

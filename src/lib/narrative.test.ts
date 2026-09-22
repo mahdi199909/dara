@@ -81,4 +81,30 @@ describe("generateNarrative", () => {
     expect(result).not.toContain("پنهان");
     expect(result).not.toContain("۹۹۹");
   });
+
+  it("Act 1 falls back to the period's biggest money expense when nothing was time-tracked", () => {
+    const report = baseReport({
+      expenseByCategory: [
+        { categoryId: "e1", name: "خرید", color: "#000", parentCategoryId: null, parentName: null, amount: 500_000 },
+        { categoryId: "e2", name: "رفت و آمد", color: "#000", parentCategoryId: null, parentName: null, amount: 2_000_000 },
+      ],
+    });
+    const result = generateNarrative(report, emptyHiddenCost(), 0);
+    expect(result).toContain("«رفت و آمد»");
+    expect(result).not.toContain("«خرید»");
+  });
+
+  it("Act 1 prefers real time over money when the period has both", () => {
+    const report = baseReport({
+      timeByCategory: [{ categoryId: "c1", name: "کار", color: "#000", parentCategoryId: null, parentName: null, kind: "PRODUCTIVE", minutes: 60 }],
+      expenseByCategory: [{ categoryId: "e1", name: "خرید", color: "#000", parentCategoryId: null, parentName: null, amount: 500_000 }],
+    });
+    const result = generateNarrative(report, emptyHiddenCost(), 60);
+    expect(result).not.toContain("این بازه بیشترین خرجت");
+  });
+
+  it("stays empty when neither time nor money was logged this period", () => {
+    const result = generateNarrative(baseReport({ expenseByCategory: [] }), emptyHiddenCost(), 0);
+    expect(result).toBe("");
+  });
 });

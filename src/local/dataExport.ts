@@ -65,6 +65,7 @@ export const DATA_EXPORT_TABLES = [
   "HabitCheckIn",
   "TimeEntry",
   "FinanceAccount",
+  "SavingsGoal",
   "Asset",
   "AssetTransaction",
   "InstallmentPlan",

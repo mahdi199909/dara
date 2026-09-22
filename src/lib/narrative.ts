@@ -1,5 +1,5 @@
 import { computeTimeCost } from "./timeCost";
-import { phraseSpend, phraseHidden, phraseBuild } from "./phrasing";
+import { phraseSpend, phraseMoneySpend, phraseHidden, phraseBuild } from "./phrasing";
 import type { TimeAndMoneyReport, HiddenCostReport } from "./reportEngine";
 
 /**
@@ -16,11 +16,18 @@ import type { TimeAndMoneyReport, HiddenCostReport } from "./reportEngine";
 export function generateNarrative(report: TimeAndMoneyReport, hiddenCost: HiddenCostReport, topCategoryLifetimeMinutes: number): string {
   const acts: string[] = [];
 
-  // پرده ۱ — چه خرج کردی: the period's single biggest time sink, whatever its kind.
+  // پرده ۱ — چه خرج کردی: the period's single biggest time sink, whatever its kind. When nothing
+  // was time-tracked this period at all (someone who mostly logs transactions, not minutes), the
+  // narrative would otherwise go silent even though there's a real number to report — so it falls
+  // back to the period's single biggest money expense instead. Never both in the same narrative:
+  // this is still one act, just anchored on whichever real signal the period actually has.
   const topSpend = [...report.timeByCategory].sort((a, b) => b.minutes - a.minutes)[0];
   if (topSpend && topSpend.minutes > 0) {
     const tomans = computeTimeCost(topSpend.minutes, report.hourlyValue);
     acts.push(phraseSpend(topSpend.minutes, tomans, topSpend.name));
+  } else {
+    const topExpense = [...report.expenseByCategory].sort((a, b) => b.amount - a.amount)[0];
+    if (topExpense && topExpense.amount > 0) acts.push(phraseMoneySpend(topExpense.amount, topExpense.name));
   }
 
   // پرده ۲ — چه پنهان بود: the single largest hidden-cost item, if the period has one at all.

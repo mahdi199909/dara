@@ -13,6 +13,7 @@ import * as tasksRepo from "@/local/repositories/tasks";
 import * as categoriesRepo from "@/local/repositories/categories";
 import * as projectsRepo from "@/local/repositories/projects";
 import * as budgetsRepo from "@/local/repositories/budgets";
+import * as savingsGoalsRepo from "@/local/repositories/savingsGoals";
 import * as notesRepo from "@/local/repositories/notes";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
@@ -55,6 +56,7 @@ import { createTaskSchema, updateTaskSchema } from "@/lib/schemas/tasks";
 import { createCategorySchema, updateCategorySchema, reorderCategoriesSchema } from "@/lib/schemas/categories";
 import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects";
 import { createBudgetSchema } from "@/lib/schemas/budgets";
+import { createSavingsGoalSchema, updateSavingsGoalSchema } from "@/lib/schemas/savingsGoals";
 import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
@@ -110,6 +112,9 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   // picks CREATE vs UPDATE correctly, this is only the transaction's own internal log name.
   "POST /api/budgets": { operation: "BUDGET_CREATE", entityType: "Budget" },
   "DELETE /api/budgets/:id": { operation: "BUDGET_DELETE", entityType: "Budget" },
+  "POST /api/savings-goals": { operation: "SAVINGS_GOAL_CREATE", entityType: "SavingsGoal" },
+  "PATCH /api/savings-goals/:id": { operation: "SAVINGS_GOAL_UPDATE", entityType: "SavingsGoal" },
+  "DELETE /api/savings-goals/:id": { operation: "SAVINGS_GOAL_DELETE", entityType: "SavingsGoal" },
   "POST /api/accounts": { operation: "ACCOUNT_CREATE", entityType: "FinanceAccount" },
   "PATCH /api/accounts/:id": { operation: "ACCOUNT_UPDATE", entityType: "FinanceAccount" },
   "DELETE /api/accounts/:id": { operation: "ACCOUNT_DELETE", entityType: "FinanceAccount" },
@@ -219,6 +224,14 @@ register("DELETE", "/api/projects/:id", ({ db, userId, params }) => projectsRepo
 register("GET", "/api/budgets", ({ db, userId }) => ({ budgets: budgetsRepo.listBudgets(db, userId) }));
 register("POST", "/api/budgets", ({ db, userId, body }) => ({ budget: budgetsRepo.createBudget(db, userId, createBudgetSchema.parse(body)) }));
 register("DELETE", "/api/budgets/:id", ({ db, userId, params }) => budgetsRepo.deleteBudget(db, userId, params.id));
+
+// --- Savings goals -----------------------------------------------------------------------------
+register("GET", "/api/savings-goals", ({ db, userId }) => ({ goals: savingsGoalsRepo.listSavingsGoals(db, userId) }));
+register("POST", "/api/savings-goals", ({ db, userId, body }) => ({ goal: savingsGoalsRepo.createSavingsGoal(db, userId, createSavingsGoalSchema.parse(body)) }));
+register("PATCH", "/api/savings-goals/:id", ({ db, userId, params, body }) => ({
+  goal: savingsGoalsRepo.updateSavingsGoal(db, userId, params.id, updateSavingsGoalSchema.parse(body)),
+}));
+register("DELETE", "/api/savings-goals/:id", ({ db, userId, params }) => savingsGoalsRepo.deleteSavingsGoal(db, userId, params.id));
 
 // --- Accounts ------------------------------------------------------------------------------
 register("GET", "/api/accounts", ({ db, userId }) => ({ accounts: accountsRepo.listAccounts(db, userId) }));

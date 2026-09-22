@@ -54,6 +54,7 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: "HabitCheckIn", model: "habitCheckIn", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "parent", parentModel: "habit", relationField: "habit", fkColumn: "habitId" } },
   { table: "TimeEntry", model: "timeEntry", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "parent", parentModel: "activity", relationField: "activity", fkColumn: "activityId" } },
   { table: "FinanceAccount", model: "financeAccount", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
+  { table: "SavingsGoal", model: "savingsGoal", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "Asset", model: "asset", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "AssetTransaction", model: "assetTransaction", hasUpdatedAt: false, hasDeletedAt: false, ownership: { type: "parent", parentModel: "asset", relationField: "asset", fkColumn: "assetId" } },
   { table: "InstallmentPlan", model: "installmentPlan", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },

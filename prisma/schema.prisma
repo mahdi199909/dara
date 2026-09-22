@@ -53,6 +53,7 @@ model User {
   syncTombstones      SyncTombstone[]
   dailyNotes          DailyNote[]
   budgets             Budget[]
+  savingsGoals        SavingsGoal[]
 }
 
 model Settings {
@@ -421,8 +422,35 @@ model FinanceAccount {
 
   transactions           Transaction[] @relation("AccountTransactions")
   transferInTransactions Transaction[] @relation("TransferTo")
+  savingsGoals           SavingsGoal[]
 
   @@index([userId])
+}
+
+// «برای X، Y تومان تا فلان تاریخ» — progress is read straight from the linked account's own real
+// balance (see /api/accounts' withBalance), never a separately tracked "contributed so far" total:
+// the account IS the goal's real money, so its balance is the only honest progress number. A
+// person who wants several goals tracked separately opens a dedicated account per goal (the app
+// already supports unlimited accounts); nothing here stops two goals sharing one account, but nor
+// does it try to split a shared balance between them.
+model SavingsGoal {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title        String
+  targetAmount Float
+  targetDate   DateTime?
+
+  accountId String
+  account   FinanceAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([accountId])
 }
 
 model Transaction {

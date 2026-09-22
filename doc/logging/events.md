@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-281 events in 41 domains.
+290 events in 42 domains.
 
 ## AUTH
 
@@ -134,6 +134,22 @@ Default module: `finance`
 | `BUDGET_UPDATE_FAILED` | ERROR | protected | yes | Budget update failed. |
 | `BUDGET_UPDATE_STARTED` | DEBUG | — | reserved | Budget update started. |
 | `BUDGET_UPDATE_SUCCESS` | INFO | — | yes | Budget update success. |
+
+## SAVINGS_GOAL
+
+Default module: `finance`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `SAVINGS_GOAL_CREATE_FAILED` | ERROR | protected | yes | Savings goal create failed. |
+| `SAVINGS_GOAL_CREATE_STARTED` | DEBUG | — | reserved | Savings goal create started. |
+| `SAVINGS_GOAL_CREATE_SUCCESS` | INFO | — | yes | Savings goal create success. |
+| `SAVINGS_GOAL_DELETE_FAILED` | ERROR | protected | yes | Savings goal delete failed. |
+| `SAVINGS_GOAL_DELETE_STARTED` | DEBUG | — | reserved | Savings goal delete started. |
+| `SAVINGS_GOAL_DELETE_SUCCESS` | INFO | — | yes | Savings goal delete success. |
+| `SAVINGS_GOAL_UPDATE_FAILED` | ERROR | protected | yes | Savings goal update failed. |
+| `SAVINGS_GOAL_UPDATE_STARTED` | DEBUG | — | reserved | Savings goal update started. |
+| `SAVINGS_GOAL_UPDATE_SUCCESS` | INFO | — | yes | Savings goal update success. |
 
 ## NOTE
 

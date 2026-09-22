@@ -22,7 +22,7 @@ import { notifySaved } from "@/lib/savedToast";
 
 const INSTALLMENT_STATUS_LABELS: Record<string, string> = { PENDING: "در انتظار", PAID: "پرداخت‌شده", OVERDUE: "دیرکرد" };
 
-function formatPercent(value: number): string {
+export function formatPercent(value: number): string {
   return `${toPersianDigits(value.toFixed(1)).replace(".", "٫")}٪`;
 }
 

@@ -21,6 +21,11 @@ export function useBudgets() {
   return { budgets: data?.budgets ?? [], error, isLoading, mutate };
 }
 
+export function useSavingsGoals() {
+  const { data, error, isLoading, mutate } = useSWR<{ goals: any[] }>("/api/savings-goals", fetcher);
+  return { goals: data?.goals ?? [], error, isLoading, mutate };
+}
+
 export function useDashboard() {
   const { data, error, isLoading, mutate } = useSWR<any>("/api/dashboard", fetcher, {
     refreshInterval: 60000,

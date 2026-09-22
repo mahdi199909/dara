@@ -11,6 +11,7 @@ export const TABLE_LABELS_FA: Record<string, string> = {
   HabitCheckIn: "چک‌این عادت",
   TimeEntry: "بازه زمانی",
   FinanceAccount: "حساب مالی",
+  SavingsGoal: "هدف پس‌انداز",
   Asset: "دارایی",
   AssetTransaction: "تراکنش دارایی",
   InstallmentPlan: "طرح قسط",

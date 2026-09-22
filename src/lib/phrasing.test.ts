@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   phraseSpend,
+  phraseMoneySpend,
   phraseBuild,
   phraseBuildAdded,
   phraseHidden,
@@ -31,6 +32,18 @@ describe("phraseSpend", () => {
 
   it("never uses «پنهان» — that word is reserved for phraseHidden/phraseBuild", () => {
     expect(phraseSpend(60, 50000, "کار")).not.toContain("پنهان");
+  });
+});
+
+describe("phraseMoneySpend", () => {
+  it("names the category and its real Toman amount", () => {
+    const result = phraseMoneySpend(2_000_000, "رفت و آمد");
+    expect(result).toContain("«رفت و آمد»");
+    expect(result).toContain("۲,۰۰۰,۰۰۰ تومان");
+  });
+
+  it("never uses «پنهان» — that word is reserved for phraseHidden/phraseBuild", () => {
+    expect(phraseMoneySpend(500_000, "خرید")).not.toContain("پنهان");
   });
 });
 

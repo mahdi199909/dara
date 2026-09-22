@@ -4,26 +4,31 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
-import { useCategories, useAccounts, useBudgets } from "@/lib/hooks";
+import { useCategories, useAccounts, useBudgets, useSavingsGoals } from "@/lib/hooks";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
 import { computeBudgetProgress } from "@/lib/budgetProgress";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali, toJalali } from "@/lib/jalali";
 import { toPersianDigits } from "@/lib/money";
+import { dayKeyIso } from "@/lib/calendarGrid";
 import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_TYPES, REMINDER_OFFSET_PRESETS, type AccountType } from "@/lib/types";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import MoneyInput from "@/components/ui/MoneyInput";
+import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import { notifySaved } from "@/lib/savedToast";
-import { InstallmentPlanCard, NewInstallmentPlanForm } from "@/components/finance/InstallmentPlans";
+import { InstallmentPlanCard, NewInstallmentPlanForm, formatPercent } from "@/components/finance/InstallmentPlans";
 import { detectRecurringTransactions, recurringSpendThisMonth, type RecurringCandidate } from "@/lib/recurringTransactions";
+import { computeEffectiveAnnualRate } from "@/lib/installments";
+import { rankDebtsForPayoff, monthsSoonerWithExtra, type DebtForPayoff, type PayoffStrategy } from "@/lib/debtPayoffOptimizer";
 
 const TABS = [
   { key: "transactions", label: "تراکنش‌ها" },
   { key: "accounts", label: "حساب‌ها" },
   { key: "installments", label: "اقساط" },
   { key: "budgets", label: "بودجه‌ها" },
+  { key: "goals", label: "اهداف" },
 ] as const;
 
 // useSearchParams needs a Suspense boundary for the static (Android) export.
@@ -66,6 +71,7 @@ function FinancePageInner() {
       {tab === "accounts" && <AccountsTab />}
       {tab === "installments" && <InstallmentsTab highlightPlanId={searchParams.get("plan")} />}
       {tab === "budgets" && <BudgetsTab />}
+      {tab === "goals" && <SavingsGoalsTab />}
     </div>
   );
 }
@@ -728,6 +734,8 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
               <p className="text-sm font-bold text-waste">{format(overallRemaining, { withSuffix: true })}</p>
             </Card>
           </div>
+
+          <DebtPayoffOptimizer plans={data.plans.filter((p: any) => p.summary.remainingCount > 0)} />
         </>
       )}
 
@@ -756,6 +764,92 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
           <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} highlighted={plan.id === highlightPlanId} />
         ))}
     </div>
+  );
+}
+
+/**
+ * «بهینه‌سازِ بازپرداختِ بدهی» — only once there are 2+ open plans (one plan has no ordering
+ * decision to make). بهمنی ranks by effectiveAnnualRatePercent (the real APR computeEffectiveAnnualRate
+ * already derives per plan) — the most expensive money first; گلوله‌برفی ranks by remaining balance
+ * ascending — the smallest debt first, for an early win. This app's plans are fixed nominal
+ * installments with no amortization split and no early-settlement discount, so re-ordering payments
+ * never changes any plan's own total interest (that was fixed when it was created) — only WHEN each
+ * one finishes. So this only ever claims a debt "finishes sooner," never a fabricated "less interest."
+ */
+function DebtPayoffOptimizer({ plans }: { plans: any[] }) {
+  const [strategy, setStrategy] = useState<PayoffStrategy>("AVALANCHE");
+  const [extra, setExtra] = useState("");
+  const { format } = useCurrencyUnit();
+
+  if (plans.length < 2) return null;
+
+  const debts: DebtForPayoff[] = plans.map((p) => ({
+    id: p.id,
+    title: p.title,
+    remainingAmount: p.summary.remainingAmount,
+    remainingCount: p.summary.remainingCount,
+    installmentAmount: p.installmentAmount,
+    effectiveAnnualRatePercent: computeEffectiveAnnualRate({
+      totalAmount: p.totalAmount,
+      installmentAmount: p.installmentAmount,
+      numberOfInstallments: p.numberOfInstallments,
+    }).effectiveAnnualRatePercent,
+  }));
+  const ranked = rankDebtsForPayoff(debts, strategy);
+  const top = ranked[0];
+  const extraAmount = Number(extra) || 0;
+  const sooner = top ? monthsSoonerWithExtra(top.remainingCount, top.installmentAmount, extraAmount) : 0;
+
+  return (
+    <Card className="p-5 space-y-3">
+      <p className="text-sm font-bold text-ink">اولویتِ پرداختِ اضافه</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setStrategy("AVALANCHE")}
+          className={`flex-1 text-xs px-3 py-2 rounded-xl border transition ${strategy === "AVALANCHE" ? "bg-accent text-on-accent border-accent" : "bg-canvas text-muted border-line"}`}
+        >
+          بهمنی — گران‌ترین اول
+        </button>
+        <button
+          type="button"
+          onClick={() => setStrategy("SNOWBALL")}
+          className={`flex-1 text-xs px-3 py-2 rounded-xl border transition ${strategy === "SNOWBALL" ? "bg-accent text-on-accent border-accent" : "bg-canvas text-muted border-line"}`}
+        >
+          گلوله‌برفی — کم‌مانده اول
+        </button>
+      </div>
+
+      <div className="space-y-1.5">
+        {ranked.map((d) => (
+          <div key={d.id} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-line last:border-0">
+            <span className="flex items-center gap-1.5 text-ink min-w-0">
+              <span className="shrink-0 w-4 h-4 rounded-full bg-canvas text-muted text-[10px] flex items-center justify-center font-bold">{toPersianDigits(d.order)}</span>
+              <span className="truncate">{d.title}</span>
+            </span>
+            <span className="shrink-0 text-muted">
+              {format(d.remainingAmount, { withSuffix: true })}
+              {d.effectiveAnnualRatePercent > 0 && <span className="text-waste"> · {formatPercent(d.effectiveAnnualRatePercent)}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <MoneyInput value={extra} onChange={setExtra} placeholder="مبلغِ اضافهٔ ماهانه (اختیاری)" />
+
+      {top && extraAmount > 0 && (
+        <p className="text-xs text-ink leading-6">
+          {sooner > 0 ? (
+            <>
+              با این مبلغِ اضافه روی «{top.title}»، این بدهی به‌جای {toPersianDigits(top.remainingCount)} ماهِ دیگر،{" "}
+              <span className="font-bold text-accent">{toPersianDigits(top.remainingCount - sooner)} ماهِ دیگر</span> تمام می‌شود — {toPersianDigits(sooner)} ماه زودتر.
+            </>
+          ) : (
+            "این مبلغ برای زودتر تمام‌شدن، هنوز به‌اندازهٔ یک قسط کامل نیست."
+          )}
+        </p>
+      )}
+    </Card>
   );
 }
 
@@ -918,6 +1012,187 @@ function BudgetForm({
         <div className="flex gap-2">
           <button type="submit" disabled={loading || !categoryId} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
             ثبت بودجه
+          </button>
+          <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
+            انصراف
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/**
+ * «برای X، Y تومان تا فلان تاریخ» — progress is the linked account's own real, live balance
+ * (from useAccounts(), already SWR-cached elsewhere on this page) against the target, never a
+ * separately tracked "contributed so far" figure — see the SavingsGoal model's own comment on why
+ * the account IS the goal's real money. Reaching the target is stated as a plain fact, not a badge
+ * or celebration screen, per the anti-gamification rule (the number itself is the reward).
+ */
+function SavingsGoalsTab() {
+  const { goals, mutate } = useSavingsGoals();
+  const { accounts } = useAccounts();
+  const [showForm, setShowForm] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<any | null>(null);
+  const { format } = useCurrencyUnit();
+
+  const balanceByAccount = new Map(accounts.map((a: any) => [a.id, a.balance]));
+
+  async function remove(id: string) {
+    if (!confirm("این هدف حذف شود؟")) return;
+    try {
+      await apiDelete(`/api/savings-goals/${id}`);
+      mutate();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "حذف هدف ناموفق بود.");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <button
+        onClick={() => {
+          setEditingGoal(null);
+          setShowForm((v) => !v);
+        }}
+        className="flex items-center gap-1 text-sm bg-accent text-on-accent px-3 py-2 rounded-xl hover:opacity-90"
+      >
+        <PlusIcon className="w-4 h-4" />
+        هدف جدید
+      </button>
+
+      {(showForm || editingGoal) && (
+        <SavingsGoalForm
+          accounts={accounts}
+          editingGoal={editingGoal}
+          onDone={() => {
+            setShowForm(false);
+            setEditingGoal(null);
+            mutate();
+          }}
+          onCancel={() => {
+            setShowForm(false);
+            setEditingGoal(null);
+          }}
+        />
+      )}
+
+      <div className="grid grid-cols-1 gap-3">
+        {goals.map((g: any) => {
+          const balance = balanceByAccount.get(g.accountId) ?? 0;
+          const pct = g.targetAmount > 0 ? Math.min(100, Math.max(0, (balance / g.targetAmount) * 100)) : 0;
+          const reached = balance >= g.targetAmount;
+          return (
+            <Card key={g.id} className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-ink truncate">{g.title}</p>
+                  <p className="text-xs text-muted mt-0.5">
+                    {g.account?.name}
+                    {g.targetDate && ` · تا ${formatJalali(new Date(g.targetDate))}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingGoal(g);
+                    }}
+                    aria-label="ویرایش"
+                    className="p-1.5 rounded-lg text-muted hover:bg-canvas"
+                  >
+                    <EditIcon className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => remove(g.id)} aria-label="حذف" className="p-1.5 rounded-lg text-waste hover:bg-canvas">
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden mt-3 bg-canvas">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-xs text-muted mt-1.5">
+                {format(balance, { withSuffix: true })} از {format(g.targetAmount, { withSuffix: true })}
+                {reached && <span className="text-accent font-bold"> — به هدف رسیدی</span>}
+              </p>
+            </Card>
+          );
+        })}
+        {goals.length === 0 && !showForm && <EmptyState message="هنوز هدفی تعریف نکرده‌اید." />}
+      </div>
+    </div>
+  );
+}
+
+function SavingsGoalForm({
+  accounts,
+  editingGoal,
+  onDone,
+  onCancel,
+}: {
+  accounts: any[];
+  editingGoal: any | null;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const oneYearFromNow = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d;
+  };
+  const [title, setTitle] = useState(editingGoal?.title ?? "");
+  const [targetAmount, setTargetAmount] = useState(editingGoal ? String(editingGoal.targetAmount) : "");
+  const [accountId, setAccountId] = useState(editingGoal?.accountId ?? "");
+  const [targetDate, setTargetDate] = useState(editingGoal?.targetDate ? new Date(editingGoal.targetDate) : oneYearFromNow());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { format } = useCurrencyUnit();
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || !targetAmount || !accountId) return;
+    setLoading(true);
+    setError("");
+    try {
+      const payload = { title: title.trim(), targetAmount: Number(targetAmount), accountId, targetDate: dayKeyIso(targetDate) };
+      if (editingGoal) await apiPatch(`/api/savings-goals/${editingGoal.id}`, payload);
+      else await apiPost("/api/savings-goals", payload);
+      notifySaved();
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ثبت هدف ناموفق بود.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card className="p-4">
+      <form onSubmit={submit} className="space-y-3">
+        <input
+          autoFocus
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="عنوان هدف (مثلاً: پیش‌پرداخت خانه)"
+          className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
+        />
+        <div className="grid grid-cols-2 gap-2">
+          <MoneyInput value={targetAmount} onChange={setTargetAmount} placeholder="مبلغ هدف" required />
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
+            <option value="">حساب</option>
+            {accounts.map((a: any) => (
+              <option key={a.id} value={a.id}>
+                {a.name} — {format(a.balance, { withSuffix: true })}
+              </option>
+            ))}
+          </select>
+        </div>
+        <JalaliDateInput value={targetDate} onChange={setTargetDate} />
+        {error && <p className="text-xs text-waste">{error}</p>}
+        <div className="flex gap-2">
+          <button type="submit" disabled={loading} className="flex-1 rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">
+            ثبت هدف
           </button>
           <button type="button" onClick={onCancel} className="px-4 rounded-xl bg-canvas text-muted text-sm">
             انصراف

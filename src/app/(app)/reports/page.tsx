@@ -14,6 +14,7 @@ import { ChevronRightIcon, ChevronLeftIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import DeltaChip, { type DeltaPolarity } from "@/components/DeltaChip";
 import { phraseDeltaPride, phraseSamePeriodTasksCompleted, phraseSamePeriodVirtualAsset } from "@/lib/phrasing";
+import { simulateSpendReduction } from "@/lib/whatIfSimulator";
 import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import { customRangeQuery, validateCustomRange } from "@/lib/reportRange";
@@ -376,7 +377,7 @@ function SummaryTab({ data }: { data: any }) {
       </div>
 
       {data.narrative && (
-        <p className="text-sm leading-8 text-ink">{data.narrative}</p>
+        <p className="text-sm leading-8 text-ink bg-accent-soft border border-accent/30 rounded-xl px-4 py-3.5">{data.narrative}</p>
       )}
 
       <ComparisonRing current={data.report.productiveMin} previous={cmp?.previous.productiveMin ?? 0} label="زمان مفید" />
@@ -616,7 +617,64 @@ function FinanceTab({ data }: { data: any }) {
           formatValue={(v) => format(v, { withSuffix: true })}
         />
       )}
+      <WhatIfSimulator expenseByCategory={data.report.expenseByCategory} from={data.from} to={data.to} />
     </Card>
+  );
+}
+
+/**
+ * «اگر...چه می‌شد» — a category from this period's real expense breakdown, a reduction percent
+ * (default ۲۰٪, matching the idea's own example) and the period's real length turn into an honest
+ * projection: what that cut would have saved this period, and what it comes to over a year at the
+ * same rate. A projection, never an instruction — "اگر" (if), not "باید" (must).
+ */
+function WhatIfSimulator({ expenseByCategory, from, to }: { expenseByCategory: any[]; from: string; to: string }) {
+  const { format } = useCurrencyUnit();
+  const spendable = expenseByCategory.filter((c: any) => c.amount > 0);
+  const [categoryId, setCategoryId] = useState("");
+  const [reductionPct, setReductionPct] = useState("20");
+
+  if (spendable.length === 0) return null;
+
+  const category = spendable.find((c: any) => c.categoryId === categoryId) ?? spendable[0];
+  const periodDays = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000));
+  const pct = Math.min(100, Math.max(0, Number(reductionPct) || 0));
+  const result = simulateSpendReduction({ categoryId: category.categoryId, name: category.name, amount: category.amount }, pct, periodDays);
+
+  return (
+    <div className="pt-4 mt-4 border-t border-line space-y-3">
+      <p className="text-xs font-bold text-muted">شبیه‌سازِ «اگر...چه می‌شد»</p>
+      <div className="flex items-center gap-2">
+        <select
+          value={category.categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className="bg-surface flex-1 rounded-xl border border-line px-2 py-2 text-sm"
+        >
+          {spendable.map((c: any) => (
+            <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1 shrink-0">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={reductionPct}
+            onChange={(e) => setReductionPct(e.target.value)}
+            className="bg-surface w-16 rounded-xl border border-line px-2 py-2 text-sm text-center"
+            dir="ltr"
+          />
+          <span className="text-sm text-muted">٪ کمتر</span>
+        </div>
+      </div>
+      {pct > 0 && (
+        <p className="text-sm text-ink leading-7">
+          اگر «{result.name}» را {toPersianDigits(pct)}٪ کم کنی، در همین بازه{" "}
+          <span className="font-bold text-accent">{format(result.periodSavings, { withSuffix: true })}</span> کمتر خرج می‌شد — در مقیاسِ یک سال یعنی حدودِ{" "}
+          <span className="font-bold text-accent">{format(result.annualizedSavings, { withSuffix: true })}</span>.
+        </p>
+      )}
+    </div>
   );
 }
 
