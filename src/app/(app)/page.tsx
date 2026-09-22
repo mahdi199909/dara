@@ -9,87 +9,17 @@ import CaptureFormModal from "@/components/CaptureFormModal";
 import type { CaptureSummary } from "@/components/CaptureForm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
-import DayBattery from "@/components/DayBattery";
+import PersonalDashboard from "@/components/home/PersonalDashboard";
 import DayItemsList from "@/components/day/DayItemsList";
 import { buildDayItems } from "@/lib/dayItems";
 import { EmptyState } from "@/components/ui/Card";
-import { formatJalali, toJalali, weekdayNameFa } from "@/lib/jalali";
-import { formatDuration, toPersianDigits } from "@/lib/money";
-import { isSameDay } from "@/lib/calendarGrid";
-import { useCurrencyUnit } from "@/lib/currencyUnit";
+import { formatDuration } from "@/lib/money";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
 import { buildCapturePrefill } from "@/lib/smartCapture";
-import LogWorkCard, { type CaptureReaction } from "@/components/companion/LogWorkCard";
+import type { CaptureReaction } from "@/components/home/QuickTaskInput";
 import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
 import type { CapturePrefill } from "@/lib/smartCapture";
-
-/** "امروز" / "فردا" / weekday name — a short, humane day label for a card in a horizontal row. */
-function shortRelativeDay(date: Date): string {
-  const today = new Date();
-  if (isSameDay(date, today)) return "امروز";
-  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  if (isSameDay(date, tomorrow)) return "فردا";
-  return `${weekdayNameFa(date)} ${toPersianDigits(toJalali(date).jd)}`;
-}
-
-/**
- * Sits beside LogWorkCard, same size, on Home's top row — the nearest unpaid installments across
- * every plan, as a horizontal row of small cards (a colored dot for their status, title, day,
- * amount) with a slim progress line underneath for this Jalali month's paid share. Always renders
- * (even with nothing due) so the two-column row stays a stable, equal split rather than LogWorkCard
- * silently going full width whenever there's nothing to show here.
- */
-function UpcomingInstallmentsCard() {
-  const { data } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
-  const { format } = useCurrencyUnit();
-
-  const plans = data?.plans ?? [];
-  const upcoming = plans
-    .flatMap((plan: any) => plan.installments.filter((i: any) => i.status !== "PAID").map((i: any) => ({ ...i, planTitle: plan.title })))
-    .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 6);
-
-  const { jy: curJy, jm: curJm } = toJalali(new Date());
-  const thisMonth = plans.flatMap((plan: any) =>
-    plan.installments.filter((i: any) => {
-      const { jy, jm } = toJalali(new Date(i.dueDate));
-      return jy === curJy && jm === curJm;
-    })
-  );
-  const monthTotal = thisMonth.reduce((s: number, i: any) => s + i.amount, 0);
-  const monthPaid = thisMonth.filter((i: any) => i.status === "PAID").reduce((s: number, i: any) => s + i.amount, 0);
-  const monthPercent = monthTotal > 0 ? Math.min(100, Math.round((monthPaid / monthTotal) * 100)) : null;
-
-  return (
-    <Link href="/finance" className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card p-2 flex flex-col gap-2">
-      <p className="text-[11px] text-muted px-1">سررسید نزدیک</p>
-      {upcoming.length === 0 ? (
-        <p className="flex-1 text-xs text-muted flex items-center justify-center px-1 min-h-[40px]">قسطی برای پرداخت نیست.</p>
-      ) : (
-        <div className="flex-1 flex gap-1.5 overflow-x-auto snap-x snap-mandatory scrollbar-thin px-1">
-          {upcoming.map((inst) => (
-            <div key={inst.id} className="shrink-0 snap-start w-[122px] rounded-xl bg-canvas px-2.5 py-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span aria-hidden className={`shrink-0 w-1.5 h-1.5 rounded-full ${inst.status === "OVERDUE" ? "bg-waste" : "bg-accent"}`} />
-                <p className="text-xs font-bold text-ink truncate">{inst.planTitle}</p>
-              </div>
-              <p className="text-[10px] text-muted mt-1">{shortRelativeDay(new Date(inst.dueDate))}</p>
-              <p className="text-xs font-bold text-accent mt-0.5">{format(inst.amount, { withSuffix: true })}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {monthPercent !== null && (
-        <div className="px-1">
-          <div className="h-1.5 rounded-full bg-canvas overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-l from-accent to-brand-400" style={{ width: `${monthPercent}%` }} />
-          </div>
-        </div>
-      )}
-    </Link>
-  );
-}
 
 interface DailyMomentInsight {
   text: string;
@@ -171,7 +101,6 @@ export default function HomePage() {
   const [smartPrefill, setSmartPrefill] = useState<CapturePrefill | null>(null);
   const [reaction, setReaction] = useState<CaptureReaction | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
-  const { format } = useCurrencyUnit();
   const { from, to } = todayRange();
 
   const { data, mutate } = useSWR<{ occurrences: any[]; taskOccurrences: any[] }>(
@@ -237,17 +166,12 @@ export default function HomePage() {
     >
       <DailyMomentCard />
 
-      <div className="shrink-0 flex items-stretch gap-2">
-        <LogWorkCard
-          reaction={reaction}
-          onOpenCapture={() => openCapture()}
-          onLogGap={(start, end) => openCapture({ start, end })}
-          onSmartCapture={openSmartCapture}
-        />
-        <UpcomingInstallmentsCard />
-      </div>
-
-      <DayBattery onLogGap={(start, end) => openCapture({ start, end })} />
+      <PersonalDashboard
+        reaction={reaction}
+        onOpenCapture={() => openCapture()}
+        onLogGap={(start, end) => openCapture({ start, end })}
+        onSmartCapture={openSmartCapture}
+      />
 
       <div className="flex-1 min-h-0 flex flex-col bg-surface rounded-2xl border border-line shadow-card">
         <h2 className="shrink-0 font-bold text-ink text-sm px-4 pt-3 pb-2">فعالیت‌های امروز</h2>
