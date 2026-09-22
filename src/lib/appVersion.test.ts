@@ -66,8 +66,8 @@ describe("the announced release", () => {
   });
 
   it("lets an admin announce a higher version, force a minimum and use another link", () => {
-    const info = resolveAppRelease({ latestVersionCode: 10400, minSupportedVersionCode: 10300, downloadUrl: " https://example.org/app.apk " });
-    expect(info).toEqual({ latestVersionName: "1.4.0", latestVersionCode: 10400, minSupportedVersionCode: 10300, downloadUrl: "https://example.org/app.apk" });
+    const info = resolveAppRelease({ latestVersionCode: 10500, minSupportedVersionCode: 10400, downloadUrl: " https://example.org/app.apk " });
+    expect(info).toEqual({ latestVersionName: "1.5.0", latestVersionCode: 10500, minSupportedVersionCode: 10400, downloadUrl: "https://example.org/app.apk" });
   });
 
   it("never lets the minimum exceed the newest version", () => {
