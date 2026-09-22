@@ -327,6 +327,32 @@ function LedgerRow({
   );
 }
 
+function NotesBox({ from, to }: { from: string; to: string }) {
+  const { data } = useSWR<{ notes: { id: string; day: string; content: string }[] }>(
+    `/api/notes?from=${dayKeyIso(new Date(from))}&to=${dayKeyIso(new Date(to))}`,
+    fetcher
+  );
+  const notes = data?.notes ?? [];
+  if (notes.length === 0) return null;
+
+  return (
+    <div>
+      <p className="text-[11px] font-bold text-muted mb-1">نوشته‌ها</p>
+      <Card className="p-4 space-y-4">
+        {notes.map((note) => {
+          const day = parseDayKey(note.day);
+          return (
+            <div key={note.id}>
+              {day && <p className="text-[11px] text-muted mb-1">{formatJalali(day, { long: true })}</p>}
+              <p className="text-sm text-ink leading-relaxed whitespace-pre-wrap break-words">{note.content}</p>
+            </div>
+          );
+        })}
+      </Card>
+    </div>
+  );
+}
+
 function SummaryTab({ data }: { data: any }) {
   const { format } = useCurrencyUnit();
   const prideLine = computePrideLine(data.comparison);
@@ -344,6 +370,8 @@ function SummaryTab({ data }: { data: any }) {
       {data.narrative && (
         <p className="text-sm leading-8 text-ink">{data.narrative}</p>
       )}
+
+      <NotesBox from={data.from} to={data.to} />
 
       <ComparisonRing current={data.report.productiveMin} previous={cmp?.previous.productiveMin ?? 0} label="زمان مفید" />
 
