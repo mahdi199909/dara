@@ -9,13 +9,15 @@
 import { toPersianDigits } from "./money";
 
 /** The file-name-safe identifier — the APK's file name and a URL path, never shown to anyone as
- * the app's name. See APP_DISPLAY_NAME for what a person actually reads; kept distinct because a
- * file name and a URL path both need to stay ASCII, which the real (Persian) brand name isn't. */
+ * the app's name. See APP_DISPLAY_NAME for what a person actually reads; kept distinct because
+ * the file name and the URL path always carry the "app" suffix ("parvaapp.apk", parvaapp.ir),
+ * which the short brand name on its own doesn't. */
 export const APP_NAME = "parvaapp";
 
 /** What a person reads as the app's name — headings, alt text, the Android launcher/widget-picker
- * label, share-dialog titles. */
-export const APP_DISPLAY_NAME = "پروا";
+ * label, share-dialog titles. Deliberately Latin (not the Persian "پروا") — the brand name itself
+ * stays English even though everything around it is Persian. */
+export const APP_DISPLAY_NAME = "parva";
 
 /** The "برند | یک‌خطی" form used at first-impression spots: the browser tab title, the native
  * splash screen, the PWA install prompt's description. */
@@ -40,7 +42,7 @@ export const APK_LATEST_RELEASE_URL = `https://github.com/mahdi199909/dara/relea
  * CI run has published the APK, because from then on every older install is told to update.
  */
 export const LATEST_APP_RELEASE = {
-  versionName: "1.5.1",
+  versionName: "1.5.2",
   /** Installs below this are locked out until they update (1 = nobody is ever forced). */
   minSupportedVersionCode: 1,
 } as const;

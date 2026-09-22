@@ -1,7 +1,7 @@
 {
-  "name": "پروا",
-  "short_name": "پروا",
-  "description": "پروا | سیستم‌عامل شخصی",
+  "name": "parva",
+  "short_name": "parva",
+  "description": "parva | سیستم‌عامل شخصی",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#EFF2EE",

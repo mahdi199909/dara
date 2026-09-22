@@ -99,7 +99,7 @@ jobs:
           grep -E "^package: " badging.txt | grep -q "name='ir.mganic.dara'"
           grep -E "^package: " badging.txt | grep -q "versionCode='$ANDROID_VERSION_CODE'"
           grep -E "^package: " badging.txt | grep -q "versionName='$ANDROID_VERSION_NAME'"
-          grep -q "^application-label:'پروا | سیستم‌عامل شخصی'$" badging.txt
+          grep -q "^application-label:'parva | سیستم‌عامل شخصی'$" badging.txt
           ls -l parvaapp.apk
 
       - uses: actions/upload-artifact@v4
@@ -120,7 +120,7 @@ jobs:
             gh release upload "$TAG" parvaapp.apk --clobber
           else
             gh release create "$TAG" parvaapp.apk \
-              --title "پروا $ANDROID_VERSION_NAME" \
-              --notes "پروا $ANDROID_VERSION_NAME (build $ANDROID_VERSION_CODE). Permanent download link: https://my.parvaapp.ir/parvaapp.apk" \
+              --title "parva $ANDROID_VERSION_NAME" \
+              --notes "parva $ANDROID_VERSION_NAME (build $ANDROID_VERSION_CODE). Permanent download link: https://my.parvaapp.ir/parvaapp.apk" \
               --verify-tag
           fi

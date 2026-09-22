@@ -95,10 +95,10 @@ describe("the download link and the name", () => {
     expect(APK_LATEST_RELEASE_URL.endsWith(`/releases/latest/download/${APK_FILE_NAME}`)).toBe(true);
   });
 
-  it("keeps the human-facing display name distinct from the file-safe APP_NAME — a Persian brand name can't be a URL/file-name segment", () => {
-    expect(APP_DISPLAY_NAME).toBe("پروا");
+  it("keeps the human-facing display name distinct from the file-safe APP_NAME — the file name always carries the \"app\" suffix the short brand name doesn't", () => {
+    expect(APP_DISPLAY_NAME).toBe("parva");
     expect(APP_DISPLAY_NAME).not.toBe(APP_NAME);
-    expect(APP_TAGLINE).toBe("پروا | سیستم‌عامل شخصی");
+    expect(APP_TAGLINE).toBe("parva | سیستم‌عامل شخصی");
     expect(APP_TAGLINE.startsWith(APP_DISPLAY_NAME)).toBe(true);
   });
 
@@ -110,7 +110,7 @@ describe("the download link and the name", () => {
     expect(config).toContain("NEXT_PUBLIC_APP_VERSION: APP_VERSION");
   });
 
-  it("shows the real (Persian) display name the same way in the Android launcher, the Capacitor config and the PWA manifest — never the file-safe APP_NAME", () => {
+  it("shows the human display name the same way in the Android launcher, the Capacitor config and the PWA manifest — never the file-safe APP_NAME", () => {
     const strings = readFileSync(resolve(process.cwd(), "android/app/src/main/res/values/strings.xml"), "utf8");
     // The widget picker/launcher entry gets the full "برند | تگ‌لاین" form (what a person actually
     // browses through to find the app); the task switcher's card label stays just the short name.
