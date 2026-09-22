@@ -7,6 +7,8 @@ import {
   APK_STATIC_PATH,
   APK_STATIC_URL,
   APP_NAME,
+  APP_DISPLAY_NAME,
+  APP_TAGLINE,
   LATEST_APP_RELEASE,
   LATEST_APP_VERSION_CODE,
   formatVersionLabel,
@@ -85,6 +87,13 @@ describe("the download link and the name", () => {
     expect(APK_LATEST_RELEASE_URL.endsWith(`/releases/latest/download/${APK_FILE_NAME}`)).toBe(true);
   });
 
+  it("keeps the human-facing display name distinct from the file-safe APP_NAME — a Persian brand name can't be a URL/file-name segment", () => {
+    expect(APP_DISPLAY_NAME).toBe("پروا");
+    expect(APP_DISPLAY_NAME).not.toBe(APP_NAME);
+    expect(APP_TAGLINE).toBe("پروا | سیستم‌عامل شخصی");
+    expect(APP_TAGLINE.startsWith(APP_DISPLAY_NAME)).toBe(true);
+  });
+
   it("is redirected by the server config to the newest release's APK (the config is plain JS with no TS import, so this ties the two together)", () => {
     const config = readFileSync(resolve(process.cwd(), "next.config.mjs"), "utf8");
     expect(config).toContain(`source: "${APK_STATIC_PATH}"`);
@@ -93,12 +102,19 @@ describe("the download link and the name", () => {
     expect(config).toContain("NEXT_PUBLIC_APP_VERSION: APP_VERSION");
   });
 
-  it("names the app the same way in the Android launcher and the Capacitor config", () => {
+  it("shows the real (Persian) display name the same way in the Android launcher, the Capacitor config and the PWA manifest — never the file-safe APP_NAME", () => {
     const strings = readFileSync(resolve(process.cwd(), "android/app/src/main/res/values/strings.xml"), "utf8");
-    expect(strings).toContain(`<string name="app_name">${APP_NAME}</string>`);
-    expect(strings).toContain(`<string name="title_activity_main">${APP_NAME}</string>`);
-    expect(readFileSync(resolve(process.cwd(), "capacitor.config.ts"), "utf8")).toContain(`appName: "${APP_NAME}"`);
-    expect(JSON.parse(readFileSync(resolve(process.cwd(), "public/manifest.json"), "utf8")).name).toBe(APP_NAME);
+    // The widget picker/launcher entry gets the full "برند | تگ‌لاین" form (what a person actually
+    // browses through to find the app); the task switcher's card label stays just the short name.
+    expect(strings).toContain(`<string name="app_name">${APP_TAGLINE}</string>`);
+    expect(strings).toContain(`<string name="title_activity_main">${APP_DISPLAY_NAME}</string>`);
+    expect(strings).toContain(`<string name="splash_title">${APP_TAGLINE}</string>`);
+    expect(readFileSync(resolve(process.cwd(), "capacitor.config.ts"), "utf8")).toContain(`appName: "${APP_DISPLAY_NAME}"`);
+
+    const manifest = JSON.parse(readFileSync(resolve(process.cwd(), "public/manifest.json"), "utf8"));
+    expect(manifest.name).toBe(APP_DISPLAY_NAME);
+    expect(manifest.short_name).toBe(APP_DISPLAY_NAME);
+    expect(manifest.description).toBe(APP_TAGLINE);
   });
 });
 

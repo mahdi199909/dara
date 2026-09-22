@@ -1,21 +1,21 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">parvaapp</string>
-    <string name="title_activity_main">parvaapp</string>
+    <string name="app_name">پروا | سیستم‌عامل شخصی</string>
+    <string name="title_activity_main">پروا</string>
     <string name="package_name">ir.mganic.dara</string>
     <string name="custom_url_scheme">ir.mganic.dara</string>
     <string name="widget_capture_title">ثبت سریع کار</string>
-    <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ parvaapp</string>
+    <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ پروا</string>
     <string name="widget_today_events_title">رویدادهای امروز</string>
     <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>
     <string name="widget_today_events_description">نمایش لیست رویدادهای امروز</string>
     <string name="widget_habits_title">عادت‌های امروز</string>
     <string name="widget_habits_empty">عادتی برای امروز ثبت نشده</string>
-    <string name="widget_habits_description">نمایش و ثبت عادت‌های امروز، بدون باز کردن اپ parvaapp</string>
+    <string name="widget_habits_description">نمایش و ثبت عادت‌های امروز، بدون باز کردن اپ پروا</string>
     <string name="widget_habits_checkbox_description">علامت‌گذاری عادت</string>
     <string name="widget_capital_title">سرمایه من</string>
-    <string name="widget_capital_description">نمایش ساعت سرمایه‌گذاری‌شده و ثبت سریع سه دسته پرکاربرد، بدون باز کردن اپ parvaapp</string>
+    <string name="widget_capital_description">نمایش ساعت سرمایه‌گذاری‌شده و ثبت سریع سه دسته پرکاربرد، بدون باز کردن اپ پروا</string>
     <string name="widget_capital_shortcuts_empty">دسته‌بندی‌ای پیدا نشد — یک‌بار اپ رو باز کنید</string>
-    <string name="splash_title">parvaapp | سیستم‌عامل شخصی</string>
+    <string name="splash_title">پروا | سیستم‌عامل شخصی</string>
     <string name="splash_slogan">زمان، پول، کار و دارایی‌هایت در یک دفتر واحد.</string>
 </resources>

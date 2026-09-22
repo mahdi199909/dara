@@ -8,8 +8,18 @@
 // minor < 100 and patch < 100, which parseVersionName enforces.
 import { toPersianDigits } from "./money";
 
-/** What the user sees as the app's name — the launcher label, the download file and the UI copy. */
+/** The file-name-safe identifier — the APK's file name and a URL path, never shown to anyone as
+ * the app's name. See APP_DISPLAY_NAME for what a person actually reads; kept distinct because a
+ * file name and a URL path both need to stay ASCII, which the real (Persian) brand name isn't. */
 export const APP_NAME = "parvaapp";
+
+/** What a person reads as the app's name — headings, alt text, the Android launcher/widget-picker
+ * label, share-dialog titles. */
+export const APP_DISPLAY_NAME = "پروا";
+
+/** The "برند | یک‌خطی" form used at first-impression spots: the browser tab title, the native
+ * splash screen, the PWA install prompt's description. */
+export const APP_TAGLINE = `${APP_DISPLAY_NAME} | سیستم‌عامل شخصی`;
 
 /** The one file name the APK is ever published under (GitHub Release asset and browser download). */
 export const APK_FILE_NAME = `${APP_NAME}.apk`;

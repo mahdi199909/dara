@@ -7,7 +7,7 @@ import { fetcher } from "@/lib/apiClient";
 import { formatDuration } from "@/lib/money";
 import { formatJalali } from "@/lib/jalali";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
-import { APP_NAME } from "@/lib/appVersion";
+import { APP_DISPLAY_NAME } from "@/lib/appVersion";
 import IdentityStatements, { type IdentityStatementDto } from "@/components/IdentityStatements";
 
 export default function PrintReportPage() {
@@ -68,7 +68,7 @@ function PrintReportContent() {
       </div>
 
       <header className="mb-8 pb-4 border-b-2 border-accent">
-        <h1 className="text-2xl font-bold text-accent">{APP_NAME} — گزارش {label}</h1>
+        <h1 className="text-2xl font-bold text-accent">{APP_DISPLAY_NAME} — گزارش {label}</h1>
         <p className="text-xs text-muted mt-1">تاریخ تولید گزارش: {formatJalali(generatedAt, { withTime: true })}</p>
       </header>
 

@@ -1,7 +1,7 @@
 {
-  "name": "parvaapp",
-  "short_name": "parvaapp",
-  "description": "parvaapp | سیستم‌عامل شخصی",
+  "name": "پروا",
+  "short_name": "پروا",
+  "description": "پروا | سیستم‌عامل شخصی",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#EFF2EE",

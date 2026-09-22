@@ -16,7 +16,7 @@
 import { useEffect, useState } from "react";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
 import { checkVersionGate, refreshVersionGate, type VersionGateResult } from "@/lib/versionGate";
-import { APP_NAME } from "@/lib/appVersion";
+import { APP_DISPLAY_NAME } from "@/lib/appVersion";
 import { getLogger } from "@/lib/observability";
 import { setClientUser } from "@/lib/observability/client/clientContext";
 import { ApiClientError } from "@/lib/apiClient";
@@ -279,10 +279,10 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">
         <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/icon.png" alt={APP_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
+          <img src="/icon.png" alt={APP_DISPLAY_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
           <h1 className="text-lg font-bold text-ink">به‌روزرسانی لازم است</h1>
           <p className="text-sm text-muted leading-relaxed">
-            این نسخه از {APP_NAME} دیگر پشتیبانی نمی‌شود و شامل یک تغییر مهم بوده. برای ادامه، نسخه جدید را نصب کنید.
+            این نسخه از {APP_DISPLAY_NAME} دیگر پشتیبانی نمی‌شود و شامل یک تغییر مهم بوده. برای ادامه، نسخه جدید را نصب کنید.
           </p>
           {versionBlock.downloadUrl && (
             <a
@@ -321,8 +321,8 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     <div className="min-h-screen flex items-center justify-center bg-canvas px-4" dir="rtl">
       <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icon.png" alt={APP_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
-        <h1 className="text-lg font-bold text-ink text-center">{mode === "login" ? `ورود به ${APP_NAME}` : `ساخت حساب در ${APP_NAME}`}</h1>
+        <img src="/icon.png" alt={APP_DISPLAY_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
+        <h1 className="text-lg font-bold text-ink text-center">{mode === "login" ? `ورود به ${APP_DISPLAY_NAME}` : `ساخت حساب در ${APP_DISPLAY_NAME}`}</h1>
         <p className="text-xs text-muted text-center leading-relaxed">
           این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>

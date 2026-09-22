@@ -15,7 +15,7 @@ import MoneyInput from "@/components/ui/MoneyInput";
 import { getLocalDbInstance } from "@/local/db";
 import { getSyncStatus, subscribeSyncStatus } from "@/lib/syncStatus";
 import { REMOTE_API_BASE } from "@/lib/remoteAuth";
-import { APP_NAME, BUNDLE_APP_VERSION, formatVersionLabel, versionCodeFromName } from "@/lib/appVersion";
+import { APP_DISPLAY_NAME, BUNDLE_APP_VERSION, formatVersionLabel, versionCodeFromName } from "@/lib/appVersion";
 import type { DataExportFile, DataExportTable, ImportResult } from "@/local/dataExport";
 import type { ParsedIcsEvent } from "@/lib/icsParser";
 import { Preferences } from "@capacitor/preferences";
@@ -138,7 +138,7 @@ function AppVersionFooter({ native }: { native: boolean }) {
   if (!label) return null;
   return (
     <p className="text-center text-[11px] text-muted pt-2" dir="rtl">
-      {APP_NAME} · {label}
+      {APP_DISPLAY_NAME} · {label}
     </p>
   );
 }
@@ -1253,7 +1253,7 @@ function BackupTab() {
       // `files` (not `url`) is @capacitor/share's option for a local file:// attachment — see
       // node_modules/@capacitor/share's ShareOptions — so Telegram/email/etc. in the resulting
       // share sheet receive the actual file, not just a path string.
-      await Share.share({ title: `پشتیبان اطلاعات ${APP_NAME}`, dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
+      await Share.share({ title: `پشتیبان اطلاعات ${APP_DISPLAY_NAME}`, dialogTitle: "ارسال فایل پشتیبان", files: [uri] });
 
       setExportMessage(`فایل پشتیبان ساخته شد (${filename}) — از صفحه‌ی اشتراک‌گذاری، مقصد را انتخاب کنید.`);
     } catch (err) {

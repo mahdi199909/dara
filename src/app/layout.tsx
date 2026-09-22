@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Vazirmatn } from "next/font/google";
 import Script from "next/script";
 import { CurrencyUnitProvider } from "@/lib/currencyUnit";
-import { APP_NAME } from "@/lib/appVersion";
+import { APP_TAGLINE } from "@/lib/appVersion";
 import ThemeSystemListener from "@/components/ThemeSystemListener";
 import "./globals.css";
 
@@ -27,8 +27,8 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} | سیستم‌عامل شخصی`,
-  description: `${APP_NAME} | سیستم‌عامل شخصی`,
+  title: APP_TAGLINE,
+  description: APP_TAGLINE,
   manifest: "/manifest.json",
   icons: { icon: "/icon.png", apple: "/icon.png" },
 };
