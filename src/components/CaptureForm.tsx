@@ -37,6 +37,12 @@ export default function CaptureForm({
   onDone,
   initialStart,
   initialEnd,
+  initialTitle,
+  initialDay,
+  initialEntityType,
+  initialFlowType,
+  initialAmount,
+  initialCategoryHint,
 }: {
   onDone: (summary?: CaptureSummary) => void;
   /** Pre-fills day/start/end — see DayBattery's "tap an unlogged gap" flow, the mandatory
@@ -44,29 +50,44 @@ export default function CaptureForm({
    * initialEnd is still honored (end just stays blank for the user to fill in). */
   initialStart?: Date;
   initialEnd?: Date;
+  /** The rest are "smart capture"'s pre-fill (see src/lib/smartCapture.ts) — a free-typed line
+   * parsed into a starting point the person still reviews and submits themselves; nothing here
+   * is ever saved on its own. `initialDay` is used only when `initialStart` wasn't (a day with no
+   * named time must never gain a fabricated one just because the day is known). */
+  initialTitle?: string;
+  initialDay?: Date | null;
+  initialEntityType?: CaptureEntityType;
+  initialFlowType?: FlowType;
+  initialAmount?: number | null;
+  /** A category NAME (e.g. "شبکه‌های اجتماعی") matched against the person's real categories once
+   * they load — applied only if a real match exists, and only once (never overrides a later pick). */
+  initialCategoryHint?: string | null;
 }) {
   const { categories } = useCategories();
 
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle ?? "");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { data: suggestionsData } = useSWR<{ suggestions: { title: string; count: number }[] }>(
     showSuggestions ? `/api/quick-capture/suggestions?q=${encodeURIComponent(title)}` : null,
     fetcher
   );
   const suggestions = suggestionsData?.suggestions ?? [];
-  const [entityType, setEntityType] = useState<CaptureEntityType>("TASK");
+  const [entityType, setEntityType] = useState<CaptureEntityType>(initialEntityType ?? "TASK");
   const [valueType, setValueType] = useState<ValueType>("EXPENSE");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [day, setDay] = useState(initialStart ?? new Date());
+  const [day, setDay] = useState(initialStart ?? initialDay ?? new Date());
   const [startTime, setStartTime] = useState(initialStart ? hhmm(initialStart) : "");
   const [endTime, setEndTime] = useState(initialEnd ? hhmm(initialEnd) : "");
-  const [flowType, setFlowType] = useState<FlowType>("COST");
-  const [amount, setAmount] = useState("");
+  const [flowType, setFlowType] = useState<FlowType>(initialFlowType ?? "COST");
+  const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set when the chosen time lies on top of something already on the day — see OverlapNotice.
   const [overlap, setOverlap] = useState<OverlapRefusal | null>(null);
+  // Applied once, the first time the real category list contains a match — a category picked by
+  // the person afterwards (or a hint with no match at all) must never be overridden by this again.
+  const [hintApplied, setHintApplied] = useState(false);
 
   // A project's auto-generated category is shown regardless of the Expense/Asset tab — a
   // project can incur both (buying a part is an expense, time spent is an asset), so tying
@@ -83,6 +104,16 @@ export default function CaptureForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valueType, categories]);
+
+  useEffect(() => {
+    if (hintApplied || !initialCategoryHint || categories.length === 0) return;
+    const match = categories.find((c: any) => c.isActive && (c.name === initialCategoryHint || c.name.includes(initialCategoryHint)));
+    if (match) {
+      pickCategory(match);
+      setHintApplied(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories, initialCategoryHint, hintApplied]);
 
   function pickCategory(cat: any) {
     setCategoryId(cat.id);

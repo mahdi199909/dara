@@ -13,49 +13,78 @@ import DayBattery from "@/components/DayBattery";
 import DayItemsList from "@/components/day/DayItemsList";
 import { buildDayItems } from "@/lib/dayItems";
 import { EmptyState } from "@/components/ui/Card";
-import { formatJalali } from "@/lib/jalali";
-import { formatDuration } from "@/lib/money";
+import { formatJalali, toJalali, weekdayNameFa } from "@/lib/jalali";
+import { formatDuration, toPersianDigits } from "@/lib/money";
+import { isSameDay } from "@/lib/calendarGrid";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
+import { buildCapturePrefill } from "@/lib/smartCapture";
 import LogWorkCard, { type CaptureReaction } from "@/components/companion/LogWorkCard";
 import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
+import type { CapturePrefill } from "@/lib/smartCapture";
+
+/** "امروز" / "فردا" / weekday name — a short, humane day label for a card in a horizontal row. */
+function shortRelativeDay(date: Date): string {
+  const today = new Date();
+  if (isSameDay(date, today)) return "امروز";
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  if (isSameDay(date, tomorrow)) return "فردا";
+  return `${weekdayNameFa(date)} ${toPersianDigits(toJalali(date).jd)}`;
+}
 
 /**
- * Sits beside LogWorkCard, same size, on Home's top row — the nearest unpaid installment
- * across every plan, one page-snapped card per swipe so scrolling the strip reveals the next
- * few without needing its own dedicated page visit. Always renders (even with nothing due) so
- * the two-column row stays a stable, equal split rather than LogWorkCard silently going full
- * width whenever there's nothing to show here.
+ * Sits beside LogWorkCard, same size, on Home's top row — the nearest unpaid installments across
+ * every plan, as a horizontal row of small cards (a colored dot for their status, title, day,
+ * amount) with a slim progress line underneath for this Jalali month's paid share. Always renders
+ * (even with nothing due) so the two-column row stays a stable, equal split rather than LogWorkCard
+ * silently going full width whenever there's nothing to show here.
  */
 function UpcomingInstallmentsCard() {
   const { data } = useSWR<{ plans: any[] }>("/api/installment-plans", fetcher);
   const { format } = useCurrencyUnit();
 
-  const upcoming = (data?.plans ?? [])
+  const plans = data?.plans ?? [];
+  const upcoming = plans
     .flatMap((plan: any) => plan.installments.filter((i: any) => i.status !== "PAID").map((i: any) => ({ ...i, planTitle: plan.title })))
     .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 4);
+    .slice(0, 6);
+
+  const { jy: curJy, jm: curJm } = toJalali(new Date());
+  const thisMonth = plans.flatMap((plan: any) =>
+    plan.installments.filter((i: any) => {
+      const { jy, jm } = toJalali(new Date(i.dueDate));
+      return jy === curJy && jm === curJm;
+    })
+  );
+  const monthTotal = thisMonth.reduce((s: number, i: any) => s + i.amount, 0);
+  const monthPaid = thisMonth.filter((i: any) => i.status === "PAID").reduce((s: number, i: any) => s + i.amount, 0);
+  const monthPercent = monthTotal > 0 ? Math.min(100, Math.round((monthPaid / monthTotal) * 100)) : null;
 
   return (
-    <Link
-      href="/finance"
-      className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card px-3 py-2 flex flex-col"
-    >
-      <p className="text-xs text-muted mb-1">سررسید نزدیک</p>
+    <Link href="/finance" className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card p-2 flex flex-col gap-2">
+      <p className="text-[11px] text-muted px-1">سررسید نزدیک</p>
       {upcoming.length === 0 ? (
-        <p className="flex-1 text-xs text-muted flex items-center">قسطی برای پرداخت نیست.</p>
+        <p className="flex-1 text-xs text-muted flex items-center justify-center px-1 min-h-[40px]">قسطی برای پرداخت نیست.</p>
       ) : (
-        <div className="flex-1 flex overflow-x-auto snap-x snap-mandatory scrollbar-thin -mx-1">
+        <div className="flex-1 flex gap-1.5 overflow-x-auto snap-x snap-mandatory scrollbar-thin px-1">
           {upcoming.map((inst) => (
-            <div key={inst.id} className="w-full shrink-0 snap-center px-1 flex flex-col justify-center">
-              <p className="text-sm font-bold text-ink truncate">{inst.planTitle}</p>
-              <div className="flex items-center justify-between mt-0.5">
-                <span className="text-[11px] text-muted">{formatJalali(new Date(inst.dueDate))}</span>
-                <span className="text-xs font-bold text-accent">{format(inst.amount, { withSuffix: true })}</span>
+            <div key={inst.id} className="shrink-0 snap-start w-[122px] rounded-xl bg-canvas px-2.5 py-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span aria-hidden className={`shrink-0 w-1.5 h-1.5 rounded-full ${inst.status === "OVERDUE" ? "bg-waste" : "bg-accent"}`} />
+                <p className="text-xs font-bold text-ink truncate">{inst.planTitle}</p>
               </div>
+              <p className="text-[10px] text-muted mt-1">{shortRelativeDay(new Date(inst.dueDate))}</p>
+              <p className="text-xs font-bold text-accent mt-0.5">{format(inst.amount, { withSuffix: true })}</p>
             </div>
           ))}
+        </div>
+      )}
+      {monthPercent !== null && (
+        <div className="px-1">
+          <div className="h-1.5 rounded-full bg-canvas overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-l from-accent to-brand-400" style={{ width: `${monthPercent}%` }} />
+          </div>
         </div>
       )}
     </Link>
@@ -137,6 +166,9 @@ function todayRange() {
 export default function HomePage() {
   const [showCapture, setShowCapture] = useState(false);
   const [captureRange, setCaptureRange] = useState<{ start: Date; end: Date } | null>(null);
+  // Set only by the smart-capture text field (src/lib/smartCapture.ts) — cleared whenever any
+  // other capture entry point opens the same modal, so its fields never leak into a blank/gap open.
+  const [smartPrefill, setSmartPrefill] = useState<CapturePrefill | null>(null);
   const [reaction, setReaction] = useState<CaptureReaction | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { format } = useCurrencyUnit();
@@ -170,7 +202,16 @@ export default function HomePage() {
   const activeHabits = habits.filter((h: any) => h.isActive && !h.isTrial);
 
   function openCapture(range?: { start: Date; end: Date }) {
+    setSmartPrefill(null);
     setCaptureRange(range ?? null);
+    setShowCapture(true);
+  }
+
+  // The smart-capture text field: parse the typed line (src/lib/smartCapture.ts) and open the
+  // very same form filled in with what it found — the person still reviews and submits it themselves.
+  function openSmartCapture(text: string) {
+    setCaptureRange(null);
+    setSmartPrefill(buildCapturePrefill(text));
     setShowCapture(true);
   }
 
@@ -180,6 +221,7 @@ export default function HomePage() {
   function handleCaptureDone(summary?: CaptureSummary) {
     setShowCapture(false);
     setCaptureRange(null);
+    setSmartPrefill(null);
     mutate();
     mutateDayActivity();
     if (summary) {
@@ -200,6 +242,7 @@ export default function HomePage() {
           reaction={reaction}
           onOpenCapture={() => openCapture()}
           onLogGap={(start, end) => openCapture({ start, end })}
+          onSmartCapture={openSmartCapture}
         />
         <UpcomingInstallmentsCard />
       </div>
@@ -269,8 +312,14 @@ export default function HomePage() {
         open={showCapture}
         onClose={() => setShowCapture(false)}
         onDone={handleCaptureDone}
-        initialStart={captureRange?.start}
-        initialEnd={captureRange?.end}
+        initialStart={smartPrefill?.start ?? captureRange?.start ?? undefined}
+        initialEnd={smartPrefill?.end ?? captureRange?.end ?? undefined}
+        initialTitle={smartPrefill?.title}
+        initialDay={smartPrefill?.day}
+        initialEntityType={smartPrefill?.entityType}
+        initialFlowType={smartPrefill?.flowType}
+        initialAmount={smartPrefill?.amount}
+        initialCategoryHint={smartPrefill?.categoryHint}
       />
 
       {durationHabit && (

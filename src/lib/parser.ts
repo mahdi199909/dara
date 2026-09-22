@@ -83,23 +83,27 @@ function extractDuration(text: string): { minutes: number; remaining: string } |
   return null;
 }
 
+// Both the written ("تومان") and the everyday-spoken ("تومن") spelling — someone typing a quick
+// capture note types the way they'd say it out loud, and "تومن" is by far the more common of the two.
+const TOMAN_WORD = /توم[ا]?ن/;
+
 function extractAmount(text: string): { amount: number; remaining: string } | null {
   // Requires a scale word so it never collides with a bare duration number, e.g. "۱.۵ میلیون"
-  let m = text.match(/(\d+(?:[.,]\d+)*)\s*(میلیارد|میلیون|هزار)\s*(تومان)?/);
+  let m = text.match(new RegExp(`(\\d+(?:[.,]\\d+)*)\\s*(میلیارد|میلیون|هزار)\\s*(${TOMAN_WORD.source})?`));
   if (m) {
     const amount = parseAmount(`${m[1]} ${m[2]}`);
     if (amount !== null) return { amount, remaining: stripMatch(text, m) };
   }
 
   // Comma-grouped numbers, e.g. "2,500,000"
-  m = text.match(/(\d{1,3}(?:,\d{3})+)\s*(تومان)?/);
+  m = text.match(new RegExp(`(\\d{1,3}(?:,\\d{3})+)\\s*(${TOMAN_WORD.source})?`));
   if (m) {
     const amount = parseAmount(m[1]);
     if (amount !== null) return { amount, remaining: stripMatch(text, m) };
   }
 
-  // Bare number explicitly tagged with تومان
-  m = text.match(/(\d+)\s*تومان/);
+  // Bare number explicitly tagged with تومان/تومن
+  m = text.match(new RegExp(`(\\d+)\\s*${TOMAN_WORD.source}`));
   if (m) {
     const amount = parseAmount(m[1]);
     if (amount !== null) return { amount, remaining: stripMatch(text, m) };

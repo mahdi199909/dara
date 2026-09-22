@@ -1,6 +1,7 @@
 "use client";
 
 import CaptureForm, { type CaptureSummary } from "./CaptureForm";
+import type { CaptureEntityType } from "@/lib/types";
 import { XIcon } from "./icons";
 
 /** The bottom-sheet capture form — shared by GlobalCaptureFab (every page except Home) and
@@ -12,6 +13,12 @@ export default function CaptureFormModal({
   onDone,
   initialStart,
   initialEnd,
+  initialTitle,
+  initialDay,
+  initialEntityType,
+  initialFlowType,
+  initialAmount,
+  initialCategoryHint,
 }: {
   open: boolean;
   onClose: () => void;
@@ -20,6 +27,14 @@ export default function CaptureFormModal({
    * opens this modal pre-filled to the day's largest unlogged gap. */
   initialStart?: Date;
   initialEnd?: Date;
+  /** "Smart capture"'s pre-fill (see src/lib/smartCapture.ts) — passed straight through to
+   * CaptureForm, whose own doc comment explains each one. */
+  initialTitle?: string;
+  initialDay?: Date | null;
+  initialEntityType?: CaptureEntityType;
+  initialFlowType?: "COST" | "INCOME";
+  initialAmount?: number | null;
+  initialCategoryHint?: string | null;
 }) {
   if (!open) return null;
 
@@ -36,7 +51,17 @@ export default function CaptureFormModal({
           </button>
         </div>
         <div className="p-5">
-          <CaptureForm onDone={onDone} initialStart={initialStart} initialEnd={initialEnd} />
+          <CaptureForm
+            onDone={onDone}
+            initialStart={initialStart}
+            initialEnd={initialEnd}
+            initialTitle={initialTitle}
+            initialDay={initialDay}
+            initialEntityType={initialEntityType}
+            initialFlowType={initialFlowType}
+            initialAmount={initialAmount}
+            initialCategoryHint={initialCategoryHint}
+          />
         </div>
       </div>
     </div>

@@ -341,6 +341,10 @@ function SummaryTab({ data }: { data: any }) {
         </span>
       </div>
 
+      {data.narrative && (
+        <p className="text-sm leading-8 text-ink">{data.narrative}</p>
+      )}
+
       <ComparisonRing current={data.report.productiveMin} previous={cmp?.previous.productiveMin ?? 0} label="زمان مفید" />
 
       {prideLine && (

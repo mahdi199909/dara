@@ -1,73 +1,54 @@
 "use client";
 
+import { useState } from "react";
 import { useCompanion } from "./useCompanion";
-import { MOOD_FA_LABEL, MOOD_TOKENS, RING_TRACK_COLOR } from "./moodTokens";
+import { MOOD_FA_LABEL } from "./moodTokens";
 import { phraseCaptureReaction, type CaptureReactionKind } from "@/lib/phrasing";
-import { formatDuration, shortDuration, toPersianDigits } from "@/lib/money";
+import { formatDuration } from "@/lib/money";
 import { PlusIcon } from "@/components/icons";
 
 export type CaptureReaction = { kind: CaptureReactionKind; minutes?: number; amount?: number };
 
-const RING_SIZE = 56;
-const RING_STROKE = 6;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-
-/** The day's progress toward the productive-time target; a check mark once it is reached. */
-function ProgressRing({ completion, color }: { completion: number; color: string }) {
-  const shown = Math.min(Math.max(completion, 0), 1);
+/** A small note/document glyph — the icon set has nothing "this becomes an entry" shaped. */
+function NoteIcon({ className }: { className?: string }) {
   return (
-    <div className="relative shrink-0" style={{ width: RING_SIZE, height: RING_SIZE }} aria-hidden>
-      <svg viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} className="w-full h-full -rotate-90">
-        <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" strokeWidth={RING_STROKE} stroke={RING_TRACK_COLOR} />
-        <circle
-          cx={RING_SIZE / 2}
-          cy={RING_SIZE / 2}
-          r={RING_RADIUS}
-          fill="none"
-          strokeWidth={RING_STROKE}
-          strokeLinecap="round"
-          stroke={color}
-          strokeDasharray={RING_LENGTH}
-          strokeDashoffset={RING_LENGTH * (1 - shown)}
-          style={{ transition: "stroke-dashoffset 700ms ease-out" }}
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[13px] font-bold text-ink">
-        {completion >= 1 ? "✓" : `${toPersianDigits(Math.round(shown * 100))}٪`}
-      </span>
-    </div>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M13 3v5h5" />
+      <path d="M8.5 12.5h7M8.5 15.5h7M8.5 18h4.5" />
+    </svg>
   );
 }
 
 /**
- * Home's «ثبت کار» card: a progress ring, the two numbers that matter — productive time against
- * the daily target, and everything logged today (the same figure DayBattery shows) — and one big
- * button. No explanatory sentence: the ring and the labelled numbers say it, and the companion's
- * mood already lives in the top bar's face. The only words that appear are the short reaction to
- * something that was just logged, for the few seconds it stays.
+ * Home's capture bar: a big "+" that opens the full form blank, and a free-text field next to it —
+ * type what you did in your own words ("۲ ساعت رو پروژه کار کردم، ۵۰۰ تومن خرج ناهار شد") and the
+ * same form opens already filled in for you to check and submit (src/lib/smartCapture.ts parses
+ * it; nothing is ever saved without that review). No numbers, no ring, no sentence here — the
+ * day's progress lives in the day battery right below, and the companion's mood in the header.
  *
- * The button's label/action still follows the companion's mood (see computeCompanionState):
- * during BLINDFOLDED it pre-fills the day's biggest unlogged gap instead of opening a blank form,
- * and it is never hidden outright — this is Home's only capture entry point (GlobalCaptureFab is
- * deliberately absent from Home).
+ * The "+" button still follows the companion's mood the way the whole card used to (see
+ * computeCompanionState): during BLINDFOLDED it pre-fills the day's biggest unlogged gap instead
+ * of a blank form, and it's never hidden outright — this is Home's only capture entry point
+ * (GlobalCaptureFab is deliberately absent from Home).
  */
 export default function LogWorkCard({
   reaction,
   onOpenCapture,
   onLogGap,
+  onSmartCapture,
 }: {
   reaction: CaptureReaction | null;
   onOpenCapture: () => void;
   onLogGap: (start: Date, end: Date) => void;
+  /** The typed line, once the person submits it — Home parses it (smartCapture.ts) and opens the form filled in. */
+  onSmartCapture: (text: string) => void;
 }) {
-  const { state, enabled, largestUnloggedGap, loggedMinutes } = useCompanion();
+  const { state, enabled, largestUnloggedGap } = useCompanion();
+  const [text, setText] = useState("");
   if (!enabled || !state) return null;
 
-  const ariaLabel = `آدمک: ${MOOD_FA_LABEL[state.mood]}، ${formatDuration(state.achievedMinutes)} از ${formatDuration(state.targetMinutes)}`;
-  const buttonLabel = state.action.label || "ثبت کار";
-
-  function handleClick() {
+  function handlePlus() {
     if (state!.mood === "BLINDFOLDED" && largestUnloggedGap) {
       onLogGap(largestUnloggedGap.start, largestUnloggedGap.end);
     } else {
@@ -75,37 +56,57 @@ export default function LogWorkCard({
     }
   }
 
+  function submitText() {
+    const value = text.trim();
+    if (!value) return;
+    onSmartCapture(value);
+    setText("");
+  }
+
+  const ariaLabel = `آدمک: ${MOOD_FA_LABEL[state.mood]}، ${formatDuration(state.achievedMinutes)} از ${formatDuration(state.targetMinutes)}`;
+
   return (
-    <div className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card p-3 flex flex-col gap-2.5" aria-label={ariaLabel}>
-      <div className="flex items-center gap-3 min-h-[56px]">
-        <ProgressRing completion={state.completion} color={MOOD_TOKENS[state.mood].ring} />
-        {reaction ? (
-          <p className="flex-1 min-w-0 text-xs font-medium text-accent leading-snug line-clamp-3">
-            {phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state.remainingMinutes })}
-          </p>
-        ) : (
-          <dl className="flex-1 min-w-0 space-y-1">
-            <div>
-              <dt className="text-[10px] text-muted leading-none">کار مفید</dt>
-              <dd className="mt-0.5 text-sm font-bold text-ink leading-tight whitespace-nowrap">
-                {shortDuration(state.achievedMinutes)} <span className="text-[11px] font-normal text-muted">از {shortDuration(state.targetMinutes)}</span>
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] text-muted leading-none">کل ثبت‌شده</dt>
-              <dd className="mt-0.5 text-sm font-bold text-ink leading-tight whitespace-nowrap">{shortDuration(loggedMinutes)}</dd>
-            </div>
-          </dl>
-        )}
-      </div>
+    <div className="flex-1 min-w-0 rounded-2xl bg-surface border border-line shadow-card p-2 flex items-center gap-2" aria-label={ariaLabel}>
       <button
         type="button"
-        onClick={handleClick}
-        className="w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] transition"
+        onClick={handlePlus}
+        aria-label="ثبت کار"
+        className="shrink-0 w-12 h-12 rounded-full bg-accent text-on-accent flex items-center justify-center shadow-sm active:scale-95 transition"
       >
-        <PlusIcon className="w-4 h-4" strokeWidth={2.5} />
-        {buttonLabel}
+        <PlusIcon className="w-5 h-5" strokeWidth={2.5} />
       </button>
+
+      {reaction ? (
+        <p className="flex-1 min-w-0 px-2 text-xs font-medium text-accent leading-snug line-clamp-2">
+          {phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state.remainingMinutes })}
+        </p>
+      ) : (
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 rounded-xl bg-canvas px-3 py-2.5">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitText();
+              }
+            }}
+            enterKeyHint="send"
+            placeholder="ثبت ..."
+            aria-label="ثبت با متن آزاد"
+            className="flex-1 min-w-0 bg-transparent text-sm text-ink placeholder:text-muted focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={submitText}
+            disabled={!text.trim()}
+            aria-label="تجزیه و باز کردن فرم"
+            className="shrink-0 text-muted disabled:opacity-40 hover:text-accent transition"
+          >
+            <NoteIcon className="w-[18px] h-[18px]" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

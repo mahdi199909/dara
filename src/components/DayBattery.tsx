@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
-import { formatDuration } from "@/lib/money";
+import { formatDuration, toPersianDigits } from "@/lib/money";
 import { Card } from "@/components/ui/Card";
+import { useCompanion } from "@/components/companion/useCompanion";
 
 interface DaySegmentDto {
   kind: "PRODUCTIVE" | "NEUTRAL" | "WASTE" | "UNLOGGED" | "REMAINING";
@@ -42,9 +43,15 @@ const UNLOGGED_STYLE: React.CSSProperties = {
  * order (RTL: right = wake time, left = sleep time) by what was actually logged. Tapping an
  * unlogged gap opens the capture form pre-filled to exactly that gap — this is the mandatory
  * "مسیر" (path) the pain→path→pride rule requires right next to the "درد" of an unlogged gap.
+ *
+ * The header carries the two numbers that used to split across two Home cards — the day's overall
+ * progress (logged ÷ waking hours, the same split the bar itself draws) and the companion's own
+ * "کار مفید" (useful work against the daily target) — so "how is today going" lives in one place.
  */
 export default function DayBattery({ onLogGap }: { onLogGap: (start: Date, end: Date) => void }) {
   const { data } = useSWR<{ battery: DayBatteryDto }>("/api/day-battery", fetcher);
+  // Same /api/day-battery response (SWR dedupes the request), plus the companion's own achieved/target.
+  const { state: companionState, enabled: companionEnabled } = useCompanion();
   const [filled, setFilled] = useState(false);
   // The fill-in transition is only meant to play once, on mount — not every time this data
   // refetches (e.g. on app resume). Dropping the transition class after it's had time to finish
@@ -65,9 +72,26 @@ export default function DayBattery({ onLogGap }: { onLogGap: (start: Date, end: 
   const { battery } = data;
   if (battery.capacityMinutes <= 0) return null;
 
+  const percent = Math.min(100, Math.round((battery.loggedMinutes / battery.capacityMinutes) * 100));
+
   return (
     <Card className="p-4">
-      <div className="w-full h-[8px] rounded-full overflow-hidden flex bg-canvas" dir="rtl">
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-xs text-muted">
+          {companionEnabled && companionState ? (
+            <>
+              کار مفید <span className="text-ink font-bold">{formatDuration(companionState.achievedMinutes)}</span> از {formatDuration(companionState.targetMinutes)}
+            </>
+          ) : (
+            "پیشرفت امروز"
+          )}
+        </p>
+        <p className="text-sm font-extrabold text-ink shrink-0" aria-label={`٪${toPersianDigits(percent)} از روز ثبت شده`}>
+          {toPersianDigits(percent)}٪
+        </p>
+      </div>
+
+      <div className="w-full h-[14px] rounded-full overflow-hidden flex bg-canvas" dir="rtl">
         {battery.segments.map((seg, i) => {
           const isUnlogged = seg.kind === "UNLOGGED";
           const widthPct = (seg.minutes / battery.capacityMinutes) * 100;
