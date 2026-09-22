@@ -29,17 +29,19 @@ describe("buildCapturePrefill", () => {
     expect(r.start?.getDate()).toBe(9);
   });
 
-  it("a day with no time and no duration sets only the day — never invents a time", () => {
+  it("a day with no time and no duration still gets a start: right now's clock time, on that day", () => {
     const r = buildCapturePrefill("فردا تماس با رضا", NOW);
     expect(r.day?.getDate()).toBe(11);
-    expect(r.start).toBeNull();
-    expect(r.end).toBeNull();
+    expect(r.start?.getDate()).toBe(11); // tomorrow's date
+    expect(r.start?.getHours()).toBe(NOW.getHours()); // but right now's time-of-day
+    expect(r.start?.getMinutes()).toBe(NOW.getMinutes());
+    expect(r.end).toBeNull(); // no duration was named, so none is invented
   });
 
-  it("no time signal at all leaves day/start/end untouched for CaptureForm's own defaults", () => {
+  it("no time signal at all still defaults to right now (today)", () => {
     const r = buildCapturePrefill("خرید نان", NOW);
-    expect(r.day).toBeNull();
-    expect(r.start).toBeNull();
+    expect(r.day).toBeNull(); // CaptureForm's own default (today) still applies to the day field itself
+    expect(r.start?.getTime()).toBe(NOW.getTime());
     expect(r.end).toBeNull();
   });
 

@@ -12,7 +12,8 @@ export interface CapturePrefill {
   entityType: CaptureEntityType;
   /** The day only (local midnight) — never guessed further than what the text actually said. */
   day: Date | null;
-  /** Set only when the text named a real clock time, or a duration let us anchor one — see below. */
+  /** Falls back to the current clock time (on whatever day was named, or today) when the text gave
+   * neither a real time nor a duration to anchor one — see below. Practically never null. */
   start: Date | null;
   end: Date | null;
   amount: number | null;
@@ -55,6 +56,15 @@ export function buildCapturePrefill(rawInput: string, now: Date = new Date()): C
     const onDay = day ?? atMidnight(now);
     end = new Date(onDay.getFullYear(), onDay.getMonth(), onDay.getDate(), now.getHours(), now.getMinutes(), 0, 0);
     start = new Date(end.getTime() - parsed.durationMinutes * 60_000);
+  }
+
+  if (!start) {
+    // Neither a clock time nor a duration to anchor one — rather than leave the person to fill in
+    // a time by hand for the common case (quickly logging something as it happens), default to
+    // right now, on whichever day was named (or today). No end is invented alongside it — a
+    // duration is a real claim about length that the text never made.
+    const onDay = day ?? atMidnight(now);
+    start = new Date(onDay.getFullYear(), onDay.getMonth(), onDay.getDate(), now.getHours(), now.getMinutes(), 0, 0);
   }
 
   return {

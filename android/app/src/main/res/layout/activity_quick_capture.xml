@@ -29,7 +29,7 @@
             android:id="@+id/capture_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="چه کاری انجام دادی؟"
+            android:hint="ثبت ..."
             android:textDirection="rtl"
             android:gravity="right"
             android:textColorHint="#9CA3AF"

@@ -7,8 +7,10 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -23,8 +25,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
 
 // The form the widget launches. Deliberately does NOT touch the app's SQLite database file for
@@ -45,6 +49,11 @@ public class QuickCaptureActivity extends Activity {
     private String selectedCategoryId = null;
     private TextView selectedDurationView;
     private TextView selectedCategoryView;
+    private final List<TextView> durationChips = new ArrayList<>();
+    // Category chip -> its plain name (without the icon prefix loadCategories() adds for
+    // display), so a parsed categoryHint (a bare name, same as parser.ts's contract) can find the
+    // matching chip and select it the same way a tap would.
+    private final Map<TextView, String> categoryChipNames = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,14 +68,74 @@ public class QuickCaptureActivity extends Activity {
         setupDurationChips();
         loadCategories();
         loadTitleSuggestions();
+        setupSmartParse();
 
         findViewById(R.id.capture_submit).setOnClickListener(v -> submit());
+    }
+
+    /**
+     * The title field doubles as a free-text quick-entry, matching the web app's "ثبت ..." bar
+     * (src/components/home/QuickTaskInput.tsx / src/lib/parser.ts) — press the keyboard's Done/
+     * Enter action to parse whatever's been typed so far: a named duration selects the closest
+     * duration chip, a recognized category word (خرید, اینستاگرام, ...) selects that category
+     * chip, and both are stripped out of the text, leaving just the title. Nothing submits on its
+     * own here — the person still reviews the now-filled-in chips and taps «ثبت» themselves,
+     * same as typing them in by hand always has.
+     */
+    private void setupSmartParse() {
+        EditText titleInput = findViewById(R.id.capture_title);
+        titleInput.setOnEditorActionListener((v, actionId, event) -> {
+            boolean isDone = actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_UNSPECIFIED;
+            boolean isEnterKeyDown = event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (!isDone && !isEnterKeyDown) return false;
+            applyParsedText(titleInput.getText().toString());
+            return true;
+        });
+    }
+
+    private void applyParsedText(String rawText) {
+        QuickTextParser.Result result = QuickTextParser.parse(rawText);
+
+        EditText titleInput = findViewById(R.id.capture_title);
+        titleInput.setText(result.title);
+        titleInput.setSelection(result.title.length());
+
+        if (result.durationMinutes != null) {
+            TextView closest = null;
+            int closestDiff = Integer.MAX_VALUE;
+            for (TextView chip : durationChips) {
+                int chipMinutes = Integer.parseInt((String) chip.getTag());
+                int diff = Math.abs(chipMinutes - result.durationMinutes);
+                if (diff < closestDiff) {
+                    closestDiff = diff;
+                    closest = chip;
+                }
+            }
+            if (closest != null) closest.performClick();
+        }
+
+        if (result.categoryHint != null) {
+            for (Map.Entry<TextView, String> entry : categoryChipNames.entrySet()) {
+                String name = entry.getValue();
+                boolean matches = name.equals(result.categoryHint) || name.contains(result.categoryHint);
+                // Only the plain (unclicked) case toggles a category chip on — clicking an
+                // already-selected one toggles it back OFF (see its own listener above), so
+                // re-parsing the same hint twice must never re-click a chip that's already picked.
+                if (matches && entry.getKey() != selectedCategoryView) {
+                    entry.getKey().performClick();
+                    break;
+                } else if (matches) {
+                    break;
+                }
+            }
+        }
     }
 
     private void setupDurationChips() {
         int[] ids = { R.id.duration_05, R.id.duration_1, R.id.duration_15, R.id.duration_2, R.id.duration_25 };
         for (int id : ids) {
             TextView chip = findViewById(id);
+            durationChips.add(chip);
             chip.setOnClickListener(v -> {
                 if (selectedDurationView != null) selectedDurationView.setBackgroundResource(R.drawable.chip_unselected);
                 chip.setBackgroundResource(R.drawable.chip_selected);
@@ -110,6 +179,7 @@ public class QuickCaptureActivity extends Activity {
             );
             lp.setMarginEnd((int) (6 * getResources().getDisplayMetrics().density));
             chip.setLayoutParams(lp);
+            categoryChipNames.put(chip, cat[2]);
             chip.setOnClickListener(v -> {
                 if (selectedCategoryView == chip) {
                     // tapping the already-selected chip clears the selection
