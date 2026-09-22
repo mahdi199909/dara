@@ -11,49 +11,48 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.TimeZone;
 
-// The form the widget launches. Deliberately does NOT touch the app's SQLite database file for
-// writes — see the file-level note in QuickCaptureWidgetProvider. It only ever READS that file
-// (to list categories), and writes new captures into the same SharedPreferences file
-// @capacitor/preferences uses (group "CapacitorStorage"), under a key the JS side drains on
-// every app resume — see src/local/widgetQueue.ts. This means a capture doesn't appear inside
-// the app INSTANTLY; it appears the next time the app is opened or resumed. That's an accepted
-// tradeoff for never risking the app's own in-memory database silently overwriting a native
-// write made while it wasn't running.
+// The form the widget launches — just a text capsule (see QuickCaptureWidgetProvider's own note
+// on why the widget surface itself can't host real text input). Type, press Done/Enter, review a
+// one-line preview of what was understood (✓/✕ to confirm or go back), and only on ✓ does
+// anything get written. Deliberately does NOT touch the app's SQLite database file for writes —
+// it only ever READS that file (to resolve a parsed category name to its id), and writes new
+// captures into the same SharedPreferences file @capacitor/preferences uses (group
+// "CapacitorStorage"), under a key the JS side drains on every app resume — see
+// src/local/widgetQueue.ts. This means a capture doesn't appear inside the app INSTANTLY; it
+// appears the next time the app is opened or resumed — an accepted tradeoff for never risking the
+// app's own in-memory database silently overwriting a native write made while it wasn't running.
+// "ثبت شد" only ever shows once the write to that queue is itself confirmed (SharedPreferences'
+// synchronous commit(), not the fire-and-forget apply()) — never before the local half of the
+// save is actually known to have succeeded.
 public class QuickCaptureActivity extends Activity {
 
     private static final String PREFS_GROUP = "CapacitorStorage";
     private static final String QUEUE_KEY = "widget_pending_captures";
     private static final String LOCAL_USER_ID = "local-device-user";
+    private static final String[] PERSIAN_DIGITS = { "۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹" };
 
-    private int selectedDurationMin = 60;
-    private String selectedCategoryId = null;
-    private TextView selectedDurationView;
-    private TextView selectedCategoryView;
-    private final List<TextView> durationChips = new ArrayList<>();
-    // Category chip -> its plain name (without the icon prefix loadCategories() adds for
-    // display), so a parsed categoryHint (a bare name, same as parser.ts's contract) can find the
-    // matching chip and select it the same way a tap would.
-    private final Map<TextView, String> categoryChipNames = new HashMap<>();
+    // id, icon, name — for resolving a parsed category-name hint (QuickTextParser.categoryHint)
+    // to a real categoryId, the same "top categories" set the old chip picker used to offer.
+    private List<String[]> categories;
+
+    private String pendingTitle;
+    private Integer pendingDurationMinutes;
+    private String pendingCategoryId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,241 +60,92 @@ public class QuickCaptureActivity extends Activity {
         getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
         setContentView(R.layout.activity_quick_capture);
 
+        categories = readTopCategories();
+
         findViewById(R.id.capture_scrim).setOnClickListener(v -> {
             if (v.getId() == R.id.capture_scrim) finish();
         });
 
-        setupDurationChips();
-        loadCategories();
-        loadTitleSuggestions();
-        setupSmartParse();
-
-        findViewById(R.id.capture_submit).setOnClickListener(v -> submit());
-    }
-
-    /**
-     * The title field doubles as a free-text quick-entry, matching the web app's "ثبت ..." bar
-     * (src/components/home/QuickTaskInput.tsx / src/lib/parser.ts) — press the keyboard's Done/
-     * Enter action to parse whatever's been typed so far: a named duration selects the closest
-     * duration chip, a recognized category word (خرید, اینستاگرام, ...) selects that category
-     * chip, and both are stripped out of the text, leaving just the title. Nothing submits on its
-     * own here — the person still reviews the now-filled-in chips and taps «ثبت» themselves,
-     * same as typing them in by hand always has.
-     */
-    private void setupSmartParse() {
         EditText titleInput = findViewById(R.id.capture_title);
         titleInput.setOnEditorActionListener((v, actionId, event) -> {
             boolean isDone = actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_UNSPECIFIED;
             boolean isEnterKeyDown = event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN;
             if (!isDone && !isEnterKeyDown) return false;
-            applyParsedText(titleInput.getText().toString());
+            showConfirmation(titleInput.getText().toString());
             return true;
         });
+
+        findViewById(R.id.confirm_ok).setOnClickListener(v -> submit());
+        findViewById(R.id.confirm_edit).setOnClickListener(v -> backToEditing());
     }
 
-    private void applyParsedText(String rawText) {
+    /** Parses the typed text and shows a one-line preview of exactly what ✓ will save — nothing
+     * is written yet. Matches a category hint the same way the old chip picker did: an exact name
+     * match, or the hint as a substring of it (e.g. "خرید" hint matching a "🛍️ خرید" chip's name). */
+    private void showConfirmation(String rawText) {
+        if (TextUtils.isEmpty(rawText.trim())) {
+            Toast.makeText(this, "چیزی بنویس", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         QuickTextParser.Result result = QuickTextParser.parse(rawText);
-
-        EditText titleInput = findViewById(R.id.capture_title);
-        titleInput.setText(result.title);
-        titleInput.setSelection(result.title.length());
-
-        if (result.durationMinutes != null) {
-            TextView closest = null;
-            int closestDiff = Integer.MAX_VALUE;
-            for (TextView chip : durationChips) {
-                int chipMinutes = Integer.parseInt((String) chip.getTag());
-                int diff = Math.abs(chipMinutes - result.durationMinutes);
-                if (diff < closestDiff) {
-                    closestDiff = diff;
-                    closest = chip;
-                }
-            }
-            if (closest != null) closest.performClick();
-        }
-
+        pendingTitle = result.title;
+        pendingDurationMinutes = result.durationMinutes != null ? result.durationMinutes : 60;
+        pendingCategoryId = null;
+        String categoryName = null;
         if (result.categoryHint != null) {
-            for (Map.Entry<TextView, String> entry : categoryChipNames.entrySet()) {
-                String name = entry.getValue();
-                boolean matches = name.equals(result.categoryHint) || name.contains(result.categoryHint);
-                // Only the plain (unclicked) case toggles a category chip on — clicking an
-                // already-selected one toggles it back OFF (see its own listener above), so
-                // re-parsing the same hint twice must never re-click a chip that's already picked.
-                if (matches && entry.getKey() != selectedCategoryView) {
-                    entry.getKey().performClick();
-                    break;
-                } else if (matches) {
+            for (String[] cat : categories) {
+                String name = cat[2];
+                if (name.equals(result.categoryHint) || name.contains(result.categoryHint)) {
+                    pendingCategoryId = cat[0];
+                    categoryName = name;
                     break;
                 }
             }
         }
-    }
 
-    private void setupDurationChips() {
-        int[] ids = { R.id.duration_05, R.id.duration_1, R.id.duration_15, R.id.duration_2, R.id.duration_25 };
-        for (int id : ids) {
-            TextView chip = findViewById(id);
-            durationChips.add(chip);
-            chip.setOnClickListener(v -> {
-                if (selectedDurationView != null) selectedDurationView.setBackgroundResource(R.drawable.chip_unselected);
-                chip.setBackgroundResource(R.drawable.chip_selected);
-                chip.setTextColor(0xFFFFFFFF);
-                if (selectedDurationView != null) selectedDurationView.setTextColor(0xFF374151);
-                selectedDurationView = chip;
-                selectedDurationMin = Integer.parseInt((String) chip.getTag());
-            });
-        }
-        // 1 hour selected by default — the single most common quick-log duration.
-        TextView defaultChip = findViewById(R.id.duration_1);
-        defaultChip.performClick();
-    }
+        StringBuilder preview = new StringBuilder();
+        preview.append("«").append(pendingTitle).append("»");
+        preview.append(" · ").append(formatMinutesFa(pendingDurationMinutes));
+        if (categoryName != null) preview.append(" · ").append(categoryName);
 
-    private void loadCategories() {
-        LinearLayout row = findViewById(R.id.category_row);
-        List<String[]> categories = readTopCategories();
-
-        if (categories.isEmpty()) {
-            TextView hint = new TextView(this);
-            hint.setText("دسته‌بندی‌ای پیدا نشد — یک‌بار اپ رو باز کنید");
-            hint.setTextColor(0xFF9CA3AF);
-            hint.setTextSize(12);
-            row.addView(hint);
-            return;
-        }
-
-        for (String[] cat : categories) {
-            String id = cat[0];
-            String label = (cat[1] == null || cat[1].isEmpty() ? "" : cat[1] + " ") + cat[2];
-            TextView chip = new TextView(this);
-            chip.setText(label);
-            chip.setTextColor(0xFF374151);
-            chip.setTextSize(13);
-            chip.setBackgroundResource(R.drawable.chip_unselected);
-            int pad = (int) (10 * getResources().getDisplayMetrics().density);
-            int padV = (int) (8 * getResources().getDisplayMetrics().density);
-            chip.setPadding(pad, padV, pad, padV);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            );
-            lp.setMarginEnd((int) (6 * getResources().getDisplayMetrics().density));
-            chip.setLayoutParams(lp);
-            categoryChipNames.put(chip, cat[2]);
-            chip.setOnClickListener(v -> {
-                if (selectedCategoryView == chip) {
-                    // tapping the already-selected chip clears the selection
-                    chip.setBackgroundResource(R.drawable.chip_unselected);
-                    chip.setTextColor(0xFF374151);
-                    selectedCategoryView = null;
-                    selectedCategoryId = null;
-                    return;
-                }
-                if (selectedCategoryView != null) {
-                    selectedCategoryView.setBackgroundResource(R.drawable.chip_unselected);
-                    selectedCategoryView.setTextColor(0xFF374151);
-                }
-                chip.setBackgroundResource(R.drawable.chip_selected);
-                chip.setTextColor(0xFFFFFFFF);
-                selectedCategoryView = chip;
-                selectedCategoryId = id;
-            });
-            row.addView(chip);
-        }
-    }
-
-    /**
-     * Past Activity titles as tappable chips, so a repeated entry (a routine, a recurring
-     * project) never needs retyping — mirrors the web app's Quick Capture suggestions
-     * (src/lib/titleSuggestions.ts) with the same "frecency" idea: log-scaled use count times an
-     * exponential recency decay, so a title used a lot but long ago doesn't drown out one you've
-     * started using again this week. Reimplemented here in Java rather than shared, since this
-     * native popup has no route to the JS/TS runtime.
-     */
-    private void loadTitleSuggestions() {
-        HorizontalScrollView scroll = findViewById(R.id.suggestion_scroll);
-        LinearLayout row = findViewById(R.id.suggestion_row);
-        List<TitleSuggestion> suggestions = readTopTitles();
-
-        if (suggestions.isEmpty()) {
-            scroll.setVisibility(View.GONE);
-            return;
-        }
+        TextView previewView = findViewById(R.id.confirm_preview);
+        previewView.setText(preview.toString());
 
         EditText titleInput = findViewById(R.id.capture_title);
-        for (TitleSuggestion s : suggestions) {
-            TextView chip = new TextView(this);
-            chip.setText(s.title);
-            chip.setTextColor(0xFF374151);
-            chip.setTextSize(13);
-            chip.setBackgroundResource(R.drawable.chip_unselected);
-            int pad = (int) (10 * getResources().getDisplayMetrics().density);
-            int padV = (int) (8 * getResources().getDisplayMetrics().density);
-            chip.setPadding(pad, padV, pad, padV);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            );
-            lp.setMarginEnd((int) (6 * getResources().getDisplayMetrics().density));
-            chip.setLayoutParams(lp);
-            chip.setOnClickListener(v -> titleInput.setText(s.title));
-            row.addView(chip);
-        }
+        titleInput.setEnabled(false);
+        findViewById(R.id.confirm_row).setVisibility(View.VISIBLE);
+
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(titleInput.getWindowToken(), 0);
     }
 
-    private static class TitleSuggestion {
-        final String title;
-        final double score;
-
-        TitleSuggestion(String title, double score) {
-            this.title = title;
-            this.score = score;
-        }
+    /** ✕ — back to editing, same text still there, nothing lost. */
+    private void backToEditing() {
+        findViewById(R.id.confirm_row).setVisibility(View.GONE);
+        EditText titleInput = findViewById(R.id.capture_title);
+        titleInput.setEnabled(true);
+        titleInput.requestFocus();
+        titleInput.setSelection(titleInput.getText().length());
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) imm.showSoftInput(titleInput, InputMethodManager.SHOW_IMPLICIT);
     }
 
-    /** Same 14-day half-life as titleSuggestions.ts's RECENCY_HALF_LIFE_DAYS. */
-    private static final double RECENCY_HALF_LIFE_DAYS = 14.0;
+    private static String formatMinutesFa(int minutes) {
+        int h = minutes / 60;
+        int m = minutes % 60;
+        if (h == 0) return toPersianDigits(String.valueOf(m)) + " دقیقه";
+        if (m == 0) return toPersianDigits(String.valueOf(h)) + " ساعت";
+        return toPersianDigits(String.valueOf(h)) + " ساعت و " + toPersianDigits(String.valueOf(m)) + " دقیقه";
+    }
 
-    /** Top 8 past Activity titles for this device's user, ranked by frecency, most first. */
-    private List<TitleSuggestion> readTopTitles() {
-        List<TitleSuggestion> result = new ArrayList<>();
-        SQLiteDatabase db = null;
-        SimpleDateFormat isoFmt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-        isoFmt.setTimeZone(TimeZone.getTimeZone("UTC"));
-        long now = System.currentTimeMillis();
-
-        try {
-            db = WidgetDb.openReadOnly(this);
-            if (db == null) return result; // never opened / mid-write — no suggestions
-            Cursor cursor = db.rawQuery(
-                "SELECT title, COUNT(*) as cnt, MAX(createdAt) as lastUsed " +
-                "FROM Activity " +
-                "WHERE userId = ? AND deletedAt IS NULL " +
-                "GROUP BY title " +
-                "ORDER BY lastUsed DESC " +
-                "LIMIT 50",
-                new String[] { LOCAL_USER_ID }
-            );
-            while (cursor.moveToNext()) {
-                String title = cursor.getString(0);
-                int count = cursor.getInt(1);
-                String lastUsed = cursor.getString(2);
-                double daysSince = 999;
-                try {
-                    daysSince = Math.max(0, (now - isoFmt.parse(lastUsed).getTime()) / 86_400_000.0);
-                } catch (ParseException ignored) {
-                    // Unparseable timestamp — treat as very old rather than crashing the ranking.
-                }
-                double score = Math.log(1 + count) * Math.exp(-daysSince / RECENCY_HALF_LIFE_DAYS);
-                result.add(new TitleSuggestion(title, score));
-            }
-            cursor.close();
-        } catch (Exception e) {
-            // Database not created yet, or some other read issue — no suggestions, same as an
-            // empty result; the form still works fine with just manual typing.
-        } finally {
-            if (db != null) db.close();
+    private static String toPersianDigits(String s) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            sb.append(c >= '0' && c <= '9' ? PERSIAN_DIGITS[c - '0'] : String.valueOf(c));
         }
-
-        Collections.sort(result, (a, b) -> Double.compare(b.score, a.score));
-        return result.subList(0, Math.min(8, result.size()));
+        return sb.toString();
     }
 
     /** id, icon, name — ordered by how often each category is used on Activity rows, most first. */
@@ -321,7 +171,7 @@ public class QuickCaptureActivity extends Activity {
             cursor.close();
         } catch (Exception e) {
             // Database not created yet (app never opened), or some other read issue — treated the
-            // same as "no categories": the user can still submit with just a title/duration.
+            // same as "no categories": a parsed category hint just won't resolve to an id.
         } finally {
             if (db != null) db.close();
         }
@@ -329,21 +179,14 @@ public class QuickCaptureActivity extends Activity {
     }
 
     private void submit() {
-        EditText titleInput = findViewById(R.id.capture_title);
-        String title = titleInput.getText().toString().trim();
-        if (TextUtils.isEmpty(title)) {
-            Toast.makeText(this, "عنوان رو وارد کنید", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
         try {
             JSONObject entry = new JSONObject();
-            entry.put("title", title);
+            entry.put("title", pendingTitle);
             // JSONObject.put(key, (Object) null) is not reliable across org.json
             // implementations — JSONObject.NULL is the explicit, documented way to write a
             // literal JSON null (which the JS side's JSON.parse then reads back as null).
-            entry.put("categoryId", selectedCategoryId == null ? JSONObject.NULL : selectedCategoryId);
-            entry.put("durationMinutes", selectedDurationMin);
+            entry.put("categoryId", pendingCategoryId == null ? JSONObject.NULL : pendingCategoryId);
+            entry.put("durationMinutes", pendingDurationMinutes);
             entry.put("startedAt", isoNow());
             entry.put("source", "widget");
 
@@ -356,10 +199,16 @@ public class QuickCaptureActivity extends Activity {
                 queue = new JSONArray();
             }
             queue.put(entry);
-            prefs.edit().putString(QUEUE_KEY, queue.toString()).apply();
 
-            Toast.makeText(this, "ثبت شد", Toast.LENGTH_SHORT).show();
-            finish();
+            // commit() (synchronous, returns success/failure) rather than apply() (fire-and-forget)
+            // — "ثبت شد" must mean the write actually landed, not just that it was requested.
+            boolean saved = prefs.edit().putString(QUEUE_KEY, queue.toString()).commit();
+            if (saved) {
+                Toast.makeText(this, "ثبت شد", Toast.LENGTH_SHORT).show();
+                finish();
+            } else {
+                Toast.makeText(this, "ذخیره نشد. دوباره امتحان کن.", Toast.LENGTH_SHORT).show();
+            }
         } catch (Exception e) {
             Toast.makeText(this, "خطایی رخ داد. دوباره تلاش کنید.", Toast.LENGTH_SHORT).show();
         }

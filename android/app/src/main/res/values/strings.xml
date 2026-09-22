@@ -5,7 +5,6 @@
     <string name="package_name">ir.mganic.dara</string>
     <string name="custom_url_scheme">ir.mganic.dara</string>
     <string name="widget_capture_title">ثبت سریع کار</string>
-    <string name="widget_capture_subtitle">بدون باز کردن parvaapp</string>
     <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ parvaapp</string>
     <string name="widget_today_events_title">رویدادهای امروز</string>
     <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>
