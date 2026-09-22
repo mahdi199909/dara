@@ -56,13 +56,17 @@ export default function QuickTaskInput({
   }
 
   return (
-    <div className="flex-[8] min-h-0 flex items-end gap-[3%] px-[4%] border-t border-line" dir="rtl">
+    // Intrinsic height (padding + line-height), not a flex-grow share of the dashboard — the
+    // capsule/button are sized to themselves, not to an ambiguous percentage of this row, which
+    // is what made the 10px-gap math fight earlier passes. The row's own py-[10px] is the exact
+    // spacing asked for above (from NearbyTasks) and below (to ProgressBar).
+    <div className="flex-none flex items-center gap-[3%] px-[4%] py-[10px] border-t border-line" dir="rtl">
       {reaction ? (
-        <p className="flex-1 min-w-0 h-[42%] flex items-center px-4 rounded-full bg-canvas text-xs font-medium text-accent leading-snug line-clamp-2">
+        <p className="flex-1 min-w-0 flex items-center px-4 py-3 rounded-full bg-canvas text-xs font-medium text-accent leading-snug line-clamp-2">
           {phraseCaptureReaction(reaction.kind, { ...reaction, remainingMinutes: state?.remainingMinutes ?? 0 })}
         </p>
       ) : (
-        <div className="flex-1 min-w-0 h-[42%] flex items-center gap-2 rounded-full bg-canvas shadow-sm px-4">
+        <div className="flex-1 min-w-0 flex items-center gap-2 rounded-full bg-canvas shadow-sm px-4 py-3">
           {/* Icon first so it sits at the input's own right edge (RTL: first child = rightmost),
               right where the placeholder/typed text starts, matching a leading-icon search field. */}
           <button
@@ -91,13 +95,12 @@ export default function QuickTaskInput({
         </div>
       )}
 
-      {/* ~90% of the capsule's own height (h-[42%] of this row), not of the row itself — a
-          same-size button would read oversized next to a 42%-tall input. */}
+      {/* ~90% of the capsule's own rendered height (py-3 + line-height ≈ 44px). */}
       <button
         type="button"
         onClick={handlePlus}
         aria-label="ثبت کار"
-        className="shrink-0 aspect-square h-[38%] rounded-full bg-accent text-on-accent flex items-center justify-center shadow-sm active:scale-95 transition"
+        className="shrink-0 h-11 w-11 rounded-full bg-accent text-on-accent flex items-center justify-center shadow-sm active:scale-95 transition"
       >
         <PlusIcon className="w-[38%] h-[38%]" strokeWidth={2.5} />
       </button>

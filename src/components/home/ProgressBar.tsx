@@ -39,9 +39,10 @@ export default function ProgressBar() {
   const battery = data?.battery;
   const capacity = battery?.capacityMinutes ?? 0;
 
+  // No top padding — QuickTaskInput's own pb-[10px] is the sole source of the gap above this.
   return (
-    <div className="flex-[2] min-h-0 flex items-start pt-[10px] px-[6%]" dir="rtl">
-      <div className="flex-1 h-[25%] min-h-[6px] rounded-full overflow-hidden flex bg-canvas" role="img" aria-label="پیشرفت امروز">
+    <div className="flex-none pb-3 px-[6%]" dir="rtl">
+      <div className="h-1.5 rounded-full overflow-hidden flex bg-canvas" role="img" aria-label="پیشرفت امروز">
         {battery?.segments.map((seg, i) => {
           const isUnlogged = seg.kind === "UNLOGGED";
           const widthPct = capacity > 0 ? (seg.minutes / capacity) * 100 : 0;
