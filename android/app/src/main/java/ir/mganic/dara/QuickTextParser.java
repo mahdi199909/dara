@@ -1,31 +1,35 @@
 package ir.mganic.dara;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A free-text line ("۲ ساعت رو پروژه کار کردم") into the three fields this widget's form already
- * has: a cleaned title, a duration in minutes, and a category-name hint the caller matches against
- * the categories it already loaded from WidgetDb. A partial, native port of src/lib/parser.ts —
- * only the pieces this widget's data model (Activity: title + categoryId + duration, see
- * QuickCaptureActivity/widgetQueue.ts) can actually use. Deliberately NOT ported here: amount,
- * date/time, project hint — none of those have anywhere to go in this queue entry's shape, and
- * widening it is a separate change, not a parsing one. This native popup has no route to the
- * JS/TS runtime (see QuickCaptureActivity's own note), hence a second copy of this logic rather
- * than a shared one.
+ * A free-text line ("شکلات ۱ میلیون تومن", "۲ ساعت رو پروژه کار کردم") into the fields this
+ * widget's queue entry can carry: a cleaned title, a duration in minutes, a direct-cost amount in
+ * Toman, and a category-name hint the caller matches against the categories it already loaded
+ * from WidgetDb. A partial, native port of src/lib/parser.ts (duration + amount + category only —
+ * date/time/project hint still deliberately NOT ported: an Activity's queue entry has nowhere for
+ * those to go, and widening it further is a separate change). This native popup has no route to
+ * the JS/TS runtime (see QuickCaptureActivity's own note), hence a second copy of this logic
+ * rather than a shared one.
  */
 final class QuickTextParser {
 
     static final class Result {
         final String title;
         final Integer durationMinutes; // null when the text named none
+        final Long amount; // Toman, null when the text named none — see extractAmount
         final String categoryHint; // null when the text named none
 
-        Result(String title, Integer durationMinutes, String categoryHint) {
+        Result(String title, Integer durationMinutes, Long amount, String categoryHint) {
             this.title = title;
             this.durationMinutes = durationMinutes;
+            this.amount = amount;
             this.categoryHint = categoryHint;
         }
     }
@@ -64,6 +68,52 @@ final class QuickTextParser {
     private static final Pattern EXTRA_WHITESPACE = Pattern.compile("\\s{2,}");
     private static final Pattern AND_WORD = Pattern.compile("\\s+و\\s+");
     private static final Pattern COMMAS = Pattern.compile("[،,]+");
+
+    // Same as money.ts's TOMAN_WORD — both the written ("تومان") and everyday-spoken ("تومن") spelling.
+    private static final String TOMAN_WORD = "توم[ا]?ن";
+    private static final String SCALE_WORD = "میلیارد|میلیون|هزار";
+
+    // Same set as parser.ts's NUMBER_WORDS — deliberately no teens (یازده..نوزده), same reasoning
+    // as that file's own comment: several share a leading substring with a smaller word here
+    // ("دو" inside "دوازده"), and a spoken amount almost never needs one anyway.
+    private static final Map<String, Integer> NUMBER_WORDS = new LinkedHashMap<>();
+    static {
+        NUMBER_WORDS.put("یک", 1);
+        NUMBER_WORDS.put("دو", 2);
+        NUMBER_WORDS.put("سه", 3);
+        NUMBER_WORDS.put("چهار", 4);
+        NUMBER_WORDS.put("پنج", 5);
+        NUMBER_WORDS.put("شش", 6);
+        NUMBER_WORDS.put("هفت", 7);
+        NUMBER_WORDS.put("هشت", 8);
+        NUMBER_WORDS.put("نه", 9);
+        NUMBER_WORDS.put("ده", 10);
+        NUMBER_WORDS.put("بیست", 20);
+        NUMBER_WORDS.put("سی", 30);
+        NUMBER_WORDS.put("چهل", 40);
+        NUMBER_WORDS.put("پنجاه", 50);
+        NUMBER_WORDS.put("شصت", 60);
+        NUMBER_WORDS.put("هفتاد", 70);
+        NUMBER_WORDS.put("هشتاد", 80);
+        NUMBER_WORDS.put("نود", 90);
+        NUMBER_WORDS.put("صد", 100);
+    }
+
+    // Longest word first — same reasoning as parser.ts's own NUMBER_WORD_PATTERN: cheap insurance
+    // against one word swallowing a shorter one it starts with, even though the current set has no
+    // real overlaps.
+    private static final Pattern AMOUNT_DIGITS_SCALE =
+        Pattern.compile("(\\d+(?:[.,]\\d+)*)\\s*(" + SCALE_WORD + ")\\s*(" + TOMAN_WORD + ")?");
+    private static final Pattern AMOUNT_WORD_SCALE;
+    static {
+        List<String> words = new ArrayList<>(NUMBER_WORDS.keySet());
+        Collections.sort(words, (a, b) -> b.length() - a.length());
+        String wordPattern = String.join("|", words);
+        AMOUNT_WORD_SCALE = Pattern.compile("(" + wordPattern + ")\\s*(" + SCALE_WORD + ")\\s*(" + TOMAN_WORD + ")?");
+    }
+    private static final Pattern AMOUNT_COMMA_GROUPED = Pattern.compile("(\\d{1,3}(?:,\\d{3})+)\\s*(" + TOMAN_WORD + ")?");
+    private static final Pattern AMOUNT_BARE_TOMAN = Pattern.compile("(\\d+)\\s*" + TOMAN_WORD);
+    private static final Pattern AMOUNT_SCALE_PREFIX = Pattern.compile("^([\\d,.]+)\\s*(" + SCALE_WORD + ")?");
 
     private QuickTextParser() {}
 
@@ -104,6 +154,71 @@ final class QuickTextParser {
         if (m.find()) return new DurationMatch(Math.round(Float.parseFloat(m.group(1)) * 24 * 60), strip(text, m));
         m = DURATION_DAYS_LATIN.matcher(text);
         if (m.find()) return new DurationMatch(Math.round(Float.parseFloat(m.group(1)) * 24 * 60), strip(text, m));
+
+        return null;
+    }
+
+    private static final class AmountMatch {
+        final long amount;
+        final String remaining;
+        AmountMatch(long amount, String remaining) { this.amount = amount; this.remaining = remaining; }
+    }
+
+    /** Same as money.ts's parseAmount — "۱.۵ میلیون" -> 1,500,000, a bare "۸۰۰" (no scale word) ->
+     * 800 unchanged. `raw` is expected to already be ASCII digits (parse() normalizes once, up
+     * front, rather than every call site normalizing again). Returns null for anything that
+     * doesn't start with a number. */
+    private static Long parseAmount(String raw) {
+        String s = raw == null ? "" : raw.trim();
+        if (s.isEmpty()) return null;
+        Matcher m = AMOUNT_SCALE_PREFIX.matcher(s);
+        if (!m.find()) return null;
+
+        String numPart = m.group(1).replace(",", "");
+        double num;
+        try {
+            num = Double.parseDouble(numPart);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+
+        String suffix = m.group(2);
+        long multiplier = 1;
+        if ("هزار".equals(suffix)) multiplier = 1_000L;
+        else if ("میلیون".equals(suffix)) multiplier = 1_000_000L;
+        else if ("میلیارد".equals(suffix)) multiplier = 1_000_000_000L;
+
+        return Math.round(num * multiplier);
+    }
+
+    /** Same four patterns as parser.ts's extractAmount, tried in the same order — a bare number
+     * only counts as money when a scale word (میلیون/هزار/میلیارد) or an explicit تومان/تومن
+     * marks it as one, so this never collides with a bare duration number like "۲" in "۲ ساعت". */
+    private static AmountMatch extractAmount(String text) {
+        Matcher m = AMOUNT_DIGITS_SCALE.matcher(text);
+        if (m.find()) {
+            Long amount = parseAmount(m.group(1) + " " + m.group(2));
+            if (amount != null) return new AmountMatch(amount, strip(text, m));
+        }
+
+        m = AMOUNT_WORD_SCALE.matcher(text);
+        if (m.find()) {
+            Integer wordValue = NUMBER_WORDS.get(m.group(1));
+            Long amount = wordValue == null ? null : parseAmount(wordValue + " " + m.group(2));
+            if (amount != null) return new AmountMatch(amount, strip(text, m));
+        }
+
+        m = AMOUNT_COMMA_GROUPED.matcher(text);
+        if (m.find()) {
+            Long amount = parseAmount(m.group(1));
+            if (amount != null) return new AmountMatch(amount, strip(text, m));
+        }
+
+        m = AMOUNT_BARE_TOMAN.matcher(text);
+        if (m.find()) {
+            Long amount = parseAmount(m.group(1));
+            if (amount != null) return new AmountMatch(amount, strip(text, m));
+        }
 
         return null;
     }
@@ -153,9 +268,15 @@ final class QuickTextParser {
         DurationMatch durationMatch = extractDuration(remaining);
         if (durationMatch != null) remaining = durationMatch.remaining;
 
-        // Same precedence as parser.ts: خرید strips from the remaining text (after duration is
-        // already out of the way), a WASTE keyword (checked against the full normalized text,
-        // before duration/خرید stripping) wins over it if both are somehow present.
+        // Same order as parser.ts's parseQuickCapture: duration, then amount, off what's left
+        // after duration is already stripped — "۲ ساعت ۱ میلیون شکلات" reduces amount-matching to
+        // "۱ میلیون شکلات" rather than re-matching the "۲" duration figure as a bare number.
+        AmountMatch amountMatch = extractAmount(remaining);
+        if (amountMatch != null) remaining = amountMatch.remaining;
+
+        // Same precedence as parser.ts: خرید strips from the remaining text (after duration/amount
+        // are already out of the way), a WASTE keyword (checked against the full normalized text,
+        // before any stripping) wins over it if both are somehow present.
         Matcher purchase = PURCHASE_KEYWORD.matcher(remaining);
         boolean hadPurchaseKeyword = purchase.find();
         if (hadPurchaseKeyword) remaining = strip(remaining, purchase);
@@ -167,6 +288,7 @@ final class QuickTextParser {
         if (title.isEmpty()) title = "بدون عنوان";
 
         Integer durationMinutes = durationMatch == null ? null : Integer.valueOf(durationMatch.minutes);
-        return new Result(title, durationMinutes, categoryHint);
+        Long amount = amountMatch == null ? null : Long.valueOf(amountMatch.amount);
+        return new Result(title, durationMinutes, amount, categoryHint);
     }
 }

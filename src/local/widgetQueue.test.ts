@@ -80,6 +80,69 @@ describe("drainWidgetQueue", () => {
     expect(entry?.durationMin).toBe(90);
   });
 
+  it("an amount-only capture (no duration named) logs zero time and creates a linked EXPENSE transaction, not a fabricated 60-minute entry", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([{ title: "شکلات", categoryId: null, durationMinutes: 0, amount: 1_000_000, startedAt: "2026-08-20T10:00:00.000Z" }])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+
+    const activities = listActivities(db, USER_ID);
+    expect(activities).toHaveLength(1);
+    expect(activities[0].title).toBe("شکلات");
+    expect(activities[0].totalDurationMin).toBe(0);
+    expect(db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM "TimeEntry"`)!.n).toBe(0);
+
+    const tx = db.get<{ type: string; amount: number; description: string }>(
+      `SELECT "type","amount","description" FROM "Transaction" WHERE "activityId" = ?`,
+      [activities[0].id]
+    );
+    expect(tx).toEqual({ type: "EXPENSE", amount: 1_000_000, description: "شکلات" });
+  });
+
+  it("a capture with both a duration and an amount logs the time AND creates the linked expense", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([{ title: "ابزار پروژه", categoryId: "cat_1", durationMinutes: 90, amount: 250_000, startedAt: "2026-08-20T10:00:00.000Z" }])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+
+    const activities = listActivities(db, USER_ID);
+    expect(activities[0].totalDurationMin).toBe(90);
+    const tx = db.get<{ amount: number }>(`SELECT "amount" FROM "Transaction" WHERE "activityId" = ?`, [activities[0].id]);
+    expect(tx?.amount).toBe(250_000);
+  });
+
+  it("an explicit null amount (what an older/no-amount widget entry serializes as) behaves exactly like one with no amount field at all", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([{ title: "بدون مبلغ", categoryId: null, durationMinutes: 45, amount: null, startedAt: "2026-08-20T10:00:00.000Z" }])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(1);
+    expect(db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM "Transaction"`)!.n).toBe(0);
+  });
+
+  it("rejects a malformed amount (not a number, not null, not absent) as a whole entry instead of silently coercing it", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([{ title: "مبلغ خراب", categoryId: null, durationMinutes: 30, amount: "زیاد", startedAt: "2026-08-20T10:00:00.000Z" }])
+    );
+
+    const count = await drainWidgetQueue(db, USER_ID);
+    expect(count).toBe(0);
+    expect(listActivities(db, USER_ID)).toEqual([]);
+  });
+
   it("clears the queue after a successful drain, and tolerates a missing categoryId", async () => {
     const db = await freshDb();
     store.set(

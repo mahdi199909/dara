@@ -44,6 +44,12 @@ interface QueuedCapture {
   title: string;
   categoryId: string | null;
   durationMinutes: number;
+  /** Toman — a direct cost to attach to the same Activity (see createActivity's own directCost
+   * field, which already syncs a linked EXPENSE Transaction via syncActivityDirectCostTransaction
+   * — nothing extra needed here beyond passing it through). Optional field added after the
+   * original queue shape shipped, so an older-APK entry simply won't have it — undefined and null
+   * both mean "no amount named", same as categoryId's own null. */
+  amount?: number | null;
   startedAt: string;
   source?: QueueEntrySource;
 }
@@ -55,7 +61,8 @@ function isQueuedCapture(v: unknown): v is QueuedCapture {
     typeof (v as QueuedCapture).title === "string" &&
     typeof (v as QueuedCapture).durationMinutes === "number" &&
     typeof (v as QueuedCapture).startedAt === "string" &&
-    isValidSource((v as QueuedCapture).source)
+    isValidSource((v as QueuedCapture).source) &&
+    ((v as QueuedCapture).amount === undefined || (v as QueuedCapture).amount === null || typeof (v as QueuedCapture).amount === "number")
   );
 }
 
@@ -105,18 +112,27 @@ async function drainCaptureQueue(db: LocalDb, userId: string): Promise<number> {
   const failed: unknown[] = [];
   for (const entry of valid) {
     try {
-      // The activity and its time are one step. Were the time to fail after the activity was written, the entry would stay
-      // queued (see above) and every retry would add one more activity without time. (No operation name: the failure is
-      // reported below as WIDGET_QUEUE_FAILED, which says what happens to the entry next.)
+      // The activity, its time and its direct cost are one step. Were a later part to fail after
+      // the activity was written, the entry would stay queued (see above) and every retry would
+      // add one more activity. (No operation name: the failure is reported below as
+      // WIDGET_QUEUE_FAILED, which says what happens to the entry next.)
       withLocalTransaction(db, () => {
+        // createActivity's own directCost handling already syncs a linked EXPENSE Transaction
+        // (see local/repositories/activities.ts) — passing the amount through is the whole job.
         const activity = createActivity(db, userId, {
           title: entry.title,
           categoryId: entry.categoryId ?? undefined,
+          directCost: entry.amount ?? undefined,
         });
-        addManualTimeEntry(db, activity.id, {
-          startAt: new Date(entry.startedAt),
-          durationMin: entry.durationMinutes,
-        });
+        // A pure-expense capture (amount named, no duration) has nothing to time-log — durationMinutes
+        // is 0 for exactly that case (see QuickCaptureActivity's own default logic), never a
+        // fabricated entry for time that was never claimed to have been spent.
+        if (entry.durationMinutes > 0) {
+          addManualTimeEntry(db, activity.id, {
+            startAt: new Date(entry.startedAt),
+            durationMin: entry.durationMinutes,
+          });
+        }
       });
       applied++;
     } catch (err) {

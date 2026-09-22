@@ -51,7 +51,8 @@ public class QuickCaptureActivity extends Activity {
     private List<String[]> categories;
 
     private String pendingTitle;
-    private Integer pendingDurationMinutes;
+    private int pendingDurationMinutes;
+    private Long pendingAmount; // Toman, null when the text named no amount
     private String pendingCategoryId;
 
     @Override
@@ -90,7 +91,12 @@ public class QuickCaptureActivity extends Activity {
 
         QuickTextParser.Result result = QuickTextParser.parse(rawText);
         pendingTitle = result.title;
-        pendingDurationMinutes = result.durationMinutes != null ? result.durationMinutes : 60;
+        pendingAmount = result.amount;
+        // A real duration is used as-is. With an amount but no duration, this is a pure expense —
+        // no time was claimed to have been spent, so none is logged (0, not a fabricated default).
+        // With neither, this is the ambiguous "log something, right now" case the 60-minute default
+        // has always covered.
+        pendingDurationMinutes = result.durationMinutes != null ? result.durationMinutes : (result.amount != null ? 0 : 60);
         pendingCategoryId = null;
         String categoryName = null;
         if (result.categoryHint != null) {
@@ -106,7 +112,8 @@ public class QuickCaptureActivity extends Activity {
 
         StringBuilder preview = new StringBuilder();
         preview.append("«").append(pendingTitle).append("»");
-        preview.append(" · ").append(formatMinutesFa(pendingDurationMinutes));
+        if (pendingDurationMinutes > 0) preview.append(" · ").append(formatMinutesFa(pendingDurationMinutes));
+        if (pendingAmount != null) preview.append(" · ").append(formatTomanFa(pendingAmount));
         if (categoryName != null) preview.append(" · ").append(categoryName);
 
         TextView previewView = findViewById(R.id.confirm_preview);
@@ -137,6 +144,12 @@ public class QuickCaptureActivity extends Activity {
         if (h == 0) return toPersianDigits(String.valueOf(m)) + " دقیقه";
         if (m == 0) return toPersianDigits(String.valueOf(h)) + " ساعت";
         return toPersianDigits(String.valueOf(h)) + " ساعت و " + toPersianDigits(String.valueOf(m)) + " دقیقه";
+    }
+
+    /** Same shape as money.ts's formatToman: thousands-separated, Persian digits, "تومان" suffix.
+     * Locale.US pins the grouping character to a comma regardless of the device's own locale. */
+    private static String formatTomanFa(long amountToman) {
+        return toPersianDigits(String.format(Locale.US, "%,d", amountToman)) + " تومان";
     }
 
     private static String toPersianDigits(String s) {
@@ -187,6 +200,7 @@ public class QuickCaptureActivity extends Activity {
             // literal JSON null (which the JS side's JSON.parse then reads back as null).
             entry.put("categoryId", pendingCategoryId == null ? JSONObject.NULL : pendingCategoryId);
             entry.put("durationMinutes", pendingDurationMinutes);
+            entry.put("amount", pendingAmount == null ? JSONObject.NULL : pendingAmount);
             entry.put("startedAt", isoNow());
             entry.put("source", "widget");
 
