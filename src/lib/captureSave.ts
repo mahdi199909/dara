@@ -1,10 +1,13 @@
 // The actual "write this to the database" step behind CaptureForm's submit button — pulled out
 // so SmartCaptureConfirm (a lightweight "here's what I found, تأیید or اصلاح" card) can save
 // exactly the same way the full form does, instead of a second hand-rolled copy of the task-vs-
-// event branching that could quietly drift from it.
+// event branching that could quietly drift from it. The calls themselves are described by
+// planSaveCapture (pure), so the phone can also carry them out for a line typed into the widget
+// (see src/lib/captureResolve.ts and src/local/widgetQueue.ts).
 import { apiPost } from "./apiClient";
 import { notifySaved } from "./savedToast";
 import { refreshAllCaches } from "./refreshCaches";
+import { runSteps, type CaptureStep } from "./captureSteps";
 import type { CaptureEntityType, ValueType } from "./types";
 
 type FlowType = "COST" | "INCOME";
@@ -49,10 +52,19 @@ export function hhmm(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** Throws on failure — including an overlap refusal (see src/lib/overlapClient.ts's
- * `overlapRefusal(err)`), which the caller decides how to handle (CaptureForm shows
- * OverlapNotice inline; SmartCaptureConfirm falls back to opening that same full form). */
-export async function saveCapture(input: SaveCaptureInput): Promise<CaptureSummary | undefined> {
+export interface PlanSaveOptions {
+  now?: Date;
+  /** How many steps run before these ones — their answers come first in `previous`. */
+  offset?: number;
+  /** The category and project when they only exist once earlier steps have run (a project made just now). */
+  resolveTargets?: (previous: unknown[]) => { categoryId: string | null; projectId: string | null };
+}
+
+/** The API calls that save one capture: a Task, or an Event (and, when it is already over, its completion). */
+export function planSaveCapture(input: SaveCaptureInput, options: PlanSaveOptions = {}): CaptureStep[] {
+  const now = options.now ?? new Date();
+  const offset = options.offset ?? 0;
+  const targets = (previous: unknown[]) => options.resolveTargets?.(previous) ?? { categoryId: input.categoryId, projectId: input.projectId };
   const amountNum = input.amount;
   const day10 = dayIso(input.day);
 
@@ -63,58 +75,77 @@ export async function saveCapture(input: SaveCaptureInput): Promise<CaptureSumma
     // Only when a time was actually entered — a bare day with no time isn't a strong enough
     // signal either way, and would wrongly mark every same-day task "done" once midnight passes.
     const referenceTime = endAt ?? startAt;
-    const status = referenceTime ? (referenceTime < new Date() ? "DONE" : "TODO") : undefined;
+    const status = referenceTime ? (referenceTime < now ? "DONE" : "TODO") : undefined;
 
-    await apiPost("/api/tasks", {
-      title: input.title,
-      categoryId: input.categoryId ?? undefined,
-      projectId: input.projectId ?? undefined,
-      dueDate: dueDate.toISOString(),
-      valueType: input.valueType,
-      status,
-      directCost: input.flowType === "COST" ? amountNum : undefined,
-      incomeAmount: input.flowType === "INCOME" ? amountNum : undefined,
-      startAt: startAt?.toISOString(),
-      endAt: endAt?.toISOString(),
-      allowOverlap: input.allowOverlap || undefined,
-    });
-  } else {
-    let startAt: Date;
-    let endAt: Date;
-    let allDay: boolean;
-
-    if (input.startTime) {
-      startAt = new Date(`${day10}T${input.startTime}:00`);
-      endAt = input.endTime ? new Date(`${day10}T${input.endTime}:00`) : new Date(startAt.getTime() + 60 * 60000);
-      allDay = false;
-    } else {
-      startAt = new Date(`${day10}T00:00:00`);
-      endAt = new Date(`${day10}T23:59:59`);
-      allDay = true;
-    }
-
-    const { event } = await apiPost<{ event: { id: string } }>("/api/events", {
-      title: input.title,
-      startAt: startAt.toISOString(),
-      endAt: endAt.toISOString(),
-      allDay,
-      categoryId: input.categoryId ?? undefined,
-      projectId: input.projectId ?? undefined,
-      valueType: input.valueType,
-      directCost: input.flowType === "COST" ? amountNum : undefined,
-      incomeAmount: input.flowType === "INCOME" ? amountNum : undefined,
-      allowOverlap: input.allowOverlap || undefined,
-    });
-    // Same "already happened" default as a Task, expressed the way events track completion —
-    // a fresh EventCompletion row rather than a status field.
-    if (input.startTime && endAt < new Date()) {
-      await apiPost(`/api/events/${event.id}/complete`, { occurrenceDate: startAt.toISOString() });
-    }
+    return [
+      (previous) => ({
+        method: "POST",
+        url: "/api/tasks",
+        body: {
+          title: input.title,
+          categoryId: targets(previous).categoryId ?? undefined,
+          projectId: targets(previous).projectId ?? undefined,
+          dueDate: dueDate.toISOString(),
+          valueType: input.valueType,
+          status,
+          directCost: input.flowType === "COST" ? amountNum : undefined,
+          incomeAmount: input.flowType === "INCOME" ? amountNum : undefined,
+          startAt: startAt?.toISOString(),
+          endAt: endAt?.toISOString(),
+          allowOverlap: input.allowOverlap || undefined,
+        },
+      }),
+    ];
   }
 
-  refreshAllCaches();
-  notifySaved();
+  let startAt: Date;
+  let endAt: Date;
+  let allDay: boolean;
 
+  if (input.startTime) {
+    startAt = new Date(`${day10}T${input.startTime}:00`);
+    endAt = input.endTime ? new Date(`${day10}T${input.endTime}:00`) : new Date(startAt.getTime() + 60 * 60000);
+    allDay = false;
+  } else {
+    startAt = new Date(`${day10}T00:00:00`);
+    endAt = new Date(`${day10}T23:59:59`);
+    allDay = true;
+  }
+
+  const steps: CaptureStep[] = [
+    (previous) => ({
+      method: "POST",
+      url: "/api/events",
+      body: {
+        title: input.title,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        allDay,
+        categoryId: targets(previous).categoryId ?? undefined,
+        projectId: targets(previous).projectId ?? undefined,
+        valueType: input.valueType,
+        directCost: input.flowType === "COST" ? amountNum : undefined,
+        incomeAmount: input.flowType === "INCOME" ? amountNum : undefined,
+        allowOverlap: input.allowOverlap || undefined,
+      },
+    }),
+  ];
+  // Same "already happened" default as a Task, expressed the way events track completion —
+  // a fresh EventCompletion row rather than a status field.
+  if (input.startTime && endAt < now) {
+    steps.push((previous) => ({
+      method: "POST",
+      url: `/api/events/${(previous[offset] as { event: { id: string } }).event.id}/complete`,
+      body: { occurrenceDate: startAt.toISOString() },
+    }));
+  }
+  return steps;
+}
+
+/** What the Companion reacts to after this capture — undefined when there is nothing worth reacting to. */
+export function captureSummary(input: SaveCaptureInput): CaptureSummary | undefined {
+  const amountNum = input.amount;
+  const day10 = dayIso(input.day);
   const durationMin =
     input.startTime && input.endTime
       ? Math.round((new Date(`${day10}T${input.endTime}:00`).getTime() - new Date(`${day10}T${input.startTime}:00`).getTime()) / 60000)
@@ -124,4 +155,16 @@ export async function saveCapture(input: SaveCaptureInput): Promise<CaptureSumma
   if (input.categoryKind === "WASTE") return { kind: "WASTE" };
   if (input.categoryKind === "PRODUCTIVE" && durationMin && durationMin > 0) return { kind: "PRODUCTIVE", minutes: durationMin };
   return undefined;
+}
+
+/** Throws on failure — including an overlap refusal (see src/lib/overlapClient.ts's
+ * `overlapRefusal(err)`), which the caller decides how to handle (CaptureForm shows
+ * OverlapNotice inline; SmartCaptureConfirm falls back to opening that same full form). */
+export async function saveCapture(input: SaveCaptureInput): Promise<CaptureSummary | undefined> {
+  await runSteps(planSaveCapture(input), (call) => apiPost(call.url, call.body));
+
+  refreshAllCaches();
+  notifySaved();
+
+  return captureSummary(input);
 }

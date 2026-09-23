@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import { useCategories } from "@/lib/hooks";
-import { apiPost } from "@/lib/apiClient";
-import { saveCapture, hhmm, type CaptureSummary } from "@/lib/captureSave";
+import { fetcher, apiPost } from "@/lib/apiClient";
+import type { CaptureSummary } from "@/lib/captureSave";
+import { resolveEntry } from "@/lib/captureResolve";
+import { runSteps } from "@/lib/captureSteps";
+import { refreshAllCaches } from "@/lib/refreshCaches";
+import { notifySaved } from "@/lib/savedToast";
 import { matchCategoryHint, matchProjectHint, type CapturePrefill } from "@/lib/smartCapture";
 import { formatJalali, formatTime as formatJalaliTime } from "@/lib/jalali";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
-import { CAPTURE_TYPE_LABELS, type ValueType } from "@/lib/types";
+import { CAPTURE_TYPE_LABELS } from "@/lib/types";
 import { XIcon } from "./icons";
 
 /**
@@ -42,46 +46,18 @@ export default function SmartCaptureConfirm({
   async function handleConfirm() {
     setSaving(true);
     try {
-      let categoryId = matchedCategory?.id ?? null;
-      let projectId = matchedCategory?.projectId ?? null;
-      let categoryKind = matchedCategory?.kind ?? null;
-      let valueType: ValueType = matchedCategory && !matchedCategory.projectId ? matchedCategory.valueType : "EXPENSE";
-
-      if (matchedProjectCategory) {
-        categoryId = matchedProjectCategory.id;
-        projectId = matchedProjectCategory.projectId;
-        categoryKind = matchedProjectCategory.kind;
-      } else if (willCreateProject && prefill.projectHint) {
-        const { project } = await apiPost<{ project: { id: string } }>("/api/projects", { name: prefill.projectHint });
-        // createProjectCategory (server side) runs in the same transaction as the project itself,
-        // so its category already exists by the time this response comes back. Revalidating
-        // through useCategories' own `mutate` (not a bare fetch) matters here: refreshAllCaches
-        // below never touches /api/categories, so without this the SWR cache every other
-        // category picker reads from — including the next smart-capture confirm card — would
-        // keep showing the pre-project list until something unrelated happened to revalidate it.
-        const freshCategories = (await mutateCategories())?.categories ?? [];
-        const newCat = freshCategories.find((c: any) => c.projectId === project.id);
-        if (newCat) {
-          categoryId = newCat.id;
-          projectId = newCat.projectId;
-          categoryKind = newCat.kind;
-        }
-      }
-
-      const summary = await saveCapture({
-        title: prefill.title,
-        entityType: prefill.entityType,
-        valueType,
-        categoryId,
-        projectId,
-        categoryKind,
-        day,
-        startTime: prefill.start ? hhmm(prefill.start) : "",
-        endTime: prefill.end ? hhmm(prefill.end) : "",
-        flowType: prefill.flowType,
-        amount: prefill.amount ?? undefined,
-      });
-      onConfirmed(summary);
+      // What is saved — and what a line typed into the phone's widget saves — is worked out in one place.
+      const resolution = resolveEntry(prefill, categories, new Date());
+      const results = await runSteps(resolution.steps, (call) => (call.method === "GET" ? fetcher(call.url) : apiPost(call.url, call.body)));
+      // A new project comes with a category of its own (read back above with a plain fetch). Revalidating
+      // through useCategories' own `mutate` matters: refreshAllCaches below never touches /api/categories,
+      // so without this the SWR cache every other category picker reads from — including the next
+      // smart-capture confirm card — would keep showing the pre-project list until something unrelated
+      // happened to revalidate it.
+      if (willCreateProject) await mutateCategories();
+      refreshAllCaches();
+      notifySaved();
+      onConfirmed(resolution.summarize?.(results));
     } catch {
       // Any failure — including a time overlap — falls back to the full form, which already
       // knows how to show that conflict (OverlapNotice) and let the person resolve it there.

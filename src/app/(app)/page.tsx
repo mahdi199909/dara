@@ -8,6 +8,7 @@ import { useHabits } from "@/lib/hooks";
 import CaptureFormModal from "@/components/CaptureFormModal";
 import type { CaptureSummary } from "@/components/CaptureForm";
 import SmartCaptureConfirm from "@/components/SmartCaptureConfirm";
+import CaptureIntentConfirm from "@/components/CaptureIntentConfirm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
 import PersonalDashboard from "@/components/home/PersonalDashboard";
@@ -16,7 +17,7 @@ import { buildDayItems } from "@/lib/dayItems";
 import { EmptyState } from "@/components/ui/Card";
 import { formatDuration } from "@/lib/money";
 import { selectDailyMoment, dailyMomentSeed, type DailyMomentType, type DailyMomentCandidate } from "@/lib/dailyMoment";
-import { buildCapturePrefill } from "@/lib/smartCapture";
+import { parseCaptureIntent, type CaptureIntent } from "@/lib/captureIntent";
 import type { CaptureReaction } from "@/components/home/QuickTaskInput";
 import { ClockIcon, CheckSquareIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX, TOP_BAR_HEIGHT_PX } from "@/lib/layoutConstants";
@@ -103,6 +104,9 @@ export default function HomePage() {
   // The "این ثبت بشه؟" summary shown right after a smart-capture parse, before the full form —
   // see openSmartCapture below. Only one of this and showCapture is ever open at a time.
   const [confirmPrefill, setConfirmPrefill] = useState<CapturePrefill | null>(null);
+  // The same card for a line that is not a plain entry (a note, an installment plan, a habit tick ...)
+  // — see src/lib/captureIntent.ts. `text` is kept so "فقط یک کار ساده" can read the line again as an entry.
+  const [intentConfirm, setIntentConfirm] = useState<{ intent: CaptureIntent; text: string } | null>(null);
   const [reaction, setReaction] = useState<CaptureReaction | null>(null);
   const [durationHabit, setDurationHabit] = useState<any>(null);
   const { from, to } = todayRange();
@@ -144,7 +148,24 @@ export default function HomePage() {
   // one-glance "این ثبت بشه؟" summary rather than the full form — اصلاح still opens that same
   // form, pre-filled, for anyone who wants to check or change something first.
   function openSmartCapture(text: string) {
-    setConfirmPrefill(buildCapturePrefill(text));
+    const intent = parseCaptureIntent(text);
+    if (intent.kind === "ENTRY") setConfirmPrefill(intent.prefill);
+    else setIntentConfirm({ intent, text });
+  }
+
+  // "فقط یک کار ساده" — the keyword guess was wrong; read the same line as an ordinary entry.
+  function captureAsEntry() {
+    if (!intentConfirm) return;
+    const entry = parseCaptureIntent(intentConfirm.text, new Date(), { forceEntry: true });
+    setIntentConfirm(null);
+    if (entry.kind === "ENTRY") setConfirmPrefill(entry.prefill);
+  }
+
+  function handleIntentDone() {
+    setIntentConfirm(null);
+    mutate();
+    mutateDayActivity();
+    mutateHabits();
   }
 
   // The Companion's own reaction (a temporary delta message) — see phraseCaptureReaction.
@@ -250,6 +271,15 @@ export default function HomePage() {
           onConfirmed={handleCaptureDone}
           onEdit={editSmartCapture}
           onCancel={() => setConfirmPrefill(null)}
+        />
+      )}
+
+      {intentConfirm && (
+        <CaptureIntentConfirm
+          intent={intentConfirm.intent}
+          onDone={handleIntentDone}
+          onAsEntry={captureAsEntry}
+          onCancel={() => setIntentConfirm(null)}
         />
       )}
 

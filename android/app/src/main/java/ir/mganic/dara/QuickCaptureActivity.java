@@ -30,10 +30,13 @@ import java.util.TimeZone;
 // on why the widget surface itself can't host real text input). Type, press Done/Enter, review a
 // one-line preview of what was understood (✓/✕ to confirm or go back), and only on ✓ does
 // anything get written. Deliberately does NOT touch the app's SQLite database file for writes —
-// it only ever READS that file (to resolve a parsed category name to its id), and writes new
+// it only ever READS that file (to show a matched category's name in the preview), and writes new
 // captures into the same SharedPreferences file @capacitor/preferences uses (group
 // "CapacitorStorage"), under a key the JS side drains on every app resume — see
-// src/local/widgetQueue.ts. This means a capture doesn't appear inside the app INSTANTLY; it
+// src/local/widgetQueue.ts. What is queued is what the preview showed, as data: the signals
+// QuickTextParser read from the line (a task, an event, an expense, an installment plan, a habit
+// check-in, a note ...) plus the line itself; the app turns them into the real thing, the same way
+// its own «ثبت...» field does. This means a capture doesn't appear inside the app INSTANTLY; it
 // appears the next time the app is opened or resumed — an accepted tradeoff for never risking the
 // app's own in-memory database silently overwriting a native write made while it wasn't running.
 // "ثبت شد" only ever shows once the write to that queue is itself confirmed (SharedPreferences'
@@ -46,14 +49,19 @@ public class QuickCaptureActivity extends Activity {
     private static final String LOCAL_USER_ID = "local-device-user";
     private static final String[] PERSIAN_DIGITS = { "۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹" };
 
-    // id, icon, name — for resolving a parsed category-name hint (QuickTextParser.categoryHint)
-    // to a real categoryId, the same "top categories" set the old chip picker used to offer.
+    // id, icon, name — for showing the name of the category a parsed hint (QuickTextParser's
+    // categoryHint) matches in the preview, from the same "top categories" set the old chip picker
+    // used to offer. The app itself matches the hint against every category when it saves.
     private List<String[]> categories;
 
-    private String pendingTitle;
-    private int pendingDurationMinutes;
-    private Long pendingAmount; // Toman, null when the text named no amount
-    private String pendingCategoryId;
+    private static final String[] WEEKDAY_NAMES = { "یکشنبه", "دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه" }; // index = JS getDay()
+    private static final String[] JALALI_MONTH_NAMES = {
+        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+    };
+
+    // What the typed line was understood as (QuickTextParser) and the line itself — both go into the queue on ✓.
+    private QuickTextParser.Signals pendingSignals;
+    private String pendingText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,35 +97,24 @@ public class QuickCaptureActivity extends Activity {
             return;
         }
 
-        QuickTextParser.Result result = QuickTextParser.parse(rawText);
-        pendingTitle = result.title;
-        pendingAmount = result.amount;
-        // A real duration is used as-is. With an amount but no duration, this is a pure expense —
-        // no time was claimed to have been spent, so none is logged (0, not a fabricated default).
-        // With neither, this is the ambiguous "log something, right now" case the 60-minute default
-        // has always covered.
-        pendingDurationMinutes = result.durationMinutes != null ? result.durationMinutes : (result.amount != null ? 0 : 60);
-        pendingCategoryId = null;
+        pendingText = rawText.trim();
+        pendingSignals = QuickTextParser.parse(rawText);
+
+        // Only the preview matches a category hint to a name (the app matches it against every category when it
+        // saves): an exact name, or the hint as a substring of it (e.g. "خرید" hint matching a "🛍️ خرید" name).
         String categoryName = null;
-        if (result.categoryHint != null) {
+        if (pendingSignals.categoryHint != null) {
             for (String[] cat : categories) {
                 String name = cat[2];
-                if (name.equals(result.categoryHint) || name.contains(result.categoryHint)) {
-                    pendingCategoryId = cat[0];
+                if (name.equals(pendingSignals.categoryHint) || name.contains(pendingSignals.categoryHint)) {
                     categoryName = name;
                     break;
                 }
             }
         }
 
-        StringBuilder preview = new StringBuilder();
-        preview.append("«").append(pendingTitle).append("»");
-        if (pendingDurationMinutes > 0) preview.append(" · ").append(formatMinutesFa(pendingDurationMinutes));
-        if (pendingAmount != null) preview.append(" · ").append(formatTomanFa(pendingAmount));
-        if (categoryName != null) preview.append(" · ").append(categoryName);
-
         TextView previewView = findViewById(R.id.confirm_preview);
-        previewView.setText(preview.toString());
+        previewView.setText(buildPreview(pendingSignals, categoryName));
 
         EditText titleInput = findViewById(R.id.capture_title);
         titleInput.setEnabled(false);
@@ -136,6 +133,87 @@ public class QuickCaptureActivity extends Activity {
         titleInput.setSelection(titleInput.getText().length());
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (imm != null) imm.showSoftInput(titleInput, InputMethodManager.SHOW_IMPLICIT);
+    }
+
+    /** One line saying what ✓ will save — the words the app will act on, in the order a person would say them. */
+    private String buildPreview(QuickTextParser.Signals s, String categoryName) {
+        StringBuilder p = new StringBuilder();
+        String kind = s.kind;
+
+        if ("INSTALLMENT_PLAN".equals(kind)) {
+            long count = s.count == null ? 1 : s.count.longValue();
+            long amount = s.amount == null ? 0 : s.amount.longValue();
+            long each = s.perInstallment ? amount : Math.round((double) amount / count);
+            long total = s.perInstallment ? amount * count : amount;
+            p.append("طرح قسط جدید «").append(s.title).append("» · ").append(faNum(count)).append(" قسط · هر قسط ")
+                .append(formatTomanFa(each)).append(" · مجموع ").append(formatTomanFa(total));
+            if (s.dueDay != null) p.append(" · روز ").append(faNum(s.dueDay.longValue())).append(" هر ماه");
+        } else if ("INSTALLMENT_PAY".equals(kind)) {
+            p.append("پرداخت قسط");
+            if (s.hint != null && !s.hint.isEmpty()) p.append(" «").append(s.hint).append("»");
+        } else if ("HABIT_CHECKIN".equals(kind)) {
+            p.append("ثبت عادت «").append(s.hint).append("» برای امروز");
+        } else if ("HABIT_CREATE".equals(kind)) {
+            p.append("عادت جدید «").append(s.title).append("»");
+        } else if ("NOTE".equals(kind)) {
+            String day = dayLabel(s);
+            p.append("یادداشت");
+            if (day != null) p.append(" ").append(day);
+            p.append(": ").append(s.title.length() > 50 ? s.title.substring(0, 50) + "…" : s.title);
+        } else if ("SAVINGS_GOAL".equals(kind)) {
+            p.append("هدف پس‌انداز «").append(s.title).append("» · ").append(formatTomanFa(s.amount == null ? 0 : s.amount.longValue()));
+        } else if ("PROJECT_CREATE".equals(kind)) {
+            p.append("پروژه جدید «").append(s.title).append("»");
+        } else if ("BUDGET".equals(kind)) {
+            p.append("بودجه ماهانه «").append(s.hint).append("» · ").append(formatTomanFa(s.amount == null ? 0 : s.amount.longValue()));
+        } else if ("REMINDER".equals(kind)) {
+            p.append("یادآوری «").append(s.title).append("»");
+            appendWhen(p, s);
+        } else {
+            // An entry: a task, an event, an expense or an income.
+            boolean dated = s.dayType != null || s.timeHour != null;
+            String label = s.amount != null ? (s.income ? "درآمد" : "هزینه") : (dated || s.eventCue ? "رویداد" : "کار");
+            p.append(label).append(" «").append(s.title).append("»");
+            appendWhen(p, s);
+            if (s.durationMinutes != null && s.durationMinutes.intValue() > 0) p.append(" · ").append(formatMinutesFa(s.durationMinutes.intValue()));
+            if (s.amount != null) p.append(" · ").append(formatTomanFa(s.amount.longValue()));
+            if (categoryName != null) p.append(" · ").append(categoryName);
+            if (s.projectHint != null) p.append(" · پروژه ").append(s.projectHint);
+        }
+        return p.toString();
+    }
+
+    private void appendWhen(StringBuilder p, QuickTextParser.Signals s) {
+        String day = dayLabel(s);
+        if (day != null) p.append(" · ").append(day);
+        if (s.timeHour != null) {
+            p.append(day == null ? " · " : " ").append("ساعت ").append(toPersianDigits(String.format(Locale.US, "%d:%02d", s.timeHour.intValue(), s.timeMinute)));
+        }
+    }
+
+    /** The day a line named, in words — null when it named none. */
+    private String dayLabel(QuickTextParser.Signals s) {
+        if (s.dayType == null) return null;
+        if ("REL".equals(s.dayType)) {
+            switch (s.dayValue) {
+                case -2: return "پریروز";
+                case -1: return "دیروز";
+                case 0: return "امروز";
+                case 1: return "فردا";
+                default: return "پس‌فردا";
+            }
+        }
+        if ("WEEKDAY".equals(s.dayType)) {
+            return s.dayValue >= 0 && s.dayValue < WEEKDAY_NAMES.length ? WEEKDAY_NAMES[s.dayValue] : null;
+        }
+        if (s.jalaliMonth < 1 || s.jalaliMonth > JALALI_MONTH_NAMES.length) return null;
+        String label = faNum(s.jalaliDay) + " " + JALALI_MONTH_NAMES[s.jalaliMonth - 1];
+        if (s.jalaliYear != null) label += " " + faNum(s.jalaliYear.longValue());
+        return label;
+    }
+
+    private static String faNum(long n) {
+        return toPersianDigits(String.valueOf(n));
     }
 
     private static String formatMinutesFa(int minutes) {
@@ -193,14 +271,13 @@ public class QuickCaptureActivity extends Activity {
 
     private void submit() {
         try {
+            // What the preview showed, as data: the signals (src/lib/captureSignalsSchema.ts reads them back)
+            // and the line as typed. The app turns the signals into a real entry when it drains the queue —
+            // using `startedAt`, so «فردا» is the day after now, however long the app takes to open.
             JSONObject entry = new JSONObject();
-            entry.put("title", pendingTitle);
-            // JSONObject.put(key, (Object) null) is not reliable across org.json
-            // implementations — JSONObject.NULL is the explicit, documented way to write a
-            // literal JSON null (which the JS side's JSON.parse then reads back as null).
-            entry.put("categoryId", pendingCategoryId == null ? JSONObject.NULL : pendingCategoryId);
-            entry.put("durationMinutes", pendingDurationMinutes);
-            entry.put("amount", pendingAmount == null ? JSONObject.NULL : pendingAmount);
+            entry.put("v", 2);
+            entry.put("text", pendingText);
+            entry.put("signals", pendingSignals.toJson());
             entry.put("startedAt", isoNow());
             entry.put("source", "widget");
 

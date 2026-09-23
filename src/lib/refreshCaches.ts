@@ -14,3 +14,11 @@ export function refreshAllCaches() {
   mutate("/api/day-battery");
   mutate("/api/capital");
 }
+
+/** Everything a typed capture line can create or change — the entries above, and the rest of what a line can be. */
+export function refreshCaptureCaches() {
+  refreshAllCaches();
+  for (const prefix of ["/api/habits", "/api/installment-plans", "/api/notes", "/api/savings-goals", "/api/budgets", "/api/projects", "/api/categories"]) {
+    mutate((key) => typeof key === "string" && key.startsWith(prefix));
+  }
+}

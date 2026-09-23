@@ -18,6 +18,7 @@ import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import { drainWidgetQueue } from "./widgetQueue";
 import { listActivities } from "./repositories/activities";
 import { createHabit, listHabits } from "./repositories/habits";
+import { extractSignals } from "../lib/captureSignals";
 
 const USER_ID = "user_test_1";
 
@@ -346,5 +347,125 @@ describe("drainWidgetQueue — habit check-in toggles", () => {
     expect(listActivities(db, USER_ID)).toHaveLength(1);
     const { habits } = listHabits(db, USER_ID);
     expect(habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
+  });
+});
+
+// A line typed into the widget: the widget's parser hands over what it understood (the signals) and the
+// line itself. Here the signals come from the TypeScript parser the widget's is a port of.
+describe("drainWidgetQueue: lines understood by the widget", () => {
+  const TYPED_AT = new Date(2026, 4, 10, 9, 0, 30); // Sunday 2026-05-10, when it was typed — the drain happens later
+  const queue = (...lines: string[]) =>
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify(lines.map((text) => ({ v: 2, text, signals: extractSignals(text), startedAt: TYPED_AT.toISOString(), source: "widget" })))
+    );
+  const rows = <T>(db: LocalDb, sql: string, params: unknown[] = []) => db.all<T>(sql, params);
+
+  it("saves an expense as a task with its cost — and the expense itself", async () => {
+    const db = await freshDb();
+    queue("شکلات یک میلیونی");
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows(db, `SELECT "title","directCost" FROM "Task"`)).toEqual([{ title: "شکلات", directCost: 1_000_000 }]);
+    expect(rows(db, `SELECT "type","amount","description" FROM "Transaction"`)).toEqual([{ type: "EXPENSE", amount: 1_000_000, description: "شکلات" }]);
+    expect(store.has("widget_pending_captures")).toBe(false);
+  });
+
+  it("puts «فردا» on the day after it was typed, not the day after the app was opened", async () => {
+    const db = await freshDb();
+    queue("جلسه فردا ساعت ۱۰");
+
+    await drainWidgetQueue(db, USER_ID);
+    const [event] = rows<{ title: string; startAt: string }>(db, `SELECT "title","startAt" FROM "Event"`);
+    const start = new Date(event.startAt);
+    expect(event.title).toBe("جلسه");
+    expect([start.getFullYear(), start.getMonth(), start.getDate(), start.getHours()]).toEqual([2026, 4, 11, 10]);
+  });
+
+  it("makes an installment plan and pays one", async () => {
+    const db = await freshDb();
+    queue("وام ماشین ۶۰ میلیون ۱۲ ماهه");
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows(db, `SELECT "title","totalAmount","installmentAmount","numberOfInstallments" FROM "InstallmentPlan"`)).toEqual([
+      { title: "وام ماشین", totalAmount: 60_000_000, installmentAmount: 5_000_000, numberOfInstallments: 12 },
+    ]);
+
+    queue("قسط ماشین رو دادم");
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows<{ status: string }>(db, `SELECT "status" FROM "Installment" WHERE "index" = 1`)).toEqual([{ status: "PAID" }]);
+    expect(rows<{ n: number }>(db, `SELECT COUNT(*) AS n FROM "Transaction" WHERE "installmentId" IS NOT NULL`)[0].n).toBe(1);
+  });
+
+  it("ticks a habit off, and writes a note", async () => {
+    const db = await freshDb();
+    const habit = createHabit(db, USER_ID, { title: "ورزش صبحگاهی" });
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify(
+        ["عادت ورزش انجام شد", "یادداشت: امروز خوب بود"].map((text) => ({ v: 2, text, signals: extractSignals(text), startedAt: new Date().toISOString() }))
+      )
+    );
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(2);
+    expect(listHabits(db, USER_ID).habits.find((h) => h.id === habit.id)?.checkedInToday).toBe(true);
+    expect(rows(db, `SELECT "content" FROM "DailyNote"`)).toEqual([{ content: "امروز خوب بود" }]);
+  });
+
+  it("keeps a line as a plain task when what it names is gone", async () => {
+    const db = await freshDb();
+    queue("عادت مدیتیشن انجام شد");
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows(db, `SELECT "title" FROM "Task"`)).toEqual([{ title: "عادت مدیتیشن" }]);
+    expect(store.has("widget_pending_captures")).toBe(false);
+  });
+
+  it("keeps a line as a plain task when the app refuses what it asked for, instead of retrying it forever", async () => {
+    const db = await freshDb();
+    // a goal whose name is longer than a goal's name may be
+    queue(`هدف ${"ماشین ".repeat(30)} ۲۰۰ میلیون`);
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows<{ n: number }>(db, `SELECT COUNT(*) AS n FROM "SavingsGoal"`)[0].n).toBe(0);
+    expect(rows<{ n: number }>(db, `SELECT COUNT(*) AS n FROM "Task"`)[0].n).toBe(1);
+    expect(store.has("widget_pending_captures")).toBe(false);
+  });
+
+  it("does nothing at all for an entry that fails half-way, and leaves it queued", async () => {
+    const db = await freshDb();
+    queue("خرید رنگ برای پروژه اتاق");
+    db.execute(`CREATE TRIGGER refuse_task BEFORE INSERT ON "Task" BEGIN SELECT RAISE(ABORT, 'injected fault'); END`);
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(0);
+    // the project made for it was rolled back with it
+    expect(rows<{ n: number }>(db, `SELECT COUNT(*) AS n FROM "Project"`)[0].n).toBe(0);
+    expect(JSON.parse(store.get("widget_pending_captures")!)).toHaveLength(1);
+
+    db.execute(`DROP TRIGGER refuse_task`);
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows<{ n: number }>(db, `SELECT COUNT(*) AS n FROM "Project"`)[0].n).toBe(1);
+    expect(rows<{ n: number }>(db, `SELECT COUNT(*) AS n FROM "Task"`)[0].n).toBe(1);
+  });
+
+  it("drops an entry whose signals are the wrong shape, and still applies the good one beside it", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_captures",
+      JSON.stringify([
+        { v: 2, text: "x", signals: { kind: "SELF_DESTRUCT", title: "x" }, startedAt: TYPED_AT.toISOString() },
+        { v: 2, text: "کار خوب", signals: extractSignals("کار خوب"), startedAt: TYPED_AT.toISOString() },
+      ])
+    );
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(rows(db, `SELECT "title" FROM "Task"`)).toEqual([{ title: "کار خوب" }]);
+  });
+
+  it("an entry from before the widget sent signals is still an Activity", async () => {
+    const db = await freshDb();
+    store.set("widget_pending_captures", JSON.stringify([{ title: "قدیمی", categoryId: null, durationMinutes: 30, startedAt: "2026-08-20T10:00:00.000Z" }]));
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(1);
+    expect(listActivities(db, USER_ID).map((a) => a.title)).toEqual(["قدیمی"]);
   });
 });

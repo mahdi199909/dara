@@ -4,7 +4,7 @@
 // duration, amount, date and category hint; this file turns THAT into form fields, and nothing here
 // ever gets saved without the person reviewing and submitting the (still fully editable) form —
 // no number here is ever written to the database on its own.
-import { parseQuickCapture } from "./parser";
+import { parseQuickCapture, type ParsedCapture } from "./parser";
 import type { CaptureEntityType } from "./types";
 
 export interface CapturePrefill {
@@ -17,7 +17,7 @@ export interface CapturePrefill {
   start: Date | null;
   end: Date | null;
   amount: number | null;
-  flowType: "COST" | "INCOME"; // the parser has no income signal (yet) — money mentioned this way defaults to a cost
+  flowType: "COST" | "INCOME"; // money that came in (salary, a sale ...) is income; any other amount mentioned is a cost
   /** A category NAME the caller matches against the person's real categories — never invented, never applied on its own. */
   categoryHint: string | null;
   /** A project NAME or a fragment of one — the caller fuzzy-matches it against the person's real
@@ -30,7 +30,11 @@ function atMidnight(date: Date): Date {
 }
 
 export function buildCapturePrefill(rawInput: string, now: Date = new Date()): CapturePrefill {
-  const parsed = parseQuickCapture(rawInput, now);
+  return prefillFromParsed(parseQuickCapture(rawInput, now), now);
+}
+
+/** An already-parsed entry as the form's starting point — see buildCapturePrefill. */
+export function prefillFromParsed(parsed: ParsedCapture, now: Date): CapturePrefill {
   // CaptureForm only ever makes a Task or an Event; a bare expense/activity becomes a Task (still
   // carries the cost/duration fields), a dated mention becomes an Event.
   const entityType: CaptureEntityType = parsed.suggestedType === "EVENT" ? "EVENT" : "TASK";
@@ -74,7 +78,7 @@ export function buildCapturePrefill(rawInput: string, now: Date = new Date()): C
     start,
     end,
     amount: parsed.amount,
-    flowType: "COST",
+    flowType: parsed.income ? "INCOME" : "COST",
     categoryHint: parsed.categoryHint,
     projectHint: parsed.projectHint,
   };

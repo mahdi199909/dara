@@ -589,6 +589,21 @@ function errorResponse(err: unknown, request?: { method: string; path: string })
 
 /** Routes one local "request" the same way a matching /api/* route handler would. */
 export function dispatchLocal(method: string, url: string, body?: unknown): LocalResponse {
+  return dispatchLocalWith(() => {
+    const db = openLocalDb(resolveDriver());
+    return { db, userId: getLocalUserId(db) };
+  }, method, url, body);
+}
+
+/**
+ * The same, on a database the caller already holds — for code that runs outside a screen and is handed
+ * its db and user (the widget queue's drain), so it neither needs nor disturbs the driver registered above.
+ */
+export function dispatchLocalOn(db: LocalDb, userId: string, method: string, url: string, body?: unknown): LocalResponse {
+  return dispatchLocalWith(() => ({ db, userId }), method, url, body);
+}
+
+function dispatchLocalWith(target: () => { db: LocalDb; userId: string }, method: string, url: string, body?: unknown): LocalResponse {
   const { pathname, searchParams } = new URL(url, "http://local");
   const route = routes.find((r) => r.method === method && r.regex.test(pathname));
   if (!route) {
@@ -600,8 +615,7 @@ export function dispatchLocal(method: string, url: string, body?: unknown): Loca
   route.paramNames.forEach((name, i) => (params[name] = match[i + 1]));
 
   try {
-    const db = openLocalDb(resolveDriver());
-    const userId = getLocalUserId(db);
+    const { db, userId } = target();
     const run = () => route.handler({ db, userId, params, query: searchParams, body });
     // A write is one step: what the handler writes, its history entry included, commits together or not at all.
     // (Reads are left alone — they change nothing worth protecting, and each write to the driver schedules a save.)
