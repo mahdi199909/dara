@@ -9,7 +9,7 @@ import { TrashIcon, PlusIcon } from "@/components/icons";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
 import { formatJalali } from "@/lib/jalali";
-import { formatDuration } from "@/lib/money";
+import { formatDuration, signed } from "@/lib/money";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 
@@ -107,7 +107,7 @@ export default function TasksPage() {
                       <span>· {formatDuration(Math.round((new Date(task.endAt).getTime() - new Date(task.startAt).getTime()) / 60000))}</span>
                     )}
                     {task.directCost > 0 && <span className="text-waste">· {format(task.directCost, { withSuffix: true })}</span>}
-                    {task.incomeAmount > 0 && <span className="text-accent">· +{format(task.incomeAmount, { withSuffix: true })}</span>}
+                    {task.incomeAmount > 0 && <span className="text-accent">· {signed("+", format(task.incomeAmount, { withSuffix: true }))}</span>}
                     {!STATUS_TABS.find((t) => t.value === task.status) ? null : task.status !== "DONE" && (
                       <span className="text-accent">· {TASK_STATUS_LABELS[task.status as TaskStatus]}</span>
                     )}

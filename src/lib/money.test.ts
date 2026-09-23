@@ -1,10 +1,38 @@
 import { describe, it, expect } from "vitest";
-import { formatToman, formatDuration, shortDuration, formatMoney, parseAmount, toPersianDigits, toAsciiDigits, tomanToUnit, unitToToman } from "./money";
+import { formatToman, formatDuration, shortDuration, formatMoney, parseAmount, toPersianDigits, toAsciiDigits, tomanToUnit, unitToToman, signed, LRM } from "./money";
 
 describe("digit conversion", () => {
   it("converts ascii to persian and back", () => {
     expect(toPersianDigits(1500000)).toBe("۱۵۰۰۰۰۰");
     expect(toAsciiDigits("۱۵۰۰۰۰۰")).toBe("1500000");
+  });
+});
+
+describe("signs stay on the left of the digits", () => {
+  it("puts a left-to-right mark in front of a sign, so right-to-left text cannot pull it to the number's right", () => {
+    expect(signed("+", "۱۲")).toBe(`${LRM}+۱۲`);
+    expect(signed("-", "۱۲")).toBe(`${LRM}-۱۲`);
+    expect(signed("", "۱۲")).toBe("۱۲");
+  });
+
+  it("writes a negative amount with its minus on the left of the digits", () => {
+    expect(formatToman(-1_500_000)).toBe(`${LRM}-۱,۵۰۰,۰۰۰`);
+    expect(formatToman(-1_500_000, { withSuffix: true })).toBe(`${LRM}-۱,۵۰۰,۰۰۰ تومان`);
+    expect(formatMoney(-1_500_000, "TOMAN", { withSuffix: true })).toBe(`${LRM}-۱,۵۰۰,۰۰۰ تومان`);
+    expect(formatMoney(-1_500_000, "TOMAN", { persianDigits: false })).toBe(`${LRM}-1,500,000`);
+    expect(formatMoney(-1_500, "THOUSAND_TOMAN")).toBe(`${LRM}-۱.۵`);
+  });
+
+  it("never prints a negative zero, and leaves positive amounts unmarked", () => {
+    expect(formatToman(-0.4)).toBe("۰");
+    expect(formatMoney(-0.04, "THOUSAND_TOMAN")).toBe("۰");
+    expect(formatToman(1_500_000)).toBe("۱,۵۰۰,۰۰۰");
+  });
+
+  it("keeps the minus of a negative number on the left when only its digits are converted", () => {
+    expect(toPersianDigits(-12)).toBe(`${LRM}-۱۲`);
+    expect(toPersianDigits(12)).toBe("۱۲");
+    expect(toPersianDigits("۱۲-۳")).toBe("۱۲-۳");
   });
 });
 

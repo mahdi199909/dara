@@ -99,6 +99,7 @@ export function InstallmentPlanCard({ plan, accounts, onChanged, highlighted }: 
   const [editing, setEditing] = useState(false);
   const [payAccountId, setPayAccountId] = useState(accounts[0]?.id ?? "");
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [unpayingId, setUnpayingId] = useState<string | null>(null);
   const { format } = useCurrencyUnit();
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -123,6 +124,22 @@ export function InstallmentPlanCard({ plan, accounts, onChanged, highlighted }: 
       alert(err instanceof Error ? err.message : "پرداخت ناموفق بود.");
     } finally {
       setPayingId(null);
+    }
+  }
+
+  /** Reverses a mistaken payment: puts the installment back to «در انتظار» and removes the
+   * EXPENSE transaction it created — the counterpart to the plan-level delete's own cascade
+   * choice, but for a single installment instead of the whole plan. */
+  async function unpay(installmentId: string) {
+    if (!confirm("پرداخت این قسط لغو شود؟ تراکنشِ مرتبط با آن هم حذف می‌شود.")) return;
+    setUnpayingId(installmentId);
+    try {
+      await apiDelete(`/api/installments/${installmentId}/pay`);
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "لغو پرداخت ناموفق بود.");
+    } finally {
+      setUnpayingId(null);
     }
   }
 
@@ -211,7 +228,15 @@ export function InstallmentPlanCard({ plan, accounts, onChanged, highlighted }: 
             <span className="text-ink flex-1 truncate">{formatJalali(new Date(inst.dueDate))}</span>
             <span className="font-medium shrink-0">{format(inst.amount, { withSuffix: true })}</span>
             {inst.status === "PAID" ? (
-              <span className="text-accent shrink-0">{INSTALLMENT_STATUS_LABELS.PAID}</span>
+              <button
+                onClick={() => unpay(inst.id)}
+                disabled={unpayingId === inst.id}
+                aria-label="لغو پرداخت"
+                className="shrink-0 flex items-center gap-1 text-accent disabled:opacity-40"
+              >
+                {unpayingId === inst.id ? "..." : INSTALLMENT_STATUS_LABELS.PAID}
+                <TrashIcon className="w-3 h-3" />
+              </button>
             ) : (
               <button
                 onClick={() => pay(inst.id)}

@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-290 events in 42 domains.
+293 events in 42 domains.
 
 ## AUTH
 
@@ -290,6 +290,9 @@ Default module: `finance`
 | `INSTALLMENT_PAY_FAILED` | ERROR | protected | yes | Installment pay failed. |
 | `INSTALLMENT_PAY_STARTED` | DEBUG | — | reserved | Installment pay started. |
 | `INSTALLMENT_PAY_SUCCESS` | INFO | — | yes | Installment pay success. |
+| `INSTALLMENT_UNPAY_FAILED` | ERROR | protected | yes | Installment unpay failed. |
+| `INSTALLMENT_UNPAY_STARTED` | DEBUG | — | reserved | Installment unpay started. |
+| `INSTALLMENT_UNPAY_SUCCESS` | INFO | — | yes | Installment unpay success. |
 | `INSTALLMENT_UPDATE_FAILED` | ERROR | protected | yes | Installment update failed. |
 | `INSTALLMENT_UPDATE_STARTED` | DEBUG | — | reserved | Installment update started. |
 | `INSTALLMENT_UPDATE_SUCCESS` | INFO | — | yes | Installment update success. |

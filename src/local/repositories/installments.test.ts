@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "../db";
 import { createNodeSqliteDriver } from "../drivers/nodeSqlite";
-import { createInstallmentPlan, deleteInstallmentPlan, getInstallmentPlan, payInstallment, updateInstallmentPlan } from "./installments";
+import { createInstallmentPlan, deleteInstallmentPlan, getInstallmentPlan, payInstallment, unpayInstallment, updateInstallmentPlan } from "./installments";
 import { fromJalali, toJalali } from "@/lib/jalali";
 
 const USER_ID = "user_inst_1";
@@ -69,6 +69,42 @@ describe("local installments", () => {
     expect(transaction.installmentId).toBe(installment.id);
 
     expect(() => payInstallment(db, USER_ID, installment.id, { accountId: "acc_1" })).toThrow("این قسط قبلاً پرداخت شده است.");
+  });
+
+  it("unpays an installment: reverts it to PENDING and soft-deletes its linked transaction", async () => {
+    const db = await freshDb();
+    db.run(`INSERT INTO "FinanceAccount" ("id","userId","name","createdAt","updatedAt") VALUES (?,?,?,?,?)`, ["acc_1", USER_ID, "نقد", now(), now()]);
+    const plan = createInstallmentPlan(db, USER_ID, {
+      title: "وام",
+      totalAmount: 1000000,
+      installmentAmount: 1000000,
+      numberOfInstallments: 1,
+      dueDay: 1,
+    });
+    const { transaction } = payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
+
+    const { installment } = unpayInstallment(db, USER_ID, plan.installments[0].id);
+    expect(installment.status).toBe("PENDING");
+    expect(installment.paidAt).toBeNull();
+
+    const txRow = db.get<{ deletedAt: string | null }>(`SELECT "deletedAt" FROM "Transaction" WHERE "id" = ?`, [transaction.id]);
+    expect(txRow?.deletedAt).not.toBeNull();
+
+    const reloaded = getInstallmentPlan(db, USER_ID, plan.id);
+    expect(reloaded.summary.paidCount).toBe(0);
+    expect(reloaded.summary.remainingCount).toBe(1);
+
+    // And it can be paid again after being unpaid — not left in some half-reverted state.
+    const { installment: paidAgain } = payInstallment(db, USER_ID, plan.installments[0].id, { accountId: "acc_1" });
+    expect(paidAgain.status).toBe("PAID");
+  });
+
+  it("refuses to unpay an installment that was never paid, or one that doesn't exist", async () => {
+    const db = await freshDb();
+    const plan = createInstallmentPlan(db, USER_ID, { title: "وام", totalAmount: 1000000, installmentAmount: 1000000, numberOfInstallments: 1, dueDay: 1 });
+
+    expect(() => unpayInstallment(db, USER_ID, plan.installments[0].id)).toThrow("این قسط پرداخت نشده است.");
+    expect(() => unpayInstallment(db, USER_ID, "does-not-exist")).toThrow("قسط پیدا نشد.");
   });
 
   it("deleting a plan with a paid installment leaves its transaction untouched by default", async () => {

@@ -5,7 +5,7 @@ import useSWR from "swr";
 import Link from "next/link";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { fetcher } from "@/lib/apiClient";
-import { toPersianDigits, formatDuration } from "@/lib/money";
+import { toPersianDigits, formatDuration, signed } from "@/lib/money";
 import { formatJalali } from "@/lib/jalali";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
@@ -156,7 +156,7 @@ export default function CapitalPage() {
 
           {data.capital.monthDeltaMinutes > 0 && (
             <Card className="p-4">
-              <StatItem label="این ماه" value={`+${toPersianDigits(data.capital.monthDeltaMinutes)} دقیقه`} tone="positive" />
+              <StatItem label="این ماه" value={`${signed("+", toPersianDigits(data.capital.monthDeltaMinutes))} دقیقه`} tone="positive" />
             </Card>
           )}
 

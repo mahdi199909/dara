@@ -39,9 +39,24 @@ export function truncateLabel(text: string, maxLength = 16): string {
   return text.slice(0, maxLength - 1).trimEnd() + "…";
 }
 
-/** Converts ASCII digits in a string/number to Persian digits for display. */
+/** U+200E LEFT-TO-RIGHT MARK — invisible, but makes the text right after it start a left-to-right run. */
+export const LRM = "‎";
+
+/**
+ * Puts a "+" / "-" in front of an already-formatted number so it displays on the LEFT of the digits, the way
+ * Persian writes it. Inside right-to-left text a bare leading sign is direction-neutral and gets pulled to the
+ * right-hand side of the number ("۵۰۰-" instead of "-۵۰۰"); the left-to-right mark in front makes the sign and
+ * the digits that follow it one left-to-right run. Pass the magnitude — the sign is the caller's to choose and
+ * the number is never negated here.
+ */
+export function signed(sign: "+" | "-" | "", formatted: string): string {
+  return sign ? `${LRM}${sign}${formatted}` : formatted;
+}
+
+/** Converts ASCII digits in a string/number to Persian digits for display. A negative number keeps its minus on the left of the digits. */
 export function toPersianDigits(input: string | number): string {
-  return String(input).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[Number(d)]);
+  const digits = String(input).replace(/[0-9]/g, (d) => PERSIAN_DIGITS[Number(d)]);
+  return typeof input === "number" && input < 0 ? LRM + digits : digits;
 }
 
 /** Converts Persian (and Arabic-Indic) digits in a string to ASCII digits. */
@@ -55,9 +70,9 @@ export function toAsciiDigits(input: string): string {
 export function formatToman(amount: number, opts?: { persianDigits?: boolean; withSuffix?: boolean }): string {
   const persianDigits = opts?.persianDigits ?? true;
   const rounded = Math.round(amount);
-  const formatted = rounded.toLocaleString("en-US");
+  const formatted = Math.abs(rounded).toLocaleString("en-US");
   const withSuffix = opts?.withSuffix ? " تومان" : "";
-  return (persianDigits ? toPersianDigits(formatted) : formatted) + withSuffix;
+  return signed(rounded < 0 ? "-" : "", persianDigits ? toPersianDigits(formatted) : formatted) + withSuffix;
 }
 
 /**
@@ -70,9 +85,9 @@ export function formatMoney(amountToman: number, unit: CurrencyUnit, opts?: { pe
   const persianDigits = opts?.persianDigits ?? true;
   const displayValue = tomanToUnit(amountToman, unit);
   const rounded = Math.round(displayValue * 10) / 10;
-  const formatted = rounded.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  const formatted = Math.abs(rounded).toLocaleString("en-US", { maximumFractionDigits: 1 });
   const withSuffix = opts?.withSuffix ? ` ${CURRENCY_UNIT_LABELS[unit]}` : "";
-  return (persianDigits ? toPersianDigits(formatted) : formatted) + withSuffix;
+  return signed(rounded < 0 ? "-" : "", persianDigits ? toPersianDigits(formatted) : formatted) + withSuffix;
 }
 
 /** Formats a duration in minutes as a human string, e.g. 105 -> "1 ساعت و 45 دقیقه". */

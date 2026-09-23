@@ -35,7 +35,8 @@ beforeEach(() => {
 });
 afterEach(() => memory.restore());
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+// Long enough that the mocked plugin's promise chain finishes even when the whole suite is running in parallel.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
 const inAnHour = () => new Date(Date.now() + 3_600_000).toISOString();
 const SECRET_TITLE = "قسط وام مسکن";
 const SECRET_BODY = "سررسید ۱۰ میلیون تومان";

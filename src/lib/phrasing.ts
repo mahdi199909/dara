@@ -7,7 +7,7 @@
 // two moments — revealing a cost the user didn't account for, and revealing an asset they didn't
 // know they'd built. phraseHidden and phraseBuild ARE those two moments, so they're the only
 // functions here that use the word; phraseSpend and phraseCapital never do.
-import { toPersianDigits, formatToman, formatDuration } from "./money";
+import { toPersianDigits, formatToman, formatDuration, signed } from "./money";
 import type { CompanionMood } from "./companion";
 
 /** "پرداخت" — a specific spend of time (and, when there's a real hourly rate, its Toman
@@ -176,7 +176,7 @@ export function phraseCaptureReaction(
   if (kind === "WASTE") {
     return "ثبت شد. حساب امروزت کامل‌تر شد.";
   }
-  const added = `+${formatDuration(opts.minutes ?? 0)}`;
+  const added = signed("+", formatDuration(opts.minutes ?? 0));
   if (opts.remainingMinutes !== undefined && opts.remainingMinutes > 0) {
     return `${added}. ${formatDuration(opts.remainingMinutes)} تا هدف.`;
   }

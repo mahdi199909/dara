@@ -125,6 +125,7 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "PATCH /api/installment-plans/:id": { operation: "INSTALLMENT_UPDATE", entityType: "InstallmentPlan" },
   "DELETE /api/installment-plans/:id": { operation: "INSTALLMENT_DELETE", entityType: "InstallmentPlan" },
   "POST /api/installments/:id/pay": { operation: "INSTALLMENT_PAY", entityType: "Installment" },
+  "DELETE /api/installments/:id/pay": { operation: "INSTALLMENT_UNPAY", entityType: "Installment" },
   "POST /api/assets": { operation: "ASSET_CREATE", entityType: "Asset" },
   "PATCH /api/assets/:id": { operation: "ASSET_UPDATE", entityType: "Asset" },
   "DELETE /api/assets/:id": { operation: "ASSET_DELETE", entityType: "Asset" },
@@ -280,6 +281,7 @@ register("DELETE", "/api/installment-plans/:id", ({ db, userId, params, query })
 register("POST", "/api/installments/:id/pay", ({ db, userId, params, body }) =>
   installmentsRepo.payInstallment(db, userId, params.id, payInstallmentSchema.parse(body))
 );
+register("DELETE", "/api/installments/:id/pay", ({ db, userId, params }) => installmentsRepo.unpayInstallment(db, userId, params.id));
 
 // --- Assets --------------------------------------------------------------------------------
 register("GET", "/api/assets", ({ db, userId }) => ({ assets: assetsRepo.listAssets(db, userId) }));

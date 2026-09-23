@@ -71,5 +71,59 @@ async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   }
 }
 
+/** Reverses POST: soft-deletes the linked EXPENSE transaction and puts the installment back to
+ * PENDING (never OVERDUE — undoing a mistaken payment is "not paid yet", the same state a freshly
+ * generated installment starts in; a separate, later process is what would ever mark it overdue).
+ *
+ * Also clears the transaction's own installmentId (not just deletedAt): that column is a hard
+ * unique constraint, which a soft-deleted row still occupies, so leaving it set would make the
+ * installment permanently unpayable the second time (the next POST's create would collide with
+ * this now-dead row on that same unique constraint). Clearing it is safe precisely because every
+ * lookup by installmentId elsewhere already filters deletedAt: null too, so a soft-deleted,
+ * unlinked row was never visible through that column anyway. */
+async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const userId = await requireUserId();
+    const installment = await prisma.installment.findFirst({
+      where: { id: params.id, plan: { userId, deletedAt: null } },
+    });
+    if (!installment) throw new ApiError("قسط پیدا نشد.", 404);
+    if (installment.status !== "PAID") throw new ApiError("این قسط پرداخت نشده است.", 409);
+
+    const updated = await withTransaction(
+      async () => {
+        const existingTx = await prisma.transaction.findFirst({ where: { installmentId: installment.id, deletedAt: null } });
+        if (existingTx) {
+          await prisma.transaction.update({ where: { id: existingTx.id }, data: { deletedAt: new Date(), installmentId: null } });
+        }
+        const claimed = await prisma.installment.updateMany({
+          where: { id: installment.id, status: "PAID" },
+          data: { status: "PENDING", paidAt: null },
+        });
+        if (claimed.count === 0) throw new ApiError("این قسط پرداخت نشده است.", 409);
+        return prisma.installment.findUniqueOrThrow({ where: { id: installment.id } });
+      },
+      { operation: "INSTALLMENT_UNPAY", entityType: "Installment", entityId: installment.id }
+    );
+
+    const { ipAddress, userAgent } = requestMeta(_req);
+    await writeAuditLog({
+      userId,
+      action: "PAYMENT_UNDO",
+      entityType: "Installment",
+      entityId: installment.id,
+      oldValue: installment,
+      newValue: updated,
+      ipAddress,
+      userAgent,
+    });
+
+    return NextResponse.json({ installment: updated });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
 const loggedPOST = withApiLogging("POST", "/api/installments/[id]/pay", POST);
-export { loggedPOST as POST };
+const loggedDELETE = withApiLogging("DELETE", "/api/installments/[id]/pay", DELETE);
+export { loggedPOST as POST, loggedDELETE as DELETE };

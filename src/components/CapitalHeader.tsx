@@ -4,7 +4,7 @@ import useSWR from "swr";
 import Link from "next/link";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { fetcher } from "@/lib/apiClient";
-import { toPersianDigits } from "@/lib/money";
+import { toPersianDigits, signed } from "@/lib/money";
 import { Card, EmptyState } from "@/components/ui/Card";
 
 interface CapitalSnapshotPoint {
@@ -74,7 +74,7 @@ export default function CapitalHeader({ onEmptyCta }: { onEmptyCta?: () => void 
             <p className="text-xs text-muted mt-1">
               {toPersianDigits(capital.skillCount)} مهارت · {toPersianDigits(capital.projectCount)} پروژه · {toPersianDigits(capital.assetCount)} دارایی
             </p>
-            {capital.todayDeltaMinutes > 0 && <p className="text-xs text-accent mt-1">+{toPersianDigits(capital.todayDeltaMinutes)} دقیقه امروز</p>}
+            {capital.todayDeltaMinutes > 0 && <p className="text-xs text-accent mt-1">{signed("+", toPersianDigits(capital.todayDeltaMinutes))} دقیقه امروز</p>}
           </div>
           {snapshots.length > 1 && (
             <div className="w-20 h-10 shrink-0">

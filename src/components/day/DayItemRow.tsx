@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatTime } from "@/lib/jalali";
-import { formatDuration, shortDuration } from "@/lib/money";
+import { formatDuration, shortDuration, signed } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import type { DayItem } from "@/lib/dayItems";
 import { CheckSquareIcon, EditIcon, TrashIcon, XIcon } from "@/components/icons";
@@ -86,8 +86,7 @@ export default function DayItemRow({
 
       {item.amount !== undefined && (
         <span className={`shrink-0 text-xs font-bold ${item.isIncome ? "text-accent" : "text-waste"}`}>
-          {item.isIncome ? "+" : "-"}
-          {format(item.amount, { withSuffix: true })}
+          {signed(item.isIncome ? "+" : "-", format(item.amount, { withSuffix: true }))}
         </span>
       )}
 

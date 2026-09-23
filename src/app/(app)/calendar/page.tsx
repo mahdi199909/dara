@@ -14,7 +14,7 @@ import DayDetailModal from "@/components/calendar/DayDetailModal";
 import DayPanel from "@/components/day/DayPanel";
 import type { NoteDto } from "@/lib/schemas/notes";
 import FeaturedMetricPicker from "@/components/calendar/FeaturedMetricPicker";
-import { toPersianDigits, compactDuration, formatDuration } from "@/lib/money";
+import { toPersianDigits, compactDuration, formatDuration, signed } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { dayKeyIso } from "@/lib/calendarGrid";
 
@@ -250,8 +250,8 @@ function CalendarPageInner() {
             <Card className="flex-1 min-w-0 p-2.5 space-y-1">
               <p className="text-[11px] text-muted">جریان کل سال</p>
               <div className="flex items-center gap-2 text-sm font-bold">
-                <span className="text-accent">+{format(yearOverview?.yearIncome ?? 0, { withSuffix: true })}</span>
-                <span className="text-waste">-{format(yearOverview?.yearExpense ?? 0, { withSuffix: true })}</span>
+                <span className="text-accent">{signed("+", format(yearOverview?.yearIncome ?? 0, { withSuffix: true }))}</span>
+                <span className="text-waste">{signed("-", format(yearOverview?.yearExpense ?? 0, { withSuffix: true }))}</span>
               </div>
               <p className="text-[11px] text-muted truncate">
                 کار مفید: <span className="text-ink font-bold">{formatDuration(yearOverview?.yearProductiveMinutes ?? 0)}</span>
@@ -293,8 +293,8 @@ function CalendarPageInner() {
                 >
                   <span className="text-xs text-ink">{JALALI_MONTH_NAMES[m.jm - 1]}</span>
                   <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[9px] leading-tight font-medium">
-                    {m.income > 0 && <span className="text-accent">+{compactMoney(m.income)}</span>}
-                    {m.expense > 0 && <span className="text-waste">-{compactMoney(m.expense)}</span>}
+                    {m.income > 0 && <span className="text-accent">{signed("+", compactMoney(m.income))}</span>}
+                    {m.expense > 0 && <span className="text-waste">{signed("-", compactMoney(m.expense))}</span>}
                     {m.productiveMinutes > 0 && <span className="text-ink">⚡{compactDuration(m.productiveMinutes)}</span>}
                     {m.featuredValue !== null && m.featuredValue > 0 && (
                       <span className="text-muted">
@@ -315,8 +315,8 @@ function CalendarPageInner() {
             <Card className="flex-1 min-w-0 p-2.5 space-y-1">
               <p className="text-[11px] text-muted">جریان کل ماه</p>
               <div className="flex items-center gap-2 text-sm font-bold">
-                <span className="text-accent">+{format(overview?.monthIncome ?? 0, { withSuffix: true })}</span>
-                <span className="text-waste">-{format(overview?.monthExpense ?? 0, { withSuffix: true })}</span>
+                <span className="text-accent">{signed("+", format(overview?.monthIncome ?? 0, { withSuffix: true }))}</span>
+                <span className="text-waste">{signed("-", format(overview?.monthExpense ?? 0, { withSuffix: true }))}</span>
               </div>
               <p className="text-[11px] text-muted truncate">
                 کار مفید: <span className="text-ink font-bold">{formatDuration(overview?.monthProductiveMinutes ?? 0)}</span>
@@ -367,8 +367,8 @@ function CalendarPageInner() {
                     </span>
                     {summary && (
                       <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[8px] leading-tight font-medium">
-                        {summary.income > 0 && <span className="text-accent">+{compactMoney(summary.income)}</span>}
-                        {summary.expense > 0 && <span className="text-waste">-{compactMoney(summary.expense)}</span>}
+                        {summary.income > 0 && <span className="text-accent">{signed("+", compactMoney(summary.income))}</span>}
+                        {summary.expense > 0 && <span className="text-waste">{signed("-", compactMoney(summary.expense))}</span>}
                         {summary.productiveMinutes > 0 && <span className="text-ink">⚡{compactDuration(summary.productiveMinutes)}</span>}
                         {summary.featuredValue !== null && summary.featuredValue > 0 && (
                           <span className="text-muted">★{overview?.featured?.type === "habit" ? "" : compactDuration(summary.featuredValue)}</span>

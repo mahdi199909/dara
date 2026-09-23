@@ -9,7 +9,7 @@ import CategoryChipPicker, { selectableCategories } from "@/components/CategoryC
 import { computeBudgetProgress } from "@/lib/budgetProgress";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali, toJalali } from "@/lib/jalali";
-import { toPersianDigits } from "@/lib/money";
+import { toPersianDigits, signed } from "@/lib/money";
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import { PlusIcon, EditIcon, TrashIcon } from "@/components/icons";
@@ -53,12 +53,12 @@ function FinancePageInner() {
       <FinanceSummary />
       <RecurringTransactionSuggestions />
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1 -mx-4 px-4">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`text-sm px-3.5 py-1.5 rounded-full transition ${
+            className={`shrink-0 whitespace-nowrap text-sm px-3.5 py-1.5 rounded-full transition ${
               tab === t.key ? "bg-accent text-on-accent" : "bg-surface border border-line text-muted"
             }`}
           >
@@ -274,8 +274,7 @@ function TransactionsTab() {
                     tx.type === "INCOME" ? "text-accent" : tx.type === "EXPENSE" ? "text-waste" : "text-muted"
                   }`}
                 >
-                  {tx.type === "EXPENSE" ? "-" : tx.type === "INCOME" ? "+" : ""}
-                  {format(tx.amount, { withSuffix: true })}
+                  {signed(tx.type === "EXPENSE" ? "-" : tx.type === "INCOME" ? "+" : "", format(tx.amount, { withSuffix: true }))}
                 </span>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button

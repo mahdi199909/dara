@@ -358,3 +358,45 @@ export function payInstallment(
 
   return { installment: updated, transaction };
 }
+
+/** Reverses payInstallment: soft-deletes the linked EXPENSE transaction and puts the installment
+ * back to PENDING (never OVERDUE — undoing a mistaken payment is "not paid yet", the same state a
+ * freshly generated installment starts in; a separate, later process is what would ever mark it
+ * overdue). Same ownership shape and ApiError messages as the web route it mirrors.
+ *
+ * Also clears the transaction's own installmentId (not just deletedAt): Transaction.installmentId
+ * is a hard unique column, which a soft-deleted row still occupies, so leaving it set would make
+ * the installment permanently unpayable the second time (payInstallment's INSERT would collide
+ * with this now-dead row on that same unique constraint). Clearing it is safe precisely because
+ * every lookup by installmentId elsewhere already filters deletedAt IS NULL too, so a soft-deleted,
+ * unlinked row was never visible through that column anyway. */
+export function unpayInstallment(db: LocalDb, userId: string, installmentId: string): { installment: InstallmentRow } {
+  const row = db.get<InstallmentRow>(
+    `SELECT i.* FROM "Installment" i
+     JOIN "InstallmentPlan" p ON p."id" = i."planId"
+     WHERE i."id" = ? AND p."userId" = ? AND p."deletedAt" IS NULL`,
+    [installmentId, userId]
+  );
+  if (!row) throw new ApiError("قسط پیدا نشد.", 404);
+  if (row.status !== "PAID") throw new ApiError("این قسط پرداخت نشده است.", 409);
+
+  const ts = now();
+  const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "installmentId" = ? AND "deletedAt" IS NULL`, [installmentId]);
+  if (existingTx) {
+    db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ?, "installmentId" = NULL WHERE "id" = ?`, [ts, ts, existingTx.id]);
+  }
+  db.run(`UPDATE "Installment" SET "status" = ?, "paidAt" = ?, "updatedAt" = ? WHERE "id" = ?`, ["PENDING", null, ts, installmentId]);
+
+  const updated = db.get<InstallmentRow>(`SELECT * FROM "Installment" WHERE "id" = ?`, [installmentId])!;
+  writeLocalAuditLog(db, {
+    userId,
+    action: "PAYMENT_UNDO",
+    entityType: "Installment",
+    entityId: installmentId,
+    oldValue: row,
+    newValue: updated,
+    metadata: existingTx ? { transactionId: existingTx.id } : undefined,
+  });
+
+  return { installment: updated };
+}

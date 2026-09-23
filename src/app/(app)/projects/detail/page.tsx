@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 import { fetcher, apiPatch } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
-import { formatDuration } from "@/lib/money";
+import { formatDuration, signed } from "@/lib/money";
 import { formatJalali } from "@/lib/jalali";
 import { TASK_STATUS_LABELS, PROJECT_STATUS_LABELS, type TaskStatus, type ProjectStatus } from "@/lib/types";
 import { CheckSquareIcon } from "@/components/icons";
@@ -100,7 +100,7 @@ function ProjectDetailContent() {
           <StatItem label="هزینه مستقیم" value={format(summary.directCost, { withSuffix: true })} tone="negative" />
           <StatItem
             label="خالص"
-            value={`${summary.netCashFlow >= 0 ? "+" : ""}${format(summary.netCashFlow, { withSuffix: true })}`}
+            value={signed(summary.netCashFlow >= 0 ? "+" : "", format(summary.netCashFlow, { withSuffix: true }))}
             tone={summary.netCashFlow >= 0 ? "positive" : "negative"}
           />
         </div>

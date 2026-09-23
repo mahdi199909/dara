@@ -6,7 +6,7 @@ import { fetcher, apiPost } from "@/lib/apiClient";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { buildDayItems } from "@/lib/dayItems";
-import { formatDuration } from "@/lib/money";
+import { formatDuration, signed } from "@/lib/money";
 import { refreshAllCaches } from "@/lib/refreshCaches";
 import { Card } from "@/components/ui/Card";
 import { CheckSquareIcon, ClockIcon } from "@/components/icons";
@@ -129,8 +129,7 @@ export default function DayPanel({
                   )}
                 </div>
                 <span className={t.type === "INCOME" ? "text-accent font-bold" : t.type === "EXPENSE" ? "text-waste font-bold" : "text-muted"}>
-                  {t.type === "EXPENSE" ? "-" : t.type === "INCOME" ? "+" : ""}
-                  {format(t.amount, { withSuffix: true })}
+                  {signed(t.type === "EXPENSE" ? "-" : t.type === "INCOME" ? "+" : "", format(t.amount, { withSuffix: true }))}
                 </span>
               </div>
             ))}
