@@ -15,6 +15,7 @@ import DeepLinkHandler from "@/components/native/DeepLinkHandler";
 import ThemeSettingsSync from "@/components/ThemeSettingsSync";
 import SavedToast from "@/components/SavedToast";
 import UpdateAvailableBanner from "@/components/native/UpdateAvailableBanner";
+import NotificationOffBanner from "@/components/native/NotificationOffBanner";
 
 // Capacitor/static-export variant of (app)/layout.tsx — see scripts/prepare-android-export.mjs,
 // which swaps this in for the real layout.tsx during an Android build only. No server-side
@@ -32,6 +33,7 @@ function AndroidChrome({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-canvas" dir="rtl">
       <AppTopBar userName={userName} />
       <UpdateAvailableBanner />
+      <NotificationOffBanner />
       <SavedToast />
       <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
       <GlobalCaptureFab />

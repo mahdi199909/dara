@@ -6,6 +6,7 @@
 // simplifying.
 import { ApiError } from "@/lib/apiErrorBase";
 import { daysSinceLastCheckIn, isHabitNeglected, type HabitCheckInLike } from "@/lib/habitStreak";
+import { eventReminderBody } from "@/lib/reminderText";
 import type { LocalDb } from "../db";
 import { fetchByIds } from "../relations";
 
@@ -93,7 +94,7 @@ function fireDueReminders(db: LocalDb, userId: string, nowIso: string) {
 
     let body = reminder.title;
     if (event) {
-      body = `${event.title} - ${reminder.offsetMinutes >= 60 ? Math.round(reminder.offsetMinutes / 60) + " ساعت" : reminder.offsetMinutes + " دقیقه"} دیگر`;
+      body = eventReminderBody(event.title, reminder.offsetMinutes);
     } else if (installment && plan) {
       body = `قسط ${installment.amount.toLocaleString("en-US")} تومانی «${plan.title}» به زودی سررسید می‌شود.`;
     }

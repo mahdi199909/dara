@@ -1,15 +1,23 @@
 package ir.mganic.dara;
 
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.print.PrintAttributes;
 import android.print.PrintManager;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import com.getcapacitor.BridgeActivity;
+
+import java.util.Locale;
 
 // Home-screen widgets (TodayEventsWidgetProvider, HabitsWidgetProvider, CapitalWidgetProvider)
 // read the app's SQLite file directly, so they only show what has been saved to that file. They are
@@ -43,6 +51,9 @@ public class MainActivity extends BridgeActivity {
         getBridge().getWebView().addJavascriptInterface(new WebPrintBridge(this), "AndroidPrint");
         // window.AndroidWidgets.refresh(): "the database was just saved, repaint the widgets".
         getBridge().getWebView().addJavascriptInterface(new WidgetBridge(getApplicationContext()), "AndroidWidgets");
+        // window.AndroidNotifications: the system screens and facts about notifications that the
+        // notification plugin does not cover (see src/local/notificationStatus.ts).
+        getBridge().getWebView().addJavascriptInterface(new NotificationSettingsBridge(this), "AndroidNotifications");
     }
 
     @Override
@@ -93,6 +104,119 @@ public class MainActivity extends BridgeActivity {
                     PrintManager printManager = (PrintManager) activity.getSystemService(Context.PRINT_SERVICE);
                     String jobName = activity.getString(R.string.app_name) + " Document";
                     printManager.print(jobName, webView.createPrintDocumentAdapter(jobName), new PrintAttributes.Builder().build());
+                }
+            });
+        }
+    }
+
+    // Why a reminder does not ring is very often outside the app: the notification switch in system
+    // settings, or a battery manager (the system's own, or the brand's: Xiaomi's autostart, Samsung's
+    // sleeping apps) that stops a closed app's alarms. The notification plugin can neither read the
+    // latter nor open the screens for either, so the notifications card in Settings asks this bridge
+    // to (see src/local/notificationStatus.ts). Every open call hops to the UI thread first, like
+    // WebPrintBridge, and falls back to the app's own details screen when the wanted one does not
+    // exist on this phone.
+    private static class NotificationSettingsBridge {
+        private final MainActivity activity;
+
+        NotificationSettingsBridge(MainActivity activity) {
+            this.activity = activity;
+        }
+
+        // Lower-case brand ("xiaomi", "samsung", ...): the battery advice differs per brand.
+        @JavascriptInterface
+        public String manufacturer() {
+            return Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase(Locale.ROOT);
+        }
+
+        // false = the system's battery optimization may stop this app's alarms.
+        @JavascriptInterface
+        public boolean ignoringBatteryOptimizations() {
+            PowerManager powerManager = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
+            return powerManager != null && powerManager.isIgnoringBatteryOptimizations(activity.getPackageName());
+        }
+
+        @JavascriptInterface
+        public void openNotificationSettings() {
+            Intent wanted;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                wanted = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                wanted.putExtra(Settings.EXTRA_APP_PACKAGE, activity.getPackageName());
+            } else {
+                wanted = appDetails();
+            }
+            open(new Intent[] { wanted });
+        }
+
+        // The list of apps with their "don't optimize" switch; needs no special permission.
+        @JavascriptInterface
+        public void openBatterySettings() {
+            open(new Intent[] { new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS) });
+        }
+
+        // The brand's own autostart / protected-apps screen. Returns false when this brand has none
+        // we know of (the app's details screen is opened instead).
+        @JavascriptInterface
+        public boolean openAutostartSettings() {
+            String brand = manufacturer();
+            Intent[] candidates;
+            if (brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco")) {
+                candidates = new Intent[] {
+                    component("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+                };
+            } else if (brand.contains("huawei") || brand.contains("honor")) {
+                candidates = new Intent[] {
+                    component("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"),
+                    component("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")
+                };
+            } else if (brand.contains("oppo") || brand.contains("realme") || brand.contains("oneplus")) {
+                candidates = new Intent[] {
+                    component("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"),
+                    component("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")
+                };
+            } else if (brand.contains("vivo") || brand.contains("iqoo")) {
+                candidates = new Intent[] {
+                    component("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"),
+                    component("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")
+                };
+            } else {
+                open(new Intent[] {});
+                return false;
+            }
+            open(candidates);
+            return true;
+        }
+
+        private Intent component(String packageName, String className) {
+            Intent intent = new Intent();
+            intent.setComponent(new ComponentName(packageName, className));
+            return intent;
+        }
+
+        private Intent appDetails() {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.fromParts("package", activity.getPackageName(), null));
+            return intent;
+        }
+
+        // Tries each intent in turn; when none of them can be started, opens the app's details screen.
+        private void open(final Intent[] candidates) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    for (Intent candidate : candidates) {
+                        try {
+                            activity.startActivity(candidate);
+                            return;
+                        } catch (RuntimeException ignored) {
+                            // Not on this phone (ActivityNotFoundException) or not exported (SecurityException).
+                        }
+                    }
+                    try {
+                        activity.startActivity(appDetails());
+                    } catch (RuntimeException ignored) {
+                        // Nothing left to open.
+                    }
                 }
             });
         }

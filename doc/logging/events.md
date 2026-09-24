@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-293 events in 42 domains.
+297 events in 42 domains.
 
 ## AUTH
 
@@ -504,11 +504,15 @@ Default module: `notifications`
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
 | `LOCAL_NOTIFICATION_CANCELLED` | DEBUG | high-volume | yes | A scheduled reminder was cancelled. |
+| `LOCAL_NOTIFICATION_CHANNEL_FAILED` | WARN | protected | yes | The reminders notification channel could not be created; reminders use the plugin's default channel. |
 | `LOCAL_NOTIFICATION_FAILED` | ERROR | protected | yes | A reminder could not be scheduled, moved or cancelled with the operating system. |
 | `LOCAL_NOTIFICATION_PERMISSION_FAILED` | WARN | protected | yes | Notification permission could not be requested or was not granted. |
 | `LOCAL_NOTIFICATION_RECONCILED` | DEBUG | — | yes | The operating system's schedule was aligned with the database. |
 | `LOCAL_NOTIFICATION_RESCHEDULED` | DEBUG | high-volume | yes | A scheduled reminder was moved. |
 | `LOCAL_NOTIFICATION_SCHEDULED` | DEBUG | high-volume | yes | A reminder was scheduled with the operating system. |
+| `LOCAL_NOTIFICATION_SKIPPED` | DEBUG | high-volume | yes | A reminder, or a whole reconcile, was not handed to the operating system (its moment had passed, or notifications are not allowed). |
+| `LOCAL_NOTIFICATION_STATUS` | INFO | — | yes | What the phone allows the app to do with notifications: permission, exact alarms, channel, scheduled count, battery restriction. |
+| `LOCAL_NOTIFICATION_TEST_SENT` | INFO | — | yes | The person asked for a test notification. |
 
 ## WIDGET
 

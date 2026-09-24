@@ -35,6 +35,7 @@ const MINUTES_PER_DAY = 60 * 24;
 
 /** "10 دقیقه قبل" / "2 ساعت قبل" / "1 روز و 12 ساعت قبل" — how a reminder offset reads on its chip. */
 export function reminderOffsetLabel(minutes: number): string {
+  if (minutes <= 0) return "در لحظه شروع";
   const days = Math.floor(minutes / MINUTES_PER_DAY);
   const hours = Math.floor((minutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR);
   const mins = minutes % MINUTES_PER_HOUR;

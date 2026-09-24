@@ -1,6 +1,6 @@
 "use client";
 
-// Five jobs on every app resume, all stemming from the same fact: Capacitor keeps the WebView
+// Six jobs on every app resume, all stemming from the same fact: Capacitor keeps the WebView
 // alive across a simple background/foreground cycle, so nothing re-runs FirstRunGate's one-time
 // bootstrap effect just because the user switched back to an already-running app.
 //
@@ -18,7 +18,12 @@
 //    AWAITED, unlike the fire-and-forget license refresh above: the mutate() below is what makes
 //    a freshly-pulled row actually visible, so revalidating before sync lands would just show the
 //    same stale data one resume cycle early.
-// 5. Refresh every SWR-cached page unconditionally, not only when the steps above found
+// 5. Re-arm the system's reminder alarms (see reminderNotifications.ts): Android drops an app's
+//    alarms when it is force-stopped, and a phone's battery manager can too — so a reminder set
+//    days ago would otherwise stay silent until the next sync happened to touch it. Also picks up
+//    a reminder the widget drain above just created, and notifications the person switched on in
+//    system settings while the app was in the background.
+// 6. Refresh every SWR-cached page unconditionally, not only when the steps above found
 //    something: revalidateOnFocus is deliberately off (see SWRProvider.tsx — it caused a request
 //    storm), so without this, reopening the app after any amount of time shows whatever was
 //    cached from before, stale, until the user happens to navigate somewhere new.
@@ -30,6 +35,10 @@ import { getLogger } from "@/lib/observability";
 
 // No fixed module: the events below belong to different domains (widgets, capital).
 const log = getLogger(null, "queue-drainer");
+
+/** Re-arming the reminder alarms on return to the app is skipped when it already ran this recently. */
+const MIN_REARM_INTERVAL_MS = 30_000;
+let lastRearmAt = 0;
 
 function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
@@ -60,6 +69,20 @@ export default function WidgetQueueDrainer() {
             recordDailyCapitalSnapshot(db, getLocalUserId(db));
           } catch (err) {
             log.error("CAPITAL_SNAPSHOT_FAILED", { error: err, layer: "local", trigger: "resume" });
+          }
+          // Skipped when it just ran (someone flicking between apps): nothing changes in seconds.
+          if (Date.now() - lastRearmAt >= MIN_REARM_INTERVAL_MS) {
+            lastRearmAt = Date.now();
+            try {
+              const [{ reconcileReminderNotifications }, { recordNotificationStatus }] = await Promise.all([
+                import("@/local/reminderNotifications"),
+                import("@/local/notificationStatus"),
+              ]);
+              reconcileReminderNotifications(db);
+              void recordNotificationStatus("resume");
+            } catch (err) {
+              log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "reconcile", trigger: "resume" });
+            }
           }
         }
         // Unconditional, and outside the try/catch above: a failed drain shouldn't also

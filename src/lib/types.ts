@@ -47,7 +47,10 @@ export type InstallmentStatus = (typeof INSTALLMENT_STATUSES)[number];
 export const ASSET_TRANSACTION_TYPES = ["VALUE_UPDATE", "EXPENSE", "SALE"] as const;
 export type AssetTransactionType = (typeof ASSET_TRANSACTION_TYPES)[number];
 
+// 0 = ring at the start itself. Without it the smallest lead time was 5 minutes, so an event made
+// less than that (or less than the pre-ticked 30) ahead of its start got no notification at all.
 export const REMINDER_OFFSET_PRESETS = [
+  { label: "در لحظه شروع", minutes: 0 },
   { label: "5 دقیقه قبل", minutes: 5 },
   { label: "10 دقیقه قبل", minutes: 10 },
   { label: "15 دقیقه قبل", minutes: 15 },

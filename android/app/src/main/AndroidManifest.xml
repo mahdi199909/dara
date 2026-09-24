@@ -127,9 +127,30 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Android drops every alarm of an app when its APK is replaced (an update, or one build
+             installed over the last), so each pending reminder stayed silent until the app was next
+             opened. The notification plugin ships a receiver that re-arms every stored notification,
+             but it only listens for the boot broadcasts. Declaring the same receiver here lets the
+             manifest merger add this one to its intent filters: "my package was replaced". -->
+        <receiver
+            android:name="com.capacitorjs.plugins.localnotifications.LocalNotificationRestoreReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Reminders ring at the minute they are set for. Without this an alarm is "inexact": Android
+         batches it with other apps' alarms and holds it back in battery-saving modes, so "30 minutes
+         before" arrived whenever the system saw fit (or, on some phones, not at all). This is the
+         permission a calendar app declares: Android 13+ grants it at install and never shows a
+         settings screen for it. Android 12 grants SCHEDULE_EXACT_ALARM (added by the notification
+         plugin) by default, and Android 14 lets the person allow it from Settings in the app. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 </manifest>

@@ -9,6 +9,8 @@ import TimePicker from "@/components/ui/TimePicker";
 import { XIcon, TrashIcon } from "@/components/icons";
 import { REMINDER_OFFSET_PRESETS, RECURRENCE_FREQS, type RecurrenceFreq } from "@/lib/types";
 import { customOffsetToMinutes, planReminderChanges, reminderOffsetLabel, type ExistingReminder } from "@/lib/reminderPlan";
+import { pastDueOffsets } from "@/lib/reminderTiming";
+import { notificationsBlocked, useNotificationStatus } from "@/components/native/useNotificationStatus";
 import OverlapNotice from "@/components/day/OverlapNotice";
 import { overlapRefusal, type OverlapRefusal } from "@/lib/overlapClient";
 
@@ -41,6 +43,8 @@ export default function EventFormModal({
   onDeleted?: () => void;
 }) {
   const { categories } = useCategories();
+  // Only ever reads anything inside the Android app — see useNotificationStatus.
+  const { status: notificationStatus, refresh: refreshNotificationStatus } = useNotificationStatus();
   const isEdit = !!event;
 
   const initialStart = event ? new Date(event.startAt) : defaultDate;
@@ -102,6 +106,20 @@ export default function EventFormModal({
     ...REMINDER_OFFSET_PRESETS.map((p) => ({ minutes: p.minutes as number, label: p.label as string })),
     ...extraOffsets.map((m) => ({ minutes: m, label: reminderOffsetLabel(m) })),
   ].sort((a, b) => a.minutes - b.minutes);
+
+  // A reminder whose moment is already behind us is never handed to the system, so it would never
+  // ring — most often the pre-ticked «30 دقیقه قبل» on an event that starts sooner than that. Say
+  // so here instead of letting the person wait for a notification that cannot come.
+  const formStart = new Date(`${dayIso(date)}T${startTime}:00`);
+  const missedOffsets = formStart.getTime() > Date.now() ? pastDueOffsets(formStart, reminderOffsets) : [];
+
+  async function turnOnNotifications() {
+    const { enableNotifications, openNotificationSettings } = await import("@/local/notificationStatus");
+    // Allowed already, so it is the reminders channel that was muted: only system settings can undo that.
+    if (notificationStatus?.permission === "granted") openNotificationSettings();
+    else await enableNotifications();
+    await refreshNotificationStatus();
+  }
 
   function dayIso(d: Date) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -311,6 +329,32 @@ export default function EventFormModal({
               </div>
             )}
             {customError && <p className="text-xs text-waste mt-1">{customError}</p>}
+            {missedOffsets.length > 0 && (
+              <div className="mt-2 rounded-lg bg-waste-soft text-waste text-xs leading-relaxed px-3 py-2">
+                <p>
+                  {missedOffsets.length === reminderOffsets.length
+                    ? "زمان یادآوری‌های انتخاب‌شده گذشته است و اعلانی برایشان نمی‌آید."
+                    : `زمان یادآوریِ «${missedOffsets.map((m) => reminderOffsetLabel(m)).join("» و «")}» گذشته است و اعلانی برایش نمی‌آید.`}
+                </p>
+                {!reminderOffsets.includes(0) && (
+                  <button type="button" onClick={() => toggleOffset(0)} className="mt-1 font-medium underline">
+                    در لحظه شروع یادآوری کن
+                  </button>
+                )}
+              </div>
+            )}
+            {reminderOffsets.length > 0 && notificationsBlocked(notificationStatus) && (
+              <div className="mt-2 rounded-lg bg-waste-soft text-waste text-xs leading-relaxed px-3 py-2 flex items-center gap-2">
+                <span className="flex-1">
+                  {notificationStatus?.permission === "granted"
+                    ? "اعلان «یادآورها» در تنظیمات گوشی بی‌صدا شده است؛ یادآوری‌ها دیده نمی‌شوند."
+                    : "اعلان‌ها برای برنامه خاموش است؛ یادآوری‌ها زنگ نمی‌خورند."}
+                </span>
+                <button type="button" onClick={() => void turnOnNotifications()} className="shrink-0 font-medium underline">
+                  {notificationStatus?.permission === "granted" ? "باز کردن تنظیمات" : "روشن کردن"}
+                </button>
+              </div>
+            )}
           </div>
 
           {overlap && <OverlapNotice refusal={overlap} saving={loading} onSaveAnyway={() => void save(true)} />}

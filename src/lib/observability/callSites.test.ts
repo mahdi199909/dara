@@ -18,6 +18,9 @@ vi.mock("@capacitor/preferences", () => ({
 
 const notifications = vi.hoisted(() => ({
   requestPermissions: vi.fn(),
+  checkPermissions: vi.fn(),
+  checkExactNotificationSetting: vi.fn(),
+  createChannel: vi.fn(),
   schedule: vi.fn(),
   update: vi.fn(),
   cancel: vi.fn(),
@@ -32,7 +35,14 @@ import { dispatchLocal, setLocalDbDriver } from "@/lib/localDispatcher";
 import { writeLocalAuditLog } from "@/local/audit";
 import { openLocalDb, resetLocalDbForTests, type LocalDb } from "@/local/db";
 import { createNodeSqliteDriver } from "@/local/drivers/nodeSqlite";
-import { requestNotificationPermission, scheduleReminderNotification, syncScheduledReminderNotifications, cancelReminderNotification, rescheduleReminderNotification } from "@/local/nativeNotifications";
+import {
+  requestNotificationPermission,
+  resetNativeNotificationsForTests,
+  scheduleReminderNotification,
+  syncScheduledReminderNotifications,
+  cancelReminderNotification,
+  rescheduleReminderNotification,
+} from "@/local/nativeNotifications";
 import { resetSyncRunnerState, runSync } from "@/local/syncRunner";
 import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { drainWidgetQueue } from "@/local/widgetQueue";
@@ -209,6 +219,13 @@ describe("native reminder notifications", () => {
   const future = new Date(Date.now() + 3_600_000).toISOString();
   const reminder = { id: "rem_1", title: "عنوان خصوصی", body: "متن خصوصی", remindAt: future };
   const waitForLog = (event: string) => vi.waitFor(() => expect(memory.sink.find(event).length).toBeGreaterThan(0));
+
+  beforeEach(() => {
+    notifications.checkPermissions.mockResolvedValue({ display: "granted" });
+    notifications.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: "denied" });
+    notifications.createChannel.mockResolvedValue(undefined);
+    resetNativeNotificationsForTests();
+  });
 
   it("reports which operation failed on which reminder — never the reminder's text", async () => {
     notifications.schedule.mockRejectedValue(new Error("Notifications not permitted"));

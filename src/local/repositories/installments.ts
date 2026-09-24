@@ -16,10 +16,12 @@
 import { ApiError } from "@/lib/apiErrorBase";
 import { planInstallments, redateInstallments, summarizeInstallments, type InstallmentSummary } from "@/lib/installments";
 import { parseDayKey } from "@/lib/calendarGrid";
+import { installmentNotifyAt } from "@/lib/reminderTiming";
 import type { CreateInstallmentPlanInput, PayInstallmentInput, UpdateInstallmentPlanInput } from "@/lib/schemas/installments";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { scheduleReminderNotification, rescheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
+import { reconcileReminderNotifications } from "../reminderNotifications";
 
 export interface InstallmentPlanRow {
   id: string;
@@ -164,7 +166,8 @@ export function createInstallmentPlan(db: LocalDb, userId: string, input: Create
           id: reminderId,
           title,
           body: `قسط ${installment.amount.toLocaleString("en-US")} تومانی «${input.title}» به زودی سررسید می‌شود.`,
-          remindAt: remindAt.toISOString(),
+          // The row keeps the exact lead time; the system notification rings at a waking hour (see installmentNotifyAt).
+          remindAt: installmentNotifyAt(remindAt).toISOString(),
         });
       }
     }
@@ -228,7 +231,7 @@ export function updateInstallmentPlan(
         id: r.id,
         title: r.title,
         body: `قسط ${installment.amount.toLocaleString("en-US")} تومانی «${input.title ?? existing.title}» به زودی سررسید می‌شود.`,
-        remindAt,
+        remindAt: installmentNotifyAt(new Date(remindAt)).toISOString(),
       });
     }
   }
@@ -342,6 +345,9 @@ export function payInstallment(
   );
 
   db.run(`UPDATE "Installment" SET "status" = ?, "paidAt" = ?, "updatedAt" = ? WHERE "id" = ?`, ["PAID", ts, ts, existing.id]);
+  // Paid: "this installment is due soon" must not ring any more. The Reminder rows stay (undoing
+  // the payment brings them back — see unpayInstallment), only the system's alarms go.
+  cancelReminderNotifications(db.all<{ id: string }>(`SELECT "id" FROM "Reminder" WHERE "installmentId" = ?`, [existing.id]).map((r) => r.id));
 
   const updated = db.get<InstallmentRow>(`SELECT * FROM "Installment" WHERE "id" = ?`, [existing.id])!;
   const transaction = db.get<TransactionRow>(`SELECT * FROM "Transaction" WHERE "id" = ?`, [transactionId])!;
@@ -386,6 +392,8 @@ export function unpayInstallment(db: LocalDb, userId: string, installmentId: str
     db.run(`UPDATE "Transaction" SET "deletedAt" = ?, "updatedAt" = ?, "installmentId" = NULL WHERE "id" = ?`, [ts, ts, existingTx.id]);
   }
   db.run(`UPDATE "Installment" SET "status" = ?, "paidAt" = ?, "updatedAt" = ? WHERE "id" = ?`, ["PENDING", null, ts, installmentId]);
+  // Payment undone: its still-upcoming reminders ring again (paying had cancelled their alarms).
+  reconcileReminderNotifications(db);
 
   const updated = db.get<InstallmentRow>(`SELECT * FROM "Installment" WHERE "id" = ?`, [installmentId])!;
   writeLocalAuditLog(db, {

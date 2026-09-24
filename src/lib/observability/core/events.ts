@@ -217,9 +217,13 @@ const STANDALONE = {
   LOCAL_NOTIFICATION_SCHEDULED: s("DEBUG", "A reminder was scheduled with the operating system.", { highVolume: true }),
   LOCAL_NOTIFICATION_RESCHEDULED: s("DEBUG", "A scheduled reminder was moved.", { highVolume: true }),
   LOCAL_NOTIFICATION_CANCELLED: s("DEBUG", "A scheduled reminder was cancelled.", { highVolume: true }),
+  LOCAL_NOTIFICATION_SKIPPED: s("DEBUG", "A reminder, or a whole reconcile, was not handed to the operating system (its moment had passed, or notifications are not allowed).", { highVolume: true }),
   LOCAL_NOTIFICATION_RECONCILED: s("DEBUG", "The operating system's schedule was aligned with the database."),
   LOCAL_NOTIFICATION_FAILED: s("ERROR", "A reminder could not be scheduled, moved or cancelled with the operating system.", { protected: true }),
   LOCAL_NOTIFICATION_PERMISSION_FAILED: s("WARN", "Notification permission could not be requested or was not granted.", { protected: true }),
+  LOCAL_NOTIFICATION_CHANNEL_FAILED: s("WARN", "The reminders notification channel could not be created; reminders use the plugin's default channel.", { protected: true }),
+  LOCAL_NOTIFICATION_STATUS: s("INFO", "What the phone allows the app to do with notifications: permission, exact alarms, channel, scheduled count, battery restriction."),
+  LOCAL_NOTIFICATION_TEST_SENT: s("INFO", "The person asked for a test notification."),
 
   // --- Widgets (they never write to the database: actions travel through an offline queue)
   WIDGET_ACTION_RECEIVED: s("DEBUG", "A home-screen widget action arrived."),

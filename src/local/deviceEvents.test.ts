@@ -12,6 +12,9 @@ vi.mock("@capacitor/preferences", () => ({
 }));
 const plugin = vi.hoisted(() => ({
   requestPermissions: vi.fn(),
+  checkPermissions: vi.fn(),
+  checkExactNotificationSetting: vi.fn(),
+  createChannel: vi.fn(),
   schedule: vi.fn(),
   update: vi.fn(),
   cancel: vi.fn(),
@@ -23,7 +26,13 @@ import { installMemoryLogger } from "@/lib/observability/testing";
 import { openLocalDb, resetLocalDbForTests } from "./db";
 import { createNodeSqliteDriver } from "./drivers/nodeSqlite";
 import { LOCAL_USER_ID, getLocalUserId } from "./localUser";
-import { cancelReminderNotification, rescheduleReminderNotification, scheduleReminderNotification, syncScheduledReminderNotifications } from "./nativeNotifications";
+import {
+  cancelReminderNotification,
+  rescheduleReminderNotification,
+  resetNativeNotificationsForTests,
+  scheduleReminderNotification,
+  syncScheduledReminderNotifications,
+} from "./nativeNotifications";
 import { drainWidgetQueue } from "./widgetQueue";
 
 let memory: ReturnType<typeof installMemoryLogger>;
@@ -32,6 +41,9 @@ beforeEach(() => {
   store.clear();
   for (const fn of Object.values(plugin)) fn.mockReset().mockResolvedValue(undefined);
   plugin.getPending.mockResolvedValue({ notifications: [] });
+  plugin.checkPermissions.mockResolvedValue({ display: "granted" });
+  plugin.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: "denied" });
+  resetNativeNotificationsForTests();
 });
 afterEach(() => memory.restore());
 
@@ -53,11 +65,12 @@ describe("OS reminders", () => {
     expect(JSON.stringify(memory.sink.records)).not.toContain("میلیون");
   });
 
-  it("says nothing when a reminder was already due and was left to the in-app path", async () => {
+  it("does not schedule a reminder that was already due, and says why it was left out", async () => {
     scheduleReminderNotification({ id: "rem-2", title: "t", body: "b", remindAt: new Date(Date.now() - 1000).toISOString() });
     await settle();
     expect(plugin.schedule).not.toHaveBeenCalled();
     expect(memory.sink.find("LOCAL_NOTIFICATION_SCHEDULED")).toEqual([]);
+    expect(memory.sink.find("LOCAL_NOTIFICATION_SKIPPED")[0]).toMatchObject({ level: "DEBUG", entity_id: "rem-2" });
   });
 
   it("does not claim it scheduled anything when the operating system refused", async () => {

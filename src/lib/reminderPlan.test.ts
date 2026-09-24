@@ -58,8 +58,8 @@ describe("reminderOffsetLabel", () => {
     expect(reminderOffsetLabel(60 * 36)).toBe("1 روز و 12 ساعت قبل");
   });
 
-  it("says «0 دقیقه» for a reminder at the start time itself", () => {
-    expect(reminderOffsetLabel(0)).toBe("0 دقیقه قبل");
+  it("says «در لحظه شروع» for a reminder at the start time itself, not «0 دقیقه قبل»", () => {
+    expect(reminderOffsetLabel(0)).toBe("در لحظه شروع");
   });
 });
 

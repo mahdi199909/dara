@@ -173,9 +173,20 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
 
       // Best-effort, fire-and-forget: ask for notification permission up front (Android 13+)
       // so the OS prompt happens here on first boot rather than surprising the user the first
-      // time they add a task/event/installment reminder later.
+      // time they add a task/event/installment reminder later. Then, whatever the answer was,
+      // bring the system's alarms in line with the reminders in the database: Android forgets an
+      // app's alarms when its APK is updated or it is force-stopped, and a reminder saved while
+      // notifications were off was never handed to the system (see reminderNotifications.ts).
       import("@/local/nativeNotifications")
         .then(({ requestNotificationPermission }) => requestNotificationPermission())
+        .then(async () => {
+          const [{ reconcileReminderNotifications }, { recordNotificationStatus }] = await Promise.all([
+            import("@/local/reminderNotifications"),
+            import("@/local/notificationStatus"),
+          ]);
+          reconcileReminderNotifications(driver);
+          await recordNotificationStatus("boot");
+        })
         .catch((err) => log.warn("LOCAL_NOTIFICATION_PERMISSION_FAILED", { error: err, errorCode: "NOTIF-002", layer: "local", trigger: "boot" }));
 
       const license = await getCachedLicense();

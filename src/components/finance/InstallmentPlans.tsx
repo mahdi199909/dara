@@ -507,10 +507,12 @@ export function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
                   reminderOffsets.includes(p.minutes) ? "bg-accent text-on-accent" : "bg-canvas text-muted"
                 }`}
               >
-                {p.label}
+                {/* An installment falls on a date, not at a time: 0 reads "on the due day", not "at the start". */}
+                {p.minutes === 0 ? "در روز سررسید" : p.label}
               </button>
             ))}
           </div>
+          <p className="text-[11px] text-muted mt-1.5">در برنامه‌ی گوشی، اعلان یادآوری قسط‌ها ساعت ۹ صبح نمایش داده می‌شود.</p>
         </div>
 
         <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium disabled:opacity-40">

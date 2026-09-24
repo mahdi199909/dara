@@ -93,6 +93,7 @@ describe("event catalogue", () => {
       "LOCAL_NOTIFICATION_CANCELLED",
       "LOCAL_NOTIFICATION_RESCHEDULED",
       "LOCAL_NOTIFICATION_SCHEDULED",
+      "LOCAL_NOTIFICATION_SKIPPED",
     ]);
   });
 

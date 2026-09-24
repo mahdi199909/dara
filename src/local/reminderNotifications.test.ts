@@ -54,9 +54,12 @@ describe("upcomingReminderNotifications", () => {
     addReminder(db, "r1", "e1", null, "2026-09-25T09:30:00.000Z", { offsetMinutes: 30 });
     addReminder(db, "r2", "e1", null, "2026-09-25T08:00:00.000Z", { offsetMinutes: 120 });
 
+    addReminder(db, "r3", "e1", null, "2026-09-25T10:00:00.000Z", { offsetMinutes: 0 });
+
     const byId = Object.fromEntries(upcomingReminderNotifications(db, NOW).map((r) => [r.id, r.body]));
     expect(byId.r1).toBe("جلسه - 30 دقیقه دیگر");
     expect(byId.r2).toBe("جلسه - 2 ساعت دیگر");
+    expect(byId.r3).toBe("جلسه - همین الان");
   });
 
   it("skips reminders of a deleted event, and words an installment reminder with its amount and plan", async () => {
@@ -73,11 +76,128 @@ describe("upcomingReminderNotifications", () => {
     expect(list[0].body).toBe("قسط 1,000,000,000 تومانی «وام خودرو» به زودی سررسید می‌شود.");
   });
 
+  describe("installment reminders", () => {
+    async function withInstallment(status: "PENDING" | "PAID") {
+      const db = await freshDb();
+      db.run(`INSERT INTO "InstallmentPlan" ("id","userId","title","totalAmount","installmentAmount","numberOfInstallments","dueDay","startDate","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?,?,?)`, ["p1", USER, "وام", 3_000_000, 1_000_000, 3, 5, T, T, T]);
+      // Due dates are the local midnight of their day; «1 روز قبل» is therefore the midnight before it.
+      db.run(`INSERT INTO "Installment" ("id","planId","index","dueDate","amount","status","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?,?)`, ["i1", "p1", 1, new Date(2026, 8, 26).toISOString(), 1_000_000, status, T, T]);
+      addReminder(db, "inst", null, "i1", new Date(2026, 8, 25).toISOString(), { offsetMinutes: 1440 });
+      return db;
+    }
+
+    it("rings at 09:00 of the day the reminder falls on, not at its midnight", async () => {
+      const db = await withInstallment("PENDING");
+      const [reminder] = upcomingReminderNotifications(db, new Date(2026, 8, 24, 12, 0));
+      expect(new Date(reminder.remindAt).getTime()).toBe(new Date(2026, 8, 25, 9, 0).getTime());
+    });
+
+    it("still rings that morning even though the stored midnight is already behind", async () => {
+      const db = await withInstallment("PENDING");
+      expect(upcomingReminderNotifications(db, new Date(2026, 8, 25, 8, 0)).map((r) => r.id)).toEqual(["inst"]);
+      expect(upcomingReminderNotifications(db, new Date(2026, 8, 25, 10, 0))).toEqual([]);
+    });
+
+    it("does not ring for an installment that has been paid", async () => {
+      const db = await withInstallment("PAID");
+      expect(upcomingReminderNotifications(db, new Date(2026, 8, 24, 12, 0))).toEqual([]);
+    });
+  });
+
   it("caps how many it hands to the OS", async () => {
     const db = await freshDb();
     addEvent(db, "e1", "جلسه");
     for (let i = 0; i < 5; i++) addReminder(db, `r${i}`, "e1", null, `2026-09-2${i + 1}T09:00:00.000Z`);
     expect(upcomingReminderNotifications(db, NOW, 3).map((r) => r.id)).toEqual(["r0", "r1", "r2"]);
+  });
+});
+
+describe("recurring events", () => {
+  // A weekly event whose first occurrence has already happened: its Reminder row is a past moment, so
+  // before, nothing was ever armed again.
+  function addWeeklyEvent(db: LocalDb, extra: { until?: string | null; count?: number | null; deletedAt?: string | null; freq?: string } = {}) {
+    db.run(
+      `INSERT INTO "Event" ("id","userId","title","startAt","endAt","recurrenceFreq","recurrenceInterval","recurrenceUntil","recurrenceCount","createdAt","updatedAt","deletedAt") VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ["w1", USER, "کلاس", "2026-09-05T10:00:00.000Z", "2026-09-05T11:00:00.000Z", extra.freq ?? "WEEKLY", 1, extra.until ?? null, extra.count ?? null, T, T, extra.deletedAt ?? null]
+    );
+    addReminder(db, "wr", "w1", null, "2026-09-05T09:30:00.000Z", { offsetMinutes: 30, notified: 1 });
+  }
+  const NOW_REC = new Date("2026-09-19T12:00:00.000Z"); // between the 3rd (09-19 10:00) and 4th (09-26) occurrences
+
+  it("arms the coming repeats of a series, one notification each, timed by the lead time", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db);
+    const list = upcomingReminderNotifications(db, NOW_REC);
+    expect(list.slice(0, 3).map((r) => [r.id, r.remindAt])).toEqual([
+      ["wr::3", "2026-09-26T09:30:00.000Z"],
+      ["wr::4", "2026-10-03T09:30:00.000Z"],
+      ["wr::5", "2026-10-10T09:30:00.000Z"],
+    ]);
+    expect(list[0].body).toBe("کلاس - 30 دقیقه دیگر");
+    expect(list[0].title).toBe("یادآوری wr");
+  });
+
+  it("stops at the horizon (about two months ahead) — not the whole series", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db);
+    const list = upcomingReminderNotifications(db, NOW_REC);
+    expect(list.length).toBeGreaterThanOrEqual(8);
+    expect(list.length).toBeLessThanOrEqual(10);
+    expect(new Date(list[list.length - 1].remindAt).getTime()).toBeLessThan(NOW_REC.getTime() + 61 * 24 * 3_600_000);
+  });
+
+  it("honours the end of the series: a count and an until date", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db, { count: 4 }); // occurrences 0..3 (09-05, 09-12, 09-19, 09-26) -> only #3 is still ahead
+    expect(upcomingReminderNotifications(db, NOW_REC).map((r) => r.id)).toEqual(["wr::3"]);
+
+    const db2 = await freshDb();
+    addWeeklyEvent(db2, { until: "2026-10-04T00:00:00.000Z" });
+    expect(upcomingReminderNotifications(db2, NOW_REC).map((r) => r.id)).toEqual(["wr::3", "wr::4"]);
+  });
+
+  it("does not repeat the event's own first start — its Reminder row covers that one", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db);
+    db.run(`UPDATE "Reminder" SET "notified" = 0, "remindAt" = '2026-09-26T09:30:00.000Z' WHERE "id" = 'wr'`);
+    db.run(`UPDATE "Event" SET "startAt" = '2026-09-26T10:00:00.000Z', "endAt" = '2026-09-26T11:00:00.000Z' WHERE "id" = 'w1'`);
+    const ids = upcomingReminderNotifications(db, NOW_REC).map((r) => r.id);
+    expect(ids[0]).toBe("wr"); // the row itself, first occurrence
+    expect(ids).not.toContain("wr::0");
+    expect(ids[1]).toBe("wr::1");
+  });
+
+  it("leaves a deleted series alone, a dismissed reminder alone, and a one-off event alone", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db, { deletedAt: "2026-09-10T00:00:00.000Z" });
+    expect(upcomingReminderNotifications(db, NOW_REC)).toEqual([]);
+
+    const db2 = await freshDb();
+    addWeeklyEvent(db2);
+    db2.run(`UPDATE "Reminder" SET "dismissed" = 1`);
+    expect(upcomingReminderNotifications(db2, NOW_REC)).toEqual([]);
+
+    const db3 = await freshDb();
+    addWeeklyEvent(db3, { freq: "NONE" });
+    expect(upcomingReminderNotifications(db3, NOW_REC)).toEqual([]);
+  });
+
+  it("gives a daily event no more than its next couple of weeks per reminder, so it cannot use up the whole quota", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db, { freq: "DAILY" });
+    const list = upcomingReminderNotifications(db, NOW_REC);
+    expect(list).toHaveLength(14);
+    expect(list.map((r) => r.remindAt)).toEqual([...list.map((r) => r.remindAt)].sort());
+  });
+
+  it("merges the repeats with everything else, soonest first, under the one overall limit", async () => {
+    const db = await freshDb();
+    addWeeklyEvent(db);
+    addEvent(db, "one", "قرار");
+    addReminder(db, "single", "one", null, "2026-09-27T09:00:00.000Z");
+    const ids = upcomingReminderNotifications(db, NOW_REC).map((r) => r.id);
+    expect(ids.slice(0, 3)).toEqual(["wr::3", "single", "wr::4"]);
+    expect(upcomingReminderNotifications(db, NOW_REC, 2).map((r) => r.id)).toEqual(["wr::3", "single"]);
   });
 });
 

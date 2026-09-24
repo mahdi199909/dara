@@ -22,6 +22,7 @@ import { Preferences } from "@capacitor/preferences";
 import { TABLE_LABELS_FA } from "@/lib/backupLabels";
 import WebBackupTab from "@/components/settings/WebBackupTab";
 import DiagnosticReportCard from "@/components/settings/DiagnosticReportCard";
+import NotificationsCard from "@/components/settings/NotificationsCard";
 import { pickWidgetTextTone, widgetTextColor } from "@/lib/widgetContrast";
 import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
@@ -519,6 +520,7 @@ function PersonalTab() {
         {saved ? "ذخیره شد ✓" : "ذخیره"}
       </button>
       </Card>
+      <NotificationsCard />
     </div>
   );
 }

@@ -77,8 +77,14 @@ Every record carries `platform: android`, `layer: "local"`, `app_version`, `sess
   `SYNC_PENDING` (DEBUG) says a write is waiting for the next sync. (The requirement's example name
   `EXPENSE_CREATED_LOCAL` is `EXPENSE_CREATE_SUCCESS` with `layer: local` here — one name for both platforms.)
 - **Every sync cycle** — [sync.md](sync.md).
-- **OS reminders** — `LOCAL_NOTIFICATION_SCHEDULED` / `RESCHEDULED` / `CANCELLED` / `RECONCILED` (DEBUG): the
-  reminder's id and the moment it rings, never its title or body; `LOCAL_NOTIFICATION_FAILED` when the OS refused.
+- **OS reminders** — `LOCAL_NOTIFICATION_SCHEDULED` / `RESCHEDULED` / `CANCELLED` / `RECONCILED` / `SKIPPED` (DEBUG): the
+  reminder's id, the moment it rings and whether it is an exact alarm, never its title or body; `SKIPPED` says why a
+  reminder (or a whole reconcile) was left out — its moment had passed, or notifications are not allowed;
+  `LOCAL_NOTIFICATION_FAILED` when the OS refused. **`LOCAL_NOTIFICATION_STATUS`** (INFO, on every launch and return to the
+  app) is the first thing to read when someone says "notifications do not come": `permission`, `exactAlarms`,
+  `channelMuted`, `scheduled` (how many the OS holds), `batteryUnrestricted` and the phone's `manufacturer`.
+  `LOCAL_NOTIFICATION_PERMISSION_FAILED` (WARN) now also records a refusal (`metadata.permission`), and
+  `LOCAL_NOTIFICATION_CHANNEL_FAILED` (WARN) a reminders channel that could not be created. See [../notifications.md](../notifications.md).
 - **Widgets** — the widget's own Java code cannot write to this log (and a crash there is outside the JavaScript
   logger's reach), so a widget action becomes visible when the offline queue is drained: `WIDGET_ACTION_RECEIVED` (how
   many, how many malformed) and `WIDGET_QUEUE_PROCESSED` (applied / failed); `WIDGET_QUEUE_FAILED` for an entry that

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { daysSinceLastCheckIn, isHabitNeglected } from "@/lib/habitStreak";
+import { eventReminderBody } from "@/lib/reminderText";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const NEGLECT_THRESHOLD_DAYS = 3;
@@ -27,7 +28,7 @@ async function GET() {
     for (const reminder of dueReminders) {
       let body = reminder.title;
       if (reminder.event) {
-        body = `${reminder.event.title} - ${reminder.offsetMinutes >= 60 ? Math.round(reminder.offsetMinutes / 60) + " ساعت" : reminder.offsetMinutes + " دقیقه"} دیگر`;
+        body = eventReminderBody(reminder.event.title, reminder.offsetMinutes);
       } else if (reminder.installment) {
         body = `قسط ${reminder.installment.amount.toLocaleString("en-US")} تومانی «${reminder.installment.plan.title}» به زودی سررسید می‌شود.`;
       }

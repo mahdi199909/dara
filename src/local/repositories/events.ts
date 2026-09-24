@@ -27,7 +27,7 @@ import { assertNoOverlap } from "../timeOverlapLocal";
 import { occupiedRange } from "@/lib/timeOverlap";
 import { ApiError } from "@/lib/apiErrorBase";
 import { expandOccurrences } from "@/lib/recurrence";
-import { formatReminderOffset } from "@/lib/reminderText";
+import { eventReminderBody } from "@/lib/reminderText";
 import type { CreateEventInput, UpdateEventInput, ToggleEventCompletionInput, CreateReminderInput } from "@/lib/schemas/events";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
@@ -35,6 +35,7 @@ import { fetchByIds } from "../relations";
 import { deleteRowsWithTombstones } from "../tombstones";
 import { syncEventDirectCostTransaction, syncEventIncomeTransaction } from "../directCostSync";
 import { scheduleReminderNotification, rescheduleReminderNotification, cancelReminderNotifications } from "../nativeNotifications";
+import { reconcileReminderNotifications } from "../reminderNotifications";
 
 interface EventRow {
   id: string;
@@ -177,7 +178,7 @@ function insertReminderRow(db: LocalDb, userId: string, event: { id: string; tit
   scheduleReminderNotification({
     id: reminder.id,
     title: reminder.title,
-    body: `${event.title} - ${formatReminderOffset(offsetMinutes)} دیگر`,
+    body: eventReminderBody(event.title, offsetMinutes),
     remindAt: reminder.remindAt,
   });
   return reminder;
@@ -291,6 +292,8 @@ export function createEvent(db: LocalDb, userId: string, input: CreateEventInput
     for (const offsetMinutes of input.reminderOffsets) {
       insertReminderRow(db, userId, row, offsetMinutes); // no per-reminder audit log — matches the web route
     }
+    // Each reminder above covers the event's first occurrence; the repeats of a series are armed by the reconcile.
+    if (row.recurrenceFreq !== "NONE") reconcileReminderNotifications(db);
   }
 
   const created = toEvent(row);
@@ -356,11 +359,14 @@ export function updateEvent(db: LocalDb, userId: string, id: string, input: Upda
       rescheduleReminderNotification({
         id: r.id,
         title: r.title,
-        body: `${row.title} - ${formatReminderOffset(r.offsetMinutes)} دیگر`,
+        body: eventReminderBody(row.title, r.offsetMinutes),
         remindAt,
       });
     }
   }
+
+  // The repeats of a recurring event are armed by the reconcile, which has to look again whenever the series changes (or stops being one).
+  if (existing.recurrenceFreq !== "NONE" || row.recurrenceFreq !== "NONE") reconcileReminderNotifications(db);
 
   const fresh = toEvent(row);
   writeLocalAuditLog(db, { userId, action: "UPDATE", entityType: "Event", entityId: id, oldValue: toEvent(existing), newValue: fresh });
@@ -376,6 +382,8 @@ export function deleteEvent(db: LocalDb, userId: string, id: string) {
   const reminderIds = db.all<{ id: string }>(`SELECT "id" FROM "Reminder" WHERE "eventId" = ?`, [id]).map((r) => r.id);
   cancelReminderNotifications(reminderIds);
   db.run(`UPDATE "Event" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ?`, [now(), now(), id]);
+  // Only the first occurrence's alarms are known by reminder id; the reconcile drops the repeats of a deleted series.
+  if (existing.recurrenceFreq !== "NONE") reconcileReminderNotifications(db);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Event", entityId: id, oldValue: toEvent(existing) });
   return { ok: true };
 }
@@ -406,6 +414,7 @@ export function toggleEventCompletion(db: LocalDb, userId: string, eventId: stri
 export function createReminder(db: LocalDb, userId: string, eventId: string, input: CreateReminderInput) {
   const event = getOwnedEventRow(db, userId, eventId);
   const reminder = insertReminderRow(db, userId, event, input.offsetMinutes);
+  if (event.recurrenceFreq !== "NONE") reconcileReminderNotifications(db);
   writeLocalAuditLog(db, { userId, action: "CREATE", entityType: "Reminder", entityId: reminder.id, newValue: reminder });
   return reminder;
 }
@@ -416,6 +425,9 @@ export function deleteReminder(db: LocalDb, userId: string, id: string) {
 
   deleteRowsWithTombstones(db, "Reminder", '"id" = ?', [id]);
   cancelReminderNotifications([id]);
+  // A recurring event's repeats of this reminder are armed under ids derived from it; the reconcile drops them.
+  const owner = reminder.eventId ? db.get<{ recurrenceFreq: string }>(`SELECT "recurrenceFreq" FROM "Event" WHERE "id" = ?`, [reminder.eventId]) : undefined;
+  if (owner && owner.recurrenceFreq !== "NONE") reconcileReminderNotifications(db);
   writeLocalAuditLog(db, { userId, action: "DELETE", entityType: "Reminder", entityId: id, oldValue: toReminder(reminder) });
   return { ok: true };
 }
