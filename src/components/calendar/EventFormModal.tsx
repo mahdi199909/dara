@@ -110,8 +110,12 @@ export default function EventFormModal({
   // A reminder whose moment is already behind us is never handed to the system, so it would never
   // ring — most often the pre-ticked «30 دقیقه قبل» on an event that starts sooner than that. Say
   // so here instead of letting the person wait for a notification that cannot come.
+  // When editing, a reminder that already exists and whose event was not moved has done its job (or will not be re-armed
+  // either way): only reminders being added now, or every reminder once the time changes, can be "too late".
   const formStart = new Date(`${dayIso(date)}T${startTime}:00`);
-  const missedOffsets = formStart.getTime() > Date.now() ? pastDueOffsets(formStart, reminderOffsets) : [];
+  const timeChanged = isEdit && Math.floor(formStart.getTime() / 60000) !== Math.floor(initialStart.getTime() / 60000);
+  const reminderCandidates = isEdit && !timeChanged ? reminderOffsets.filter((m) => !savedReminders.some((r) => r.offsetMinutes === m)) : reminderOffsets;
+  const missedOffsets = formStart.getTime() > Date.now() ? pastDueOffsets(formStart, reminderCandidates) : [];
 
   async function turnOnNotifications() {
     const { enableNotifications, openNotificationSettings } = await import("@/local/notificationStatus");
@@ -332,7 +336,7 @@ export default function EventFormModal({
             {missedOffsets.length > 0 && (
               <div className="mt-2 rounded-lg bg-waste-soft text-waste text-xs leading-relaxed px-3 py-2">
                 <p>
-                  {missedOffsets.length === reminderOffsets.length
+                  {missedOffsets.length === reminderCandidates.length
                     ? "زمان یادآوری‌های انتخاب‌شده گذشته است و اعلانی برایشان نمی‌آید."
                     : `زمان یادآوریِ «${missedOffsets.map((m) => reminderOffsetLabel(m)).join("» و «")}» گذشته است و اعلانی برایش نمی‌آید.`}
                 </p>
