@@ -438,6 +438,48 @@ describe("what reads naturally", () => {
   });
 });
 
+describe("saying things once", () => {
+  const stretch = (id: string, day: number, minutes: number, project: string) => ({ id, title: "الف", startAt: at(day, 9), minutes, project, category: null });
+  const TOTAL = /جمعاً|روی هم رفته|مجموع کار/;
+
+  it("does not repeat a day's total when one stretch of work already is the total", () => {
+    for (const d of [23, 24, 25, 26]) {
+      const chapter = buildChapter({ month: MEHR, rows: rows({ work: [stretch(`w${d}`, d, 300, "سایت")] }), now: NOW });
+      expect(textOf(dayOf(chapter.entries, dayKey(d)))).not.toMatch(TOTAL);
+    }
+  });
+
+  it("gives the total when the day was spread over several stretches", () => {
+    for (const d of [23, 24, 25, 26]) {
+      const chapter = buildChapter({ month: MEHR, rows: rows({ work: [stretch(`a${d}`, d, 180, "سایت"), stretch(`b${d}`, d, 120, "اپ")] }), now: NOW });
+      expect(textOf(dayOf(chapter.entries, dayKey(d)))).toMatch(TOTAL);
+    }
+  });
+
+  it("calls the busiest day the busiest without saying its hours twice when there was one stretch", () => {
+    const chapter = buildChapter({ month: MEHR, rows: rows({ work: [stretch("a", 24, 480, "سایت")] }), now: NOW });
+    const text = textOf(dayOf(chapter.entries, dayKey(24)));
+    expect(text).toContain("پرکارترین روز این ماه تا اینجا بود");
+    expect(text).not.toMatch(TOTAL);
+  });
+
+  it("does not open a day with «also» when the habits are all there is", () => {
+    for (const d of [23, 24, 25, 26]) {
+      const habit = { id: `h${d}`, habitId: "h", title: "ورزش", date: at(d), at: at(d, 7), minutes: null, streak: 1 };
+      const another = { ...habit, id: `i${d}`, habitId: "i", title: "مطالعه" };
+      for (const habits of [[habit], [habit, another]]) {
+        const chapter = buildChapter({ month: MEHR, rows: rows({ habits }), now: NOW });
+        expect(textOf(dayOf(chapter.entries, dayKey(d)))).not.toMatch(/را هم انجام|در کنار کارها|هم انجام شد|هم مثل دیروز/);
+      }
+    }
+  });
+
+  it("does not repeat a place that the title already names", () => {
+    const chapter = buildChapter({ month: MEHR, rows: rows({ events: [event({ id: "e", title: "تحویل سایت آتلیه", location: "آتلیه", startAt: at(24, 11), endAt: at(24, 12) })] }), now: NOW });
+    expect(textOf(dayOf(chapter.entries, dayKey(24)))).not.toContain("(آتلیه)");
+  });
+});
+
 describe("small grammar points", () => {
   it("does not name a habit twice in the sentence that gives its streak", () => {
     const habit = { id: "c", habitId: "h", title: "ورزش", date: at(24), at: at(24, 7), minutes: null, streak: 7 };

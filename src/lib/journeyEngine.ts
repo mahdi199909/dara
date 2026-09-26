@@ -114,7 +114,10 @@ const dayBefore = (key: string): string | null => {
 const choose = <T>(dayKey: string, slot: string, options: readonly T[]): T => pickBySeed(options, `${dayKey}|${slot}`);
 
 /** A location, set in brackets — it may be «کافه‌ی هشت» or «آنلاین», and brackets read right for both. */
-const where = (location: string | null) => (location && tidy(location) ? ` (${tidy(location)})` : "");
+const where = (location: string | null, title: string) => {
+  const spot = location ? tidy(location) : "";
+  return spot && !tidy(title).includes(spot) ? ` (${spot})` : ""; // «تحویل سایت آتلیه» at «آتلیه» needs no brackets
+};
 
 // ---------------------------------------------------------------------------------------------
 // Events
@@ -126,7 +129,7 @@ const isSocial = (e: JourneyEventRow) => (!!e.category && SOCIAL_CATEGORIES.has(
 
 function eventSentence(e: JourneyEventRow, index: number, total: number, dayKey: string, now: Date): string {
   const title = quote(cleanTitle(e.title));
-  const place = where(e.location);
+  const place = where(e.location, e.title);
   const start = new Date(e.startAt);
   const end = new Date(e.endAt);
   const future = start.getTime() > now.getTime();
@@ -283,27 +286,38 @@ const habitKey = (habits: JourneyHabitRow[]) =>
     .join("|");
 
 /** The day's habits, in the order they were ticked; and, when it is the same set as yesterday's, said shorter so a good routine does not read like a copy-paste. */
-function habitsSentence(habits: JourneyHabitRow[], dayKey: string, sameAsYesterday: boolean): string {
+function habitsSentence(habits: JourneyHabitRow[], dayKey: string, sameAsYesterday: boolean, hasActivity: boolean): string {
   if (habits.length === 0) return "";
   const ordered = [...habits].sort((a, b) => a.at.localeCompare(b.at) || a.title.localeCompare(b.title, "fa"));
   const list = joinFa(ordered.map((h) => quote(cleanTitle(h.title))));
   const many = ordered.length >= 2;
 
+  // «هم» and «در کنار کارها» lean on something said before them; on a day with nothing else, the habits are where the day starts.
   let main: string;
   if (sameAsYesterday) {
     main = many
-      ? choose(dayKey, "habitsSame", [`${list} هم مثل دیروز انجام شد`, `عادت‌ها هم مثل دیروز: ${list}`, `همان عادت‌های دیروز — ${list} — امروز هم سر جایشان بود`])
-      : choose(dayKey, "habitSame", [`${list} را امروز هم انجام دادم`, `${list} هم مثل دیروز انجام شد`]);
+      ? choose(
+          dayKey,
+          "habitsSame",
+          hasActivity
+            ? [`${list} هم مثل دیروز انجام شد`, `عادت‌ها هم مثل دیروز: ${list}`, `همان عادت‌های دیروز — ${list} — امروز هم سر جایشان بود`]
+            : [`عادت‌ها مثل دیروز: ${list}`, `همان عادت‌های دیروز — ${list} — امروز هم سر جایشان بود`]
+        )
+      : choose(dayKey, "habitSame", hasActivity ? [`${list} را امروز هم انجام دادم`, `${list} هم مثل دیروز انجام شد`] : [`${list} را امروز هم انجام دادم`, `${list} مثل دیروز انجام شد`]);
   } else if (many) {
-    main = choose(dayKey, "habits", [
-      `از عادت‌هایم ${list} را انجام دادم`,
-      `عادت‌هایی که امروز انجام دادم: ${list}`,
-      `${list} را هم انجام دادم`,
-      `در کنار کارها، ${list} هم انجام شد`,
-      `عادت‌های امروزم: ${list}`,
-    ]);
+    main = choose(
+      dayKey,
+      "habits",
+      hasActivity
+        ? [`از عادت‌هایم ${list} را انجام دادم`, `عادت‌هایی که امروز انجام دادم: ${list}`, `${list} را هم انجام دادم`, `در کنار کارها، ${list} هم انجام شد`, `عادت‌های امروزم: ${list}`]
+        : [`از عادت‌هایم ${list} را انجام دادم`, `عادت‌هایی که امروز انجام دادم: ${list}`, `عادت‌های امروزم: ${list}`]
+    );
   } else {
-    main = choose(dayKey, "habit1", [`${list} را هم انجام دادم`, `از عادت‌هایم ${list} را انجام دادم`, `${list} هم انجام شد`]);
+    main = choose(
+      dayKey,
+      "habit1",
+      hasActivity ? [`${list} را هم انجام دادم`, `از عادت‌هایم ${list} را انجام دادم`, `${list} هم انجام شد`] : [`از عادت‌هایم ${list} را انجام دادم`, `${list} را انجام دادم`, `امروز ${list} را انجام دادم`]
+    );
   }
 
   const notable = [...ordered].sort((a, b) => b.streak - a.streak).find((h) => isNotableStreak(h.streak));
@@ -418,20 +432,24 @@ function composeDay(dayKey: string, bucket: DayBucket, ctx: DayContext): Journey
   // A task closed inside tracked time is part of that stretch; the list still names it.
   const tasks = tasksSentence(allTasks, dayKey, time !== "");
   const workSentences = [time, tasks].filter(Boolean);
+  const hasActivity = calendar.length > 0 || workSentences.length > 0 || bucket.milestones.length > 0;
   if (workSentences.length > 0 && workMinutes >= 240) {
-    const total = spokenDuration(workMinutes);
-    const busiest = ctx.busiestDay === dayKey;
-    workSentences.push(
-      busiest
-        ? `جمعاً ${total} کار ثبت شد — ${ctx.partialMonth ? "پرکارترین روز این ماه تا اینجا" : "پرکارترین روز این ماه"}.`
-        : choose(dayKey, "total", [`جمعاً ${total} کار ثبت شد.`, `روی هم رفته ${total} کار کردم.`, `مجموع کار امروز ${total} شد.`])
-    );
+    // One stretch of work already says the whole total: saying the number again would read like a stutter.
+    const stretches = groups.filter((g) => g.minutes >= 15);
+    const oneStretch = stretches.length === 1 && workMinutes - stretches[0].minutes < 15;
+    const record = ctx.partialMonth ? "پرکارترین روز این ماه تا اینجا" : "پرکارترین روز این ماه";
+    if (ctx.busiestDay === dayKey) {
+      workSentences.push(oneStretch ? `${record} بود.` : `جمعاً ${spokenDuration(workMinutes)} کار ثبت شد — ${record}.`);
+    } else if (!oneStretch) {
+      const total = spokenDuration(workMinutes);
+      workSentences.push(choose(dayKey, "total", [`جمعاً ${total} کار ثبت شد.`, `روی هم رفته ${total} کار کردم.`, `مجموع کار امروز ${total} شد.`]));
+    }
   }
 
   const before = dayBefore(dayKey);
   const yesterdayBucket = before ? ctx.bucketOf(before) : undefined;
   const sameAsYesterday = !!yesterdayBucket && yesterdayBucket.habits.length > 0 && bucket.habits.length > 0 && habitKey(yesterdayBucket.habits) === habitKey(bucket.habits);
-  const habit = habitsSentence(bucket.habits, dayKey, sameAsYesterday);
+  const habit = habitsSentence(bucket.habits, dayKey, sameAsYesterday, hasActivity);
 
   // What is told about the day's doings flows as one paragraph when it is short, and splits at the calendar/work seam when it is long;
   // the habits always stand in a paragraph of their own. The lead-in never stands alone: it joins the first paragraph after it.
