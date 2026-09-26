@@ -49,6 +49,7 @@ import {
 import { computeDailyInsight, computeDailyMomentCandidates } from "@/local/insightsData";
 import { fetchByIds } from "@/local/relations";
 import { computeIdentityStatements } from "@/local/identityData";
+import { loadJourneyRows } from "@/local/journeyData";
 import { generateNarrative } from "@/lib/narrative";
 import { resolveRange } from "@/lib/reportRange";
 import { jalaliMonthRange, toJalali } from "@/lib/jalali";
@@ -67,6 +68,7 @@ import { createEventSchema, updateEventSchema, toggleEventCompletionSchema, crea
 import { createHabitSchema, updateHabitSchema, habitCheckInToggleSchema, habitCheckInDurationSchema } from "@/lib/schemas/habits";
 import { updateSettingsSchema } from "@/lib/schemas/settings";
 import { capitalRangeSchema } from "@/lib/schemas/capital";
+import { journeyQuerySchema } from "@/lib/schemas/journey";
 
 interface HandlerCtx {
   db: LocalDb;
@@ -377,6 +379,12 @@ register("GET", "/api/audit-logs", ({ db, userId, query }) =>
 
 // --- Cross-cutting: search, export, quick-capture, dashboard ---------------------------------
 register("GET", "/api/search", ({ db, userId, query }) => ({ results: searchRepo.search(db, userId, query.get("q") ?? undefined) }));
+
+// The facts «مسیر» turns into prose — same shape as src/app/api/journey/route.ts (see src/lib/journeyTypes.ts).
+register("GET", "/api/journey", ({ db, userId, query }) => {
+  const range = journeyQuerySchema.parse({ from: query.get("from") ?? undefined, to: query.get("to") ?? undefined });
+  return loadJourneyRows(db, userId, range.from, range.to);
+});
 
 register("GET", "/api/export/:entity", ({ db, userId, params }) => exportRepo.exportCsv(db, userId, params.entity));
 

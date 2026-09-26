@@ -37,7 +37,14 @@ export default function AppTopBar({ userName }: { userName: string }) {
       style={{ height: TOP_BAR_HEIGHT_PX }}
     >
       <div className="h-full grid grid-cols-3 items-center">
-        <p className="font-bold text-ink text-sm truncate">مسیر {userName}</p>
+        {/* Tapping the title opens «مسیر»: the person's days read back as a story (see src/app/(app)/journey/page.tsx). */}
+        <Link
+          href="/journey"
+          aria-label={`مسیر ${userName} — خواندن روایت روزها`}
+          className="block min-w-0 font-bold text-sm truncate rounded-lg py-1.5 -my-1.5 text-ink hover:text-accent active:opacity-70 transition"
+        >
+          مسیر {userName}
+        </Link>
 
         <div className="flex justify-center">
           {isHome && companionEnabled && companionState && (
