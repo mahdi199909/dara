@@ -256,9 +256,10 @@ the UI copy (`APP_NAME` in `src/lib/appVersion.ts`) — and there is one permane
 
     https://my.parvaapp.ir/parvaapp.apk
 
-`next.config.mjs` redirects it to `https://github.com/mahdi199909/dara/releases/latest/download/parvaapp.apk`, which
-GitHub points at the newest **release**'s `parvaapp.apk`. The link itself never changes; publishing a release is what
-changes what it downloads (and it works without logging in).
+The server itself serves it (`next.config.mjs` rewrites it to `src/app/api/app/apk/route.ts`), from `/opt/parva/downloads/parvaapp.apk`
+(mounted read-only into the container). It resumes interrupted downloads (Range) and does not depend on GitHub being
+reachable from Iran; only when that file is missing does it fall back to the GitHub release. The link never changes;
+copying a new file there (step 3 below) is what changes what it downloads.
 
 **Versions.** `package.json`'s version is the only source. The APK's `versionName` is that version and its `versionCode`
 is derived from it (`1.1.0` → `10100`, i.e. major·10000 + minor·100 + patch, with minor and patch below 100), so it
@@ -274,7 +275,9 @@ always grows with the version and is known before the APK exists. Builds made be
    (`.github/workflows/build-android.yml`) builds the APK, fails if the file does not carry the right version,
    application id and name, and publishes it as the release asset `parvaapp.apk`. (Pushes to `master` without a tag
    only produce a test build, kept as the `parvaapp-apk` workflow artifact — nobody is told about those.)
-3. **After** the tag's run is green and the release exists, deploy the server (section 5b). From then on every install
+3. **After** the tag's run is green and the release exists, put the APK on the server — in /opt/parva:
+   `scripts/server-fetch-apk.sh vX.Y.Z` (downloads the release asset, checks size and zip header, swaps it in; the
+   previous file stays as `downloads/parvaapp.previous.apk`) — then deploy the server (section 5b). From then on every install
    older than X.Y.Z shows "نسخه جدید … آماده‌ی دانلود است" with a download button that opens the permanent link. Deploying
    first would announce a version nobody can download yet.
 4. Check: `curl -s https://my.parvaapp.ir/api/app/version` reports the new `latestVersionName`, and

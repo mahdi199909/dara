@@ -54,21 +54,16 @@ const nextConfig = {
         async headers() {
           return [{ source: "/:path*", headers: SECURITY_HEADERS }];
         },
-        // The permanent download link (APK_STATIC_URL in src/lib/appVersion.ts). GitHub serves
-        // whichever release is newest at the "latest" address, so publishing a release — pushing a
-        // vX.Y.Z tag, see .github/workflows/build-android.yml — is all it takes to change what this
-        // link downloads; nothing here or on the server needs touching per release. A config
-        // redirect runs before the auth middleware, so the link works for anyone, logged in or not.
-        // (Not part of the static export, which has no server to redirect from.)
+        // The permanent download link (APK_STATIC_URL in src/lib/appVersion.ts) is served by this
+        // server from its own downloads folder (src/app/api/app/apk/route.ts), not by GitHub. Not part
+        // of the static export, which has no server.
+        async rewrites() {
+          return [{ source: "/parvaapp.apk", destination: "/api/app/apk" }];
+        },
         async redirects() {
           return [
             // The owner's tools moved to /dashboard (the middleware answers 404 here for anyone else first).
             { source: "/admin", destination: "/dashboard", permanent: false },
-            {
-              source: "/parvaapp.apk",
-              destination: "https://github.com/mahdi199909/dara/releases/latest/download/parvaapp.apk",
-              permanent: false,
-            },
           ];
         },
       }),

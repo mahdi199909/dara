@@ -13,3 +13,5 @@ prisma/dev.db
 prisma/dev.db-journal
 .DS_Store
 coverage
+# The served APK (see docker-compose.yml)
+/downloads

@@ -85,6 +85,9 @@ services:
       - "127.0.0.1:3000:3000"
     volumes:
       - hesabkon_logs:/app/logs
+      # The APK behind https://my.parvaapp.ir/parvaapp.apk (src/app/api/app/apk/route.ts). Filled per
+      # release on the host (DEPLOYMENT.md "Releasing a new Android APK"); read-only for the app.
+      - ./downloads:/app/downloads:ro
     # Docker keeps container stdout in one ever-growing file unless told otherwise. Five files of
     # 20 MB per container is a hard ceiling on what the logs may occupy (~100 MB), oldest dropped first.
     logging:

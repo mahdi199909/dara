@@ -7,3 +7,5 @@ prisma/dev.db-journal
 npm-debug.log*
 logs
 .git
+# The served APK (see docker-compose.yml)
+downloads

@@ -105,6 +105,12 @@ jobs:
             rm -f "$RUNNER_TEMP/parva.p12"
             echo "Signed with the private key (rotated from the debug key)."
           else
+            # From 1.7.2 on, phones trust only the private key: a debug-only release would not install
+            # over it. A release tag without the key therefore fails instead of publishing.
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::Release builds must be signed with the private key (repository secrets PARVA_KEYSTORE_BASE64 / PARVA_KEYSTORE_PASSWORD)."
+              exit 1
+            fi
             cp "$APK" parvaapp.apk
             echo "::warning::No private key in the repository secrets: parvaapp.apk is signed with the public debug key."
             export SELFTEST_PASSWORD="$(openssl rand -hex 16)"
@@ -126,7 +132,7 @@ jobs:
           grep -E "^package: " badging.txt | grep -q "name='ir.mganic.dara'"
           grep -E "^package: " badging.txt | grep -q "versionCode='$ANDROID_VERSION_CODE'"
           grep -E "^package: " badging.txt | grep -q "versionName='$ANDROID_VERSION_NAME'"
-          grep -q "^application-label:'parva | سیستم‌عامل شخصی'$" badging.txt
+          grep -q "^application-label:'parva'$" badging.txt
           # A debuggable APK lets anyone with a USB cable read the person's data (run-as, WebView inspect).
           if grep -q "^application-debuggable" badging.txt; then echo "::error::The APK is debuggable"; exit 1; fi
           ls -l parvaapp.apk

@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">parva | سیستم‌عامل شخصی</string>
+    <string name="app_name">parva</string>
     <string name="title_activity_main">parva</string>
     <string name="package_name">ir.mganic.dara</string>
     <string name="custom_url_scheme">ir.mganic.dara</string>
@@ -16,6 +16,6 @@
     <string name="widget_capital_title">سرمایه من</string>
     <string name="widget_capital_description">نمایش ساعت سرمایه‌گذاری‌شده و ثبت سریع سه دسته پرکاربرد، بدون باز کردن اپ parva</string>
     <string name="widget_capital_shortcuts_empty">دسته‌بندی‌ای پیدا نشد — یک‌بار اپ رو باز کنید</string>
-    <string name="splash_title">parva | سیستم‌عامل شخصی</string>
+    <string name="splash_title">parva</string>
     <string name="splash_slogan">زمان، پول، کار و دارایی‌هایت در یک دفتر واحد.</string>
 </resources>

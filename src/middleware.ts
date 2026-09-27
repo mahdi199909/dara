@@ -11,7 +11,7 @@ const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "hesabkon_session";
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"];
 // /api/auth/code/* (sign-in and password-reset codes) is for people who are not signed in yet; the
 // signed-in account routes live under /api/account and stay behind the session check.
-const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/auth/code/", "/api/quotes", "/api/app/version"];
+const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/auth/code/", "/api/quotes", "/api/app/version", "/api/app/apk"];
 // The owner's area. The middleware can only read the token (no database here), so it turns away anyone
 // whose token names another address; the pages and routes then check the account itself (requireAdmin).
 const ADMIN_PAGE_PREFIXES = ["/dashboard", "/admin"];
@@ -19,6 +19,8 @@ const ADMIN_API_PREFIX = "/api/admin";
 // /api/metrics has no session (a Prometheus scraper has none): the route guards itself with its own bearer token. Exactly
 // that path, not a prefix — nothing else may become public by starting with the same letters.
 const PUBLIC_API_PATHS = ["/api/metrics"];
+// The APK download link (rewritten to /api/app/apk): people download the app before they have an account.
+const PUBLIC_FILE_PATHS = ["/parvaapp.apk"];
 
 const log = getLogger("auth", "middleware");
 
@@ -65,7 +67,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/manifest") ||
     pathname.startsWith("/icons") ||
-    pathname === "/icon.png"
+    pathname === "/icon.png" ||
+    PUBLIC_FILE_PATHS.includes(pathname)
   ) {
     return NextResponse.next();
   }

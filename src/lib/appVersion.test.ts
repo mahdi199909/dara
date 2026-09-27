@@ -102,21 +102,20 @@ describe("the download link and the name", () => {
     expect(APP_TAGLINE.startsWith(APP_DISPLAY_NAME)).toBe(true);
   });
 
-  it("is redirected by the server config to the newest release's APK (the config is plain JS with no TS import, so this ties the two together)", () => {
+  it("is served by this server, rewritten to its download route (the config is plain JS with no TS import, so this ties the two together)", () => {
     const config = readFileSync(resolve(process.cwd(), "next.config.mjs"), "utf8");
-    expect(config).toContain(`source: "${APK_STATIC_PATH}"`);
-    expect(config).toContain(`destination: "${APK_LATEST_RELEASE_URL}"`);
-    expect(config).toContain("permanent: false");
+    expect(config).toContain(`source: "${APK_STATIC_PATH}", destination: "/api/app/apk"`);
     expect(config).toContain("NEXT_PUBLIC_APP_VERSION: APP_VERSION");
+    const route = readFileSync(resolve(process.cwd(), "src/app/api/app/apk/route.ts"), "utf8");
+    expect(route).toContain(APK_LATEST_RELEASE_URL);
   });
 
   it("shows the human display name the same way in the Android launcher, the Capacitor config and the PWA manifest — never the file-safe APP_NAME", () => {
     const strings = readFileSync(resolve(process.cwd(), "android/app/src/main/res/values/strings.xml"), "utf8");
-    // The widget picker/launcher entry gets the full "برند | تگ‌لاین" form (what a person actually
-    // browses through to find the app); the task switcher's card label stays just the short name.
-    expect(strings).toContain(`<string name="app_name">${APP_TAGLINE}</string>`);
+    // Under the launcher icon, in the widget picker and on the splash screen: just the short name.
+    expect(strings).toContain(`<string name="app_name">${APP_DISPLAY_NAME}</string>`);
     expect(strings).toContain(`<string name="title_activity_main">${APP_DISPLAY_NAME}</string>`);
-    expect(strings).toContain(`<string name="splash_title">${APP_TAGLINE}</string>`);
+    expect(strings).toContain(`<string name="splash_title">${APP_DISPLAY_NAME}</string>`);
     expect(readFileSync(resolve(process.cwd(), "capacitor.config.ts"), "utf8")).toContain(`appName: "${APP_DISPLAY_NAME}"`);
 
     const manifest = JSON.parse(readFileSync(resolve(process.cwd(), "public/manifest.json"), "utf8"));

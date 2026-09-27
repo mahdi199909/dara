@@ -31,6 +31,11 @@ describe("which API paths need a session", () => {
     }
   });
 
+  it("lets anyone download the app, signed in or not", async () => {
+    expect(passesOn(await call("/parvaapp.apk"))).toBe(true);
+    expect(passesOn(await call("/api/app/apk"))).toBe(true);
+  });
+
   async function tokenFor(email: string): Promise<string> {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-secret-change-me-in-production");
     return new SignJWT({ userId: "someone", email }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(secret);

@@ -13,7 +13,8 @@ describe("secretBox", () => {
     const sealed = seal("KAVENEGAR_API_KEY", "k");
     expect(open("SMSIR_API_KEY", sealed)).toBeNull();
     const [v, iv, tag, ct] = sealed.split(".");
-    const flipped = ct.slice(0, -1) + (ct.endsWith("A") ? "B" : "A");
+    // The first character carries six full bits of ciphertext (the last may be only padding).
+    const flipped = (ct.startsWith("A") ? "B" : "A") + ct.slice(1);
     expect(open("KAVENEGAR_API_KEY", [v, iv, tag, flipped].join("."))).toBeNull();
     expect(open("KAVENEGAR_API_KEY", "garbage")).toBeNull();
   });
