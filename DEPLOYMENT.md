@@ -257,8 +257,8 @@ changes what it downloads (and it works without logging in).
 **Versions.** `package.json`'s version is the only source. The APK's `versionName` is that version and its `versionCode`
 is derived from it (`1.1.0` → `10100`, i.e. major·10000 + minor·100 + patch, with minor and patch below 100), so it
 always grows with the version and is known before the APK exists. Builds made before 1.1.0 used the CI run number
-(always far below 10000), so they read as older. Never change the application id (`ir.mganic.dara`) or the signing key
-(`android/app/debug.keystore`): Android would treat the result as a different app and refuse to install it over the old one.
+(always far below 10000), so they read as older. Never change the application id (`ir.mganic.dara`), delete `android/app/debug.keystore` or replace the private key
+(see "Signing the APK" below): Android would treat the result as a different app and refuse to install it over the old one.
 
 **To release X.Y.Z**
 
@@ -281,18 +281,23 @@ blocking "به‌روزرسانی لازم است" screen. The minimum is `1` (n
 `/dashboard/release` («نسخه‌ی اپ اندروید»), which also lets the owner announce a higher number or use another download link;
 what is saved there only overrides the release shipped in code, so a stale row can never hide a newer release.
 
-**Signing the APK.** The published APK is still signed with the committed, public debug key — anyone could sign an
-"update" that installs over it. The build is no longer *debuggable* (no `run-as`, no WebView inspection over USB), but
-the key itself is the last big item before a wide public launch. To switch, once, to a private key:
+**Signing the APK (private key, via key rotation).** Gradle signs with the committed debug key; CI then re-signs the
+published APK with the private key through APK Signature Scheme v3 *key rotation* (`scripts/sign-apk-rotated.sh`):
 
-1. Create it on your own computer (keep the file and both passwords somewhere safe — losing them means no update can
-   ever be installed over the app again):
-   `keytool -genkeypair -v -keystore parva.jks -keyalg RSA -keysize 4096 -validity 36500 -alias parva`
-2. In GitHub → Settings → Secrets and variables → Actions → *Secrets*, add `PARVA_KEYSTORE_BASE64` (the output of
-   `base64 -w0 parva.jks`), `PARVA_KEYSTORE_PASSWORD`, `PARVA_KEY_ALIAS` (`parva`) and `PARVA_KEY_PASSWORD`.
-3. The next build signs with it (the CI log says "Signing with the private key."). **Every existing install must be
-   uninstalled once** before the new APK installs — tell users to sync (or export a backup) first, since uninstalling
-   deletes the on-device data. Do this before the user count grows.
+- Android 9 and newer see the private key plus a proof, signed by the old debug key, that the app moved to it. They install
+  the update **without an uninstall**, and from then on only the private key can sign an update (the debug key keeps no
+  right to sign updates — "rollback" off).
+- Android 7–8 do not understand rotation: they keep checking the debug-key signature, so they also update without an
+  uninstall, but stay protected only by the public key.
+
+The key lives only with the owner (created 2026-09-27 in `C:/Users/asus/parva-signing/`, never in the repository) and in
+two repository secrets (GitHub → Settings → Secrets and variables → Actions → *New repository secret*):
+`PARVA_KEYSTORE_BASE64` (the contents of `parva.p12.base64.txt`) and `PARVA_KEYSTORE_PASSWORD` (the contents of
+`keystore-password.txt`). Without them the build warns, publishes a debug-signed APK, and still runs the rotation with a
+throwaway key as a self-test. **Back the key up** (the `parva-signing` folder, somewhere offline): losing it means no
+further update can be installed over the rotated app. **Once a rotated APK is out, never publish a debug-only build again**
+(phones that took the rotated one refuse it) — keep the secrets in place.
+
 
 ## 6. Migrations going forward
 
