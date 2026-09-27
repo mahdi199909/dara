@@ -14,6 +14,7 @@ import { ApiError } from "./apiError";
 import { getLogger } from "./observability/root";
 import { APP_DISPLAY_NAME } from "./appVersion";
 import type { OtpPurpose } from "./otp";
+import { messagingConfig, type MessagingConfig } from "./serverSettings";
 
 const log = getLogger("auth", "messaging");
 
@@ -41,23 +42,25 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-export function emailConfigured(): boolean {
-  return Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM);
+export async function emailConfigured(config?: MessagingConfig): Promise<boolean> {
+  const c = config ?? (await messagingConfig());
+  return Boolean(c.SMTP_HOST && c.SMTP_FROM);
 }
 
-export function smsProvider(): "kavenegar" | "smsir" | null {
-  const p = (process.env.SMS_PROVIDER ?? "").toLowerCase();
-  if (p === "kavenegar" && process.env.KAVENEGAR_API_KEY && process.env.KAVENEGAR_OTP_TEMPLATE) return "kavenegar";
-  if (p === "smsir" && process.env.SMSIR_API_KEY && process.env.SMSIR_TEMPLATE_ID) return "smsir";
+export async function smsProvider(config?: MessagingConfig): Promise<"kavenegar" | "smsir" | null> {
+  const c = config ?? (await messagingConfig());
+  const p = (c.SMS_PROVIDER ?? "").toLowerCase();
+  if (p === "kavenegar" && c.KAVENEGAR_API_KEY && c.KAVENEGAR_OTP_TEMPLATE) return "kavenegar";
+  if (p === "smsir" && c.SMSIR_API_KEY && c.SMSIR_TEMPLATE_ID) return "smsir";
   return null;
 }
 
-export function smsConfigured(): boolean {
-  return smsProvider() !== null;
+export async function smsConfigured(): Promise<boolean> {
+  return (await smsProvider()) !== null;
 }
 
 /** Whether codes can reach people on this channel (always true outside production — the dev outbox). */
-export function channelAvailable(channel: "EMAIL" | "SMS"): boolean {
+export async function channelAvailable(channel: "EMAIL" | "SMS"): Promise<boolean> {
   if (!isProduction()) return true;
   return channel === "EMAIL" ? emailConfigured() : smsConfigured();
 }
@@ -71,8 +74,8 @@ function unavailable(channel: "EMAIL" | "SMS"): ApiError {
 }
 
 /** Throws AUTH-008 up front when a channel cannot deliver, before any code is created. */
-export function assertChannelAvailable(channel: "EMAIL" | "SMS"): void {
-  if (!channelAvailable(channel)) throw unavailable(channel);
+export async function assertChannelAvailable(channel: "EMAIL" | "SMS"): Promise<void> {
+  if (!(await channelAvailable(channel))) throw unavailable(channel);
 }
 
 const PURPOSE_TEXT: Record<OtpPurpose, string> = {
@@ -82,16 +85,18 @@ const PURPOSE_TEXT: Record<OtpPurpose, string> = {
   RESET_PASSWORD: "بازیابی رمز عبور",
 };
 
-let transport: Transporter | null = null;
+// Rebuilt whenever the settings behind it change (the owner can edit them in the dashboard).
+let transport: { signature: string; transporter: Transporter } | null = null;
 
-function smtp(): Transporter {
-  if (transport) return transport;
-  const port = Number(process.env.SMTP_PORT || 587);
-  transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+function smtp(c: MessagingConfig): Transporter {
+  const signature = [c.SMTP_HOST, c.SMTP_PORT, c.SMTP_SECURE, c.SMTP_USER, c.SMTP_PASS].join("|");
+  if (transport?.signature === signature) return transport.transporter;
+  const port = Number(c.SMTP_PORT || 587);
+  const transporter = nodemailer.createTransport({
+    host: c.SMTP_HOST,
     port,
-    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465,
-    auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS ?? "" } : undefined,
+    secure: c.SMTP_SECURE ? c.SMTP_SECURE === "true" : port === 465,
+    auth: c.SMTP_USER ? { user: c.SMTP_USER, pass: c.SMTP_PASS ?? "" } : undefined,
     // Never follow a message's own file/URL references (defence in depth: only our text is sent).
     disableFileAccess: true,
     disableUrlAccess: true,
@@ -99,7 +104,8 @@ function smtp(): Transporter {
     greetingTimeout: 15_000,
     socketTimeout: 20_000,
   });
-  return transport;
+  transport = { signature, transporter };
+  return transporter;
 }
 
 function escapeHtml(s: string): string {
@@ -107,14 +113,15 @@ function escapeHtml(s: string): string {
 }
 
 export async function sendEmail(input: { to: string; subject: string; text: string; html?: string; code?: string }): Promise<void> {
-  if (!emailConfigured()) {
+  const c = await messagingConfig();
+  if (!(await emailConfigured(c))) {
     if (isProduction()) throw unavailable("EMAIL");
     devOutbox.push({ channel: "EMAIL", to: input.to, subject: input.subject, text: input.text, code: input.code, at: new Date() });
     log.info("AUTH_OTP_SENT", { channel: "EMAIL", dev: true, note: "SMTP not configured — message kept in the dev outbox", devText: input.text });
     return;
   }
   try {
-    await smtp().sendMail({ from: process.env.SMTP_FROM, to: input.to, subject: input.subject, text: input.text, html: input.html });
+    await smtp(c).sendMail({ from: c.SMTP_FROM, to: input.to, subject: input.subject, text: input.text, html: input.html });
   } catch (err) {
     log.error("AUTH_MESSAGE_SEND_FAILED", { errorCode: "AUTH-008", channel: "EMAIL", error: err instanceof Error ? { type: err.name, message: err.message } : undefined });
     throw new ApiError("ارسال ایمیل ناموفق بود. چند دقیقه بعد دوباره تلاش کنید.", 503, "AUTH-008");
@@ -122,7 +129,8 @@ export async function sendEmail(input: { to: string; subject: string; text: stri
 }
 
 async function sendSms(phone: string, code: string, text: string): Promise<void> {
-  const provider = smsProvider();
+  const c = await messagingConfig();
+  const provider = await smsProvider(c);
   if (!provider) {
     if (isProduction()) throw unavailable("SMS");
     devOutbox.push({ channel: "SMS", to: phone, text, code, at: new Date() });
@@ -133,14 +141,14 @@ async function sendSms(phone: string, code: string, text: string): Promise<void>
     const res =
       provider === "kavenegar"
         ? await fetch(
-            `https://api.kavenegar.com/v1/${encodeURIComponent(process.env.KAVENEGAR_API_KEY!)}/verify/lookup.json?` +
-              new URLSearchParams({ receptor: phone, token: code, template: process.env.KAVENEGAR_OTP_TEMPLATE! }).toString(),
+            `https://api.kavenegar.com/v1/${encodeURIComponent(c.KAVENEGAR_API_KEY!)}/verify/lookup.json?` +
+              new URLSearchParams({ receptor: phone, token: code, template: c.KAVENEGAR_OTP_TEMPLATE! }).toString(),
             { method: "POST", signal: AbortSignal.timeout(15_000) }
           )
         : await fetch("https://api.sms.ir/v1/send/verify", {
             method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json", "x-api-key": process.env.SMSIR_API_KEY! },
-            body: JSON.stringify({ mobile: phone, templateId: Number(process.env.SMSIR_TEMPLATE_ID), parameters: [{ name: process.env.SMSIR_PARAM_NAME || "CODE", value: code }] }),
+            headers: { "Content-Type": "application/json", Accept: "application/json", "x-api-key": c.SMSIR_API_KEY! },
+            body: JSON.stringify({ mobile: phone, templateId: Number(c.SMSIR_TEMPLATE_ID), parameters: [{ name: c.SMSIR_PARAM_NAME || "CODE", value: code }] }),
             signal: AbortSignal.timeout(15_000),
           });
     if (!res.ok) throw new Error(`${provider} answered HTTP ${res.status}`);

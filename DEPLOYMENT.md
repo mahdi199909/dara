@@ -146,6 +146,12 @@ channels in `/opt/parva/.env` (names in `.env.example`, passed through by `docke
 - **SMS:** `SMS_PROVIDER=kavenegar` with `KAVENEGAR_API_KEY` and `KAVENEGAR_OTP_TEMPLATE` (a *verify/lookup* template
   whose `%token` is the code), or `SMS_PROVIDER=smsir` with `SMSIR_API_KEY`, `SMSIR_TEMPLATE_ID`, `SMSIR_PARAM_NAME`.
 
+**Or from the dashboard** (/dashboard → «ایمیل و پیامک»): the same settings can be typed there instead. They are
+stored encrypted in the `ServerSetting` table (AES-256-GCM; key derived from `SETTINGS_ENCRYPTION_KEY` if set, otherwise
+from `JWT_SECRET` — so a database dump or backup alone reveals nothing), secret fields are write-only, saving asks for
+the owner's password again, and a dashboard value overrides the `.env` one. Changing `JWT_SECRET` (without a separate
+`SETTINGS_ENCRYPTION_KEY`) makes the stored values unreadable — the page then says so and they must be typed again.
+
 Until a channel is configured, production refuses to send on it (`AUTH-008`) and the app says so; password sign-in
 keeps working. The owner dashboard's «ایمیل و پیامک» page shows what is configured and sends a test message.
 

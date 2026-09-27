@@ -54,7 +54,7 @@ function limitVerify(ip: string | null, target: string): void {
 export async function requestPublicCode(input: { purpose: "LOGIN_OTP" | "RESET_PASSWORD"; identifier: string; ip: string | null }): Promise<CodeSentAnswer> {
   limitRequest(input.ip);
   const id = parseIdentifier(input.identifier);
-  assertChannelAvailable(id.channel);
+  await assertChannelAvailable(id.channel);
 
   const user = await findAccount(id);
   const usable = user && !user.disabledAt;
@@ -90,7 +90,7 @@ export async function verifyPublicCode(input: { purpose: "LOGIN_OTP" | "RESET_PA
 /** Verification code to the signed-in person's own address or a phone number they are adding. */
 export async function requestContactCode(input: { userId: string; channel: "EMAIL" | "SMS"; target: string; ip: string | null }): Promise<CodeSentAnswer> {
   limitRequest(input.ip);
-  assertChannelAvailable(input.channel);
+  await assertChannelAvailable(input.channel);
   const purpose: OtpPurpose = input.channel === "EMAIL" ? "VERIFY_EMAIL" : "VERIFY_PHONE";
   const { code } = await issueCode({ purpose, channel: input.channel, target: input.target, userId: input.userId, ipAddress: input.ip });
   await sendCode({ channel: input.channel, to: input.target, code, purpose });

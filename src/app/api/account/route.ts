@@ -29,7 +29,7 @@ async function GET(req: NextRequest) {
         phoneVerified: Boolean(user.phone && user.phoneVerifiedAt),
         passwordChangedAt: user.passwordChangedAt,
         isAdmin: isAdminAccount(user),
-        channels: { email: channelAvailable("EMAIL"), sms: channelAvailable("SMS") },
+        channels: { email: await channelAvailable("EMAIL"), sms: await channelAvailable("SMS") },
       })
     );
   } catch (err) {

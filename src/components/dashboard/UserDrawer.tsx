@@ -9,6 +9,7 @@ import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import { XIcon } from "@/components/icons";
 import { LICENSE_LABELS, LICENSE_TONES, ago, fa, jalaliDate, jalaliDateTime, remainingLabel } from "./format";
 import { accountAction, changeLicense, errorMessage, type LicenseChangeBody } from "./adminApi";
+import DangerZone from "./DangerZone";
 
 interface Detail {
   user: {
@@ -269,6 +270,21 @@ export default function UserDrawer({ userId, onClose, onChanged }: { userId: str
                   )}
                 </div>
               </section>
+            )}
+
+            {!data.user.isAdmin && (
+              <DangerZone
+                userId={userId}
+                email={data.user.email}
+                onErased={() => {
+                  void mutate();
+                  onChanged();
+                }}
+                onDeleted={() => {
+                  onChanged();
+                  onClose();
+                }}
+              />
             )}
 
             <section className="space-y-2">

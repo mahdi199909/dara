@@ -909,3 +909,17 @@ model VerificationCode {
   @@index([target, purpose, createdAt])
   @@index([userId])
 }
+
+// ---------------------------------------------------------------------------
+// Server settings the owner edits in /dashboard (server only)
+// ---------------------------------------------------------------------------
+
+// One row per setting (e.g. SMTP_PASS, KAVENEGAR_API_KEY). The value is always encrypted (AES-256-GCM,
+// key derived from the server secret, the setting name bound in as associated data — see
+// src/lib/secretBox.ts), so a database dump alone reveals nothing. Secret values never leave the server.
+model ServerSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+}

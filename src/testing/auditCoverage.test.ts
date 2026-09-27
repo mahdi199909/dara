@@ -13,7 +13,6 @@ const EXEMPT: Record<string, string> = {
   "auth/code/request/route.ts": "it only issues a one-time code (a VerificationCode row); the sign-in or reset that uses the code is audited, and the log records AUTH_OTP_SENT",
   "account/email/send-code/route.ts": "it only issues a verification code; verifying it is audited (VERIFY_EMAIL)",
   "account/phone/send-code/route.ts": "it only issues a verification code; verifying it is audited (VERIFY_PHONE)",
-  "admin/messaging/route.ts": "its POST sends a test message to the owner and changes no data",
   "notifications/[id]/read/route.ts": "marking a notification read is interface state, not a change to the person's data",
   "sync/push/route.ts":
     "it applies rows a device already recorded in its own history; the server's application log keeps a per-push summary (SYNC_PUSH_SUCCESS / SYNC_PARTIAL_SUCCESS). A durable per-push audit entry waits for phase 4, when a push carries a device and a sync id",
