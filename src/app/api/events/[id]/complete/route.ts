@@ -14,7 +14,8 @@ const bodySchema = z.object({ occurrenceDate: z.string().datetime() });
  * recurring event has no per-occurrence row — see EventCompletion in prisma/schema.prisma).
  * Only completed occurrences count toward the Reports time totals.
  */
-async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const event = await prisma.event.findFirst({ where: { id: params.id, userId, deletedAt: null } });

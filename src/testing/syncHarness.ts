@@ -19,6 +19,7 @@ import { createNodeSqliteDriver } from "@/local/drivers/nodeSqlite";
 import { dispatchLocal, setLocalDbDriver } from "@/lib/localDispatcher";
 import { getLocalUserId } from "@/local/localUser";
 import { cookieJar } from "./cookieJar";
+import { resetAllRateLimits } from "@/lib/rateLimit";
 
 type AnyModule = any;
 type Loader = () => Promise<AnyModule>;
@@ -26,6 +27,23 @@ type Loader = () => Promise<AnyModule>;
 const ROUTE_DEFS: Array<{ pattern: string; load: Loader }> = [
   { pattern: "/api/auth/register", load: () => import("@/app/api/auth/register/route") },
   { pattern: "/api/auth/login", load: () => import("@/app/api/auth/login/route") },
+  { pattern: "/api/auth/code/request", load: () => import("@/app/api/auth/code/request/route") },
+  { pattern: "/api/auth/code/login", load: () => import("@/app/api/auth/code/login/route") },
+  { pattern: "/api/auth/code/reset-password", load: () => import("@/app/api/auth/code/reset-password/route") },
+  { pattern: "/api/account", load: () => import("@/app/api/account/route") },
+  { pattern: "/api/account/email/send-code", load: () => import("@/app/api/account/email/send-code/route") },
+  { pattern: "/api/account/email/verify", load: () => import("@/app/api/account/email/verify/route") },
+  { pattern: "/api/account/phone/send-code", load: () => import("@/app/api/account/phone/send-code/route") },
+  { pattern: "/api/account/phone/verify", load: () => import("@/app/api/account/phone/verify/route") },
+  { pattern: "/api/account/phone/remove", load: () => import("@/app/api/account/phone/remove/route") },
+  { pattern: "/api/account/password", load: () => import("@/app/api/account/password/route") },
+  { pattern: "/api/account/logout-all", load: () => import("@/app/api/account/logout-all/route") },
+  { pattern: "/api/admin/users", load: () => import("@/app/api/admin/users/route") },
+  { pattern: "/api/admin/users/:id", load: () => import("@/app/api/admin/users/[id]/route") },
+  { pattern: "/api/admin/users/:id/license", load: () => import("@/app/api/admin/users/[id]/license/route") },
+  { pattern: "/api/admin/users/:id/actions", load: () => import("@/app/api/admin/users/[id]/actions/route") },
+  { pattern: "/api/admin/stats", load: () => import("@/app/api/admin/stats/route") },
+  { pattern: "/api/admin/messaging", load: () => import("@/app/api/admin/messaging/route") },
   { pattern: "/api/license/status", load: () => import("@/app/api/license/status/route") },
   { pattern: "/api/sync/push", load: () => import("@/app/api/sync/push/route") },
   { pattern: "/api/sync/pull", load: () => import("@/app/api/sync/pull/route") },
@@ -152,7 +170,7 @@ async function callRoute(method: string, rawUrl: string, body: unknown, headers:
     headers: { ...(hasBody ? { "content-type": "application/json" } : {}), ...headers },
     body: hasBody ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined,
   });
-  return handler(req, { params });
+  return handler(req, { params: Promise.resolve(params) });
 }
 
 async function readJson(res: Response): Promise<any> {
@@ -207,6 +225,8 @@ export async function createServerHarness(): Promise<ServerHarness> {
       return res.json;
     },
     async registerUser(email = "user-" + Math.random().toString(36).slice(2) + "@example.test") {
+      // Every test account comes from the same (absent) address; the per-address sign-up limit is not what these tests are about.
+      resetAllRateLimits();
       const res = await harness.web("POST", "/api/auth/register", { name: "تست", email, password: "secret123" });
       if (res.status !== 200) throw new Error("register failed: " + res.status + " " + JSON.stringify(res.json));
       return { userId: res.json.id, token: res.json.token, email };

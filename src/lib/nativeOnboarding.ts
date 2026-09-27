@@ -4,7 +4,7 @@
 // it locally via the ordinary local-dispatcher path (src/lib/apiClient.ts already routes these
 // two calls through dispatchLocal on native, same as every other resource).
 import { fetcher, apiPost } from "./apiClient";
-import { remoteLogin, remoteRegister, fetchRemoteLicenseStatus } from "./remoteAuth";
+import { remoteLogin, remoteRegister, fetchRemoteLicenseStatus, type RemoteAuthResult } from "./remoteAuth";
 import { cacheVersionGate } from "./versionGate";
 import { updateSyncStatus } from "./syncStatus";
 import { setClientUser } from "./observability/client/clientContext";
@@ -29,6 +29,8 @@ export interface FirstRunInput {
   password: string;
   /** Set once the person has agreed to replace another account's data on this phone. */
   confirmSwitch?: boolean;
+  /** Already signed in another way — a one-time code or a password reset (see src/lib/authApi.ts). */
+  preauth?: RemoteAuthResult;
 }
 
 /** Thrown when the account just signed into differs from the one this phone's data belongs to —
@@ -44,7 +46,8 @@ export class AccountSwitchRequired extends Error {
 
 export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCache> {
   const { user, token } =
-    input.mode === "register" ? await remoteRegister(input.name ?? "", input.email, input.password) : await remoteLogin(input.email, input.password);
+    input.preauth ??
+    (input.mode === "register" ? await remoteRegister(input.name ?? "", input.email, input.password) : await remoteLogin(input.email, input.password));
 
   // The phone's database belongs to the device, not to a login. Signing in as somebody else must
   // not quietly merge two people's data — see src/local/accountSwitch.ts.
@@ -80,6 +83,24 @@ export async function completeFirstRun(input: FirstRunInput): Promise<LicenseCac
   await syncWithServer({ deep: true, trigger: "first-run" });
 
   return license;
+}
+
+/**
+ * A password change or "sign out of other devices" ends every session the server had issued, this phone's
+ * included, and hands back a fresh token — which replaces the stored one here so sync keeps working.
+ */
+export async function replaceCachedToken(token: string): Promise<void> {
+  const cached = await getCachedLicense();
+  if (!cached) return;
+  await apiPost("/api/local/license-cache", {
+    status: cached.status,
+    trialDaysRemaining: cached.trialDaysRemaining,
+    trialEndsAt: cached.trialEndsAt,
+    currentPeriodEnd: cached.currentPeriodEnd,
+    remoteUserId: cached.remoteUserId,
+    remoteEmail: cached.remoteEmail,
+    token,
+  });
 }
 
 const OFFLINE_TRIAL_DAYS = 30;

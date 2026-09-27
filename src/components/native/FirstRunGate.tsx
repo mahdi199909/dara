@@ -14,6 +14,8 @@
 // Wiring this in is part of restructuring that layout in Phase 6, once there's a real Capacitor
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
+import CodeSignIn from "@/components/auth/CodeSignIn";
+import type { AuthResult } from "@/lib/authApi";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
 import { checkVersionGate, refreshVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { APP_DISPLAY_NAME } from "@/lib/appVersion";
@@ -58,7 +60,10 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   // isNativePlatform() inside the effect, which by definition never runs during that prerender.
   const [checking, setChecking] = useState(true);
   const [ready, setReady] = useState(false);
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "code" | "forgot">("login");
+  // Set once a one-time code or a password reset signed the person in; the rest of first-run (account
+  // switch check, license, first sync) then runs exactly as after a password sign-in.
+  const [preauth, setPreauth] = useState<AuthResult | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -239,12 +244,12 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     return () => remove?.();
   }, []);
 
-  async function submit(confirmSwitch: boolean) {
+  async function submit(confirmSwitch: boolean, auth: AuthResult | null = preauth) {
     setError(null);
     setNetworkError(false);
     setLoading(true);
     try {
-      await completeFirstRun({ mode, name, email, password, confirmSwitch });
+      await completeFirstRun({ mode: mode === "register" ? "register" : "login", name, email, password, confirmSwitch, preauth: auth ?? undefined });
       setSwitchPrompt(null);
       setReady(true);
     } catch (err) {
@@ -333,7 +338,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
       <div className="w-full max-w-sm bg-surface rounded-2xl shadow p-6 space-y-4">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icon.png" alt={APP_DISPLAY_NAME} className="h-14 w-14 rounded-2xl mx-auto" />
-        <h1 className="text-lg font-bold text-ink text-center">{mode === "login" ? `ورود به ${APP_DISPLAY_NAME}` : `ساخت حساب در ${APP_DISPLAY_NAME}`}</h1>
+        <h1 className="text-lg font-bold text-ink text-center">{mode === "register" ? `ساخت حساب در ${APP_DISPLAY_NAME}` : mode === "forgot" ? "بازیابی رمز عبور" : `ورود به ${APP_DISPLAY_NAME}`}</h1>
         <p className="text-xs text-muted text-center leading-relaxed">
           این فقط یک‌بار لازمه — بعدش دیگه نیازی به ورود دوباره نیست. اطلاعات شخصی شما همچنان فقط روی همین گوشی می‌مونه؛ این مرحله فقط وضعیت اشتراکتون رو مشخص می‌کنه.
         </p>
@@ -369,6 +374,20 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             </div>
           </div>
         )}
+        {mode === "code" || mode === "forgot" ? (
+          <>
+            <CodeSignIn
+              purpose={mode === "code" ? "LOGIN_OTP" : "RESET_PASSWORD"}
+              initialIdentifier={email}
+              onAuthenticated={async (result) => {
+                setPreauth(result);
+                setEmail(result.user.email);
+                await submit(false, result);
+              }}
+            />
+            {error && <p className="text-xs text-red-500 leading-relaxed">{error}</p>}
+          </>
+        ) : (
         <form onSubmit={onSubmit} className="space-y-3">
           {mode === "register" && (
             <input
@@ -380,10 +399,10 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             />
           )}
           <input
-            type="email"
+            type={mode === "register" ? "email" : "text"}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="ایمیل"
+            placeholder={mode === "register" ? "ایمیل" : "ایمیل یا شماره موبایل"}
             dir="ltr"
             className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm text-left"
             required
@@ -416,12 +435,27 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             </button>
           )}
         </form>
+        )}
+        {mode === "login" && (
+          <div className="flex items-center justify-between text-xs">
+            <button type="button" onClick={() => { setError(null); setMode("code"); }} className="text-accent">
+              ورود با کد یکبار مصرف
+            </button>
+            <button type="button" onClick={() => { setError(null); setMode("forgot"); }} className="text-muted hover:text-ink">
+              رمز را فراموش کرده‌اید؟
+            </button>
+          </div>
+        )}
         <button
           type="button"
-          onClick={() => setMode(mode === "login" ? "register" : "login")}
+          onClick={() => {
+            setError(null);
+            setPreauth(null);
+            setMode(mode === "login" ? "register" : "login");
+          }}
           className="w-full text-center text-xs text-muted hover:text-ink"
         >
-          {mode === "login" ? "حساب ندارید؟ ثبت‌نام کنید" : "قبلاً حساب دارید؟ وارد شوید"}
+          {mode === "login" ? "حساب ندارید؟ ثبت‌نام کنید" : mode === "register" ? "قبلاً حساب دارید؟ وارد شوید" : "بازگشت به ورود با رمز عبور"}
         </button>
       </div>
     </div>

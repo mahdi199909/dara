@@ -35,6 +35,21 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Account security (server only — the phone never reads these; see migration 20260927120000).
+  emailVerifiedAt   DateTime?
+  // An Iranian mobile in 09xxxxxxxxx form. Unique only among set values; it can sign in once verified.
+  phone             String?   @unique
+  phoneVerifiedAt   DateTime?
+  // Stamped into every session token; bumping it signs the account out everywhere (password reset,
+  // "sign out of all devices", an admin suspension). Tokens from before this column existed carry none = 0.
+  sessionVersion    Int       @default(0)
+  passwordChangedAt DateTime?
+  lastLoginAt       DateTime?
+  // Refreshed at most every few minutes by an authenticated request — the admin dashboard's "last seen".
+  lastSeenAt        DateTime?
+  // Set by the admin dashboard: a suspended account can neither sign in nor use an existing session.
+  disabledAt        DateTime?
+
   settings            Settings?
   categories          Category[]
   projects            Project[]
@@ -57,6 +72,7 @@ model User {
   dailyNotes          DailyNote[]
   budgets             Budget[]
   savingsGoals        SavingsGoal[]
+  verificationCodes   VerificationCode[]
 }
 
 model Settings {
@@ -859,4 +875,30 @@ model SyncTombstone {
 
   @@unique([userId, table, rowId])
   @@index([userId, deletedAt])
+}
+
+// ---------------------------------------------------------------------------
+// One-time codes (server only)
+// ---------------------------------------------------------------------------
+
+// A 6-digit code sent by email or SMS: verifying an address or a phone, signing in without the
+// password, or resetting it. Only an HMAC of the code is kept (see src/lib/otp.ts); a code dies after
+// its expiry, its first successful use or too many wrong tries.
+model VerificationCode {
+  id     String  @id @default(cuid())
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  purpose    String // VERIFY_EMAIL | VERIFY_PHONE | LOGIN_OTP | RESET_PASSWORD
+  channel    String // EMAIL | SMS
+  target     String // the normalized address or phone number the code was sent to
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([target, purpose, createdAt])
+  @@index([userId])
 }

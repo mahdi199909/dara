@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-297 events in 42 domains.
+306 events in 42 domains.
 
 ## AUTH
 
@@ -17,14 +17,23 @@ Default module: `auth`
 
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
+| `AUTH_ACCOUNT_DISABLED` | WARN | security | yes | A suspended account tried to sign in or use a session. |
+| `AUTH_CONTACT_VERIFIED` | INFO | security | yes | An email address or phone number was verified. |
 | `AUTH_FORBIDDEN` | WARN | security | yes | A signed-in user tried something they may not do. |
 | `AUTH_LOGIN_ATTEMPT` | DEBUG | security | reserved | A login request arrived. |
 | `AUTH_LOGIN_FAILED` | WARN | security | yes | A login was refused. |
 | `AUTH_LOGIN_SUCCESS` | INFO | security | yes | A login succeeded. |
 | `AUTH_LOGOUT_SUCCESS` | INFO | security | yes | A session was ended by the person. |
+| `AUTH_MESSAGE_SEND_FAILED` | ERROR | protected | yes | An email or SMS could not be handed to the provider. |
+| `AUTH_OTP_FAILED` | WARN | security | yes | A one-time code was wrong, expired or used up. |
+| `AUTH_OTP_LOGIN_SUCCESS` | INFO | security | yes | A sign-in with a one-time code succeeded. |
+| `AUTH_OTP_SENT` | INFO | security | yes | A one-time code was sent (verification, sign-in or password reset). |
+| `AUTH_PASSWORD_CHANGED` | INFO | security | yes | A signed-in person changed their password; every other session ended. |
+| `AUTH_PASSWORD_RESET` | INFO | security | yes | A password was reset with a one-time code; every other session ended. |
 | `AUTH_RATE_LIMITED` | WARN | security | yes | Login attempts were throttled. |
 | `AUTH_REGISTER_FAILED` | WARN | security | yes | An account could not be created. |
 | `AUTH_REGISTER_SUCCESS` | INFO | security | yes | A new account was created. |
+| `AUTH_SESSIONS_REVOKED` | INFO | security | yes | Every session of an account was ended (by the person or the owner). |
 | `AUTH_SESSION_CREATED` | INFO | security | reserved | A session token was issued. |
 | `AUTH_SESSION_EXPIRED` | WARN | security | reserved | An expired session token was presented. |
 | `AUTH_SESSION_INVALID` | WARN | security | yes | A missing or invalid session token was presented. |

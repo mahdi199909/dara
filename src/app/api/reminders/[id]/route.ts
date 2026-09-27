@@ -6,7 +6,8 @@ import { writeAuditLog } from "@/lib/audit";
 import { deleteRowsWithTombstones } from "@/lib/tombstones";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const reminder = await prisma.reminder.findFirst({ where: { id: params.id, userId } });

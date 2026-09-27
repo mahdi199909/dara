@@ -33,7 +33,7 @@ async function handle<T>(res: Response): Promise<T> {
 // True only inside the Capacitor Android shell (Phase 6) — false in the browser/dev-server
 // path, including this very repo's own `next dev`/Railway deployment, so every existing web
 // behavior is completely unchanged until that shell actually exists.
-function isNativePlatform(): boolean {
+export function isNativePlatform(): boolean {
   if (typeof window === "undefined") return false;
   return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
 }

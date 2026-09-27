@@ -9,7 +9,7 @@ async function POST() {
   if (user) {
     await writeAuditLog({ userId: user.id, action: "LOGOUT", entityType: "User", entityId: user.id });
   }
-  clearSessionCookie();
+  await clearSessionCookie();
   logLogout({ userId: user?.id });
   return NextResponse.json({ ok: true });
 }

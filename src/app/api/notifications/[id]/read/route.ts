@@ -4,7 +4,8 @@ import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-async function POST(_req: Request, { params }: { params: { id: string } }) {
+async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const notification = await prisma.notification.findFirst({ where: { id: params.id, userId } });

@@ -3,21 +3,26 @@ import { jwtVerify } from "jose";
 // The isomorphic core only (no node: modules) — this file runs on the Edge runtime.
 import { newId } from "@/lib/observability/core/ids";
 import { getLogger } from "@/lib/observability/root";
+import { sessionSecret } from "@/lib/sessionSecret";
+import { isAdminEmail } from "@/lib/adminIdentity";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "hesabkon_session";
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "dev-only-secret-change-me-in-production"
-);
 
-const PUBLIC_PATHS = ["/login", "/register"];
-const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/quotes", "/api/app/version"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"];
+// /api/auth/code/* (sign-in and password-reset codes) is for people who are not signed in yet; the
+// signed-in account routes live under /api/account and stay behind the session check.
+const PUBLIC_API_PREFIXES = ["/api/auth/login", "/api/auth/register", "/api/auth/code/", "/api/quotes", "/api/app/version"];
+// The owner's area. The middleware can only read the token (no database here), so it turns away anyone
+// whose token names another address; the pages and routes then check the account itself (requireAdmin).
+const ADMIN_PAGE_PREFIXES = ["/dashboard", "/admin"];
+const ADMIN_API_PREFIX = "/api/admin";
 // /api/metrics has no session (a Prometheus scraper has none): the route guards itself with its own bearer token. Exactly
 // that path, not a prefix — nothing else may become public by starting with the same letters.
 const PUBLIC_API_PATHS = ["/api/metrics"];
 
 const log = getLogger("auth", "middleware");
 
-type SessionState = "valid" | "missing" | "invalid";
+type SessionState = { state: "valid"; email: string | null } | { state: "missing" | "invalid" };
 
 async function sessionState(req: NextRequest): Promise<SessionState> {
   // Falls back to `Authorization: Bearer <token>` alongside the cookie — see requireUserId in
@@ -27,12 +32,12 @@ async function sessionState(req: NextRequest): Promise<SessionState> {
   // route handler (which already accepts the header) ever runs.
   const bearerToken = req.headers.get("authorization")?.match(/^Bearer (.+)$/)?.[1];
   const token = req.cookies.get(COOKIE_NAME)?.value ?? bearerToken;
-  if (!token) return "missing";
+  if (!token) return { state: "missing" };
   try {
-    await jwtVerify(token, SECRET);
-    return "valid";
+    const { payload } = await jwtVerify(token, sessionSecret(), { algorithms: ["HS256"] });
+    return { state: "valid", email: typeof payload.email === "string" ? payload.email : null };
   } catch {
-    return "invalid";
+    return { state: "invalid" };
   }
 }
 
@@ -72,12 +77,22 @@ export async function middleware(req: NextRequest) {
   if (req.method === "OPTIONS") return NextResponse.next();
 
   const session = await sessionState(req);
-  const authed = session === "valid";
+  const authed = session.state === "valid";
+  const ownerToken = session.state === "valid" && isAdminEmail(session.email);
+
+  // Signed in as anyone but the owner: the owner's area does not exist (a plain 404). Not signed in: the
+  // usual trip to /login below, which shows nothing of the dashboard.
+  if (ADMIN_PAGE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/")) && authed && !ownerToken) {
+    return new NextResponse("Not Found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  if ((pathname === ADMIN_API_PREFIX || pathname.startsWith(ADMIN_API_PREFIX + "/")) && authed && !ownerToken) {
+    return NextResponse.json({ error: "دسترسی ندارید.", code: "AUTH-004" }, { status: 403 });
+  }
 
   if (pathname.startsWith("/api")) {
     const isPublicApi = PUBLIC_API_PATHS.includes(pathname) || PUBLIC_API_PREFIXES.some((p) => pathname.startsWith(p));
     if (isPublicApi || authed) return NextResponse.next();
-    return unauthenticatedApiResponse(req, session === "missing" ? "missing" : "invalid");
+    return unauthenticatedApiResponse(req, session.state === "missing" ? "missing" : "invalid");
   }
 
   const isPublicPage = PUBLIC_PATHS.some((p) => pathname.startsWith(p));

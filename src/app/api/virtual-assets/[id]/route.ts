@@ -14,7 +14,8 @@ import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 // syncProjectCompletionAsset, syncHabitCheckInVirtualAsset, ...) will just recreate it — the same
 // "hard delete, doesn't stick against a live source" trade-off already accepted for
 // EventCompletion/Reminder elsewhere in this schema.
-async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const existing = await prisma.virtualAssetEntry.findFirst({ where: { id: params.id, userId } });

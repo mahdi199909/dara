@@ -6,13 +6,14 @@ import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
 import type { NextRequest } from "next/server";
+import { effectiveLicense, type LicenseStatus } from "@/lib/license";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 // First login on any device (web or Android) starts the user's one-time free trial — see the
 // original product ask: "ابتدای عضویت یک ماه امکان ثبت رایگان داشته باشد."
 const TRIAL_DAYS = 30;
 
-export type LicenseStatus = "TRIAL" | "FREE" | "SUBSCRIBED" | "LIFETIME";
+export type { LicenseStatus };
 
 /**
  * Returns this user's licensing status, creating their License row (and starting the free
@@ -53,20 +54,9 @@ async function GET(req: NextRequest) {
       });
     }
 
-    const now = new Date();
-    let status: LicenseStatus;
-    let trialDaysRemaining: number | null = null;
-
-    if (license.status === "LIFETIME") {
-      status = "LIFETIME";
-    } else if (license.status === "SUBSCRIBED" && license.currentPeriodEnd && license.currentPeriodEnd > now) {
-      status = "SUBSCRIBED";
-    } else if (license.trialEndsAt && license.trialEndsAt > now) {
-      status = "TRIAL";
-      trialDaysRemaining = Math.max(0, Math.ceil((license.trialEndsAt.getTime() - now.getTime()) / 86_400_000));
-    } else {
-      status = "FREE";
-    }
+    const effective = effectiveLicense(license);
+    const status: LicenseStatus = effective.status;
+    const trialDaysRemaining = status === "TRIAL" ? effective.daysRemaining : null;
 
     return withCors(
       NextResponse.json({

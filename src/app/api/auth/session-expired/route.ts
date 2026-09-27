@@ -10,7 +10,7 @@ import { withApiLogging } from "@/lib/observability/server/withApiLogging";
  * not DB existence) would keep bouncing the still-cookied browser back to "/".
  */
 async function GET(req: NextRequest) {
-  clearSessionCookie();
+  await clearSessionCookie();
   return NextResponse.redirect(new URL("/login", req.url));
 }
 

@@ -12,7 +12,8 @@ async function getOwned(userId: string, id: string) {
   return budget;
 }
 
-async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);

@@ -90,3 +90,55 @@ export function logForbidden(input: { userId: string; what: string }): void {
   count("forbidden");
   log.warn("AUTH_FORBIDDEN", { errorCode: "AUTH-004", what: input.what });
 }
+
+/** A suspended account tried to sign in or use a session it still held. */
+export function logAccountDisabled(input: { userId: string }): void {
+  setRequestUser(input.userId);
+  noteCode("AUTH-007");
+  count("account_disabled");
+  log.warn("AUTH_ACCOUNT_DISABLED", { errorCode: "AUTH-007" });
+}
+
+export type CodePurposeLabel = "VERIFY_EMAIL" | "VERIFY_PHONE" | "LOGIN_OTP" | "RESET_PASSWORD";
+
+/** A one-time code went out. The target is pseudonymised like an address; the code itself never appears. */
+export function logCodeSent(input: { purpose: CodePurposeLabel; channel: "EMAIL" | "SMS"; target: string; userId?: string | null; ip: string | null }): void {
+  if (input.userId) setRequestUser(input.userId);
+  count("code_sent");
+  log.info("AUTH_OTP_SENT", { purpose: input.purpose, channel: input.channel, targetHash: emailPseudonym(input.target), ip: input.ip });
+}
+
+export function logCodeFailed(input: { purpose: CodePurposeLabel; target: string; reason: string; ip: string | null }): void {
+  noteCode("AUTH-006");
+  count("code_failed");
+  log.warn("AUTH_OTP_FAILED", { errorCode: "AUTH-006", purpose: input.purpose, reason: input.reason, targetHash: emailPseudonym(input.target), ip: input.ip });
+}
+
+export function logCodeLogin(input: { userId: string; channel: "EMAIL" | "SMS"; ip: string | null }): void {
+  setRequestUser(input.userId);
+  count("code_login_success");
+  log.info("AUTH_OTP_LOGIN_SUCCESS", { channel: input.channel, ip: input.ip });
+}
+
+export function logPasswordReset(input: { userId: string; ip: string | null }): void {
+  setRequestUser(input.userId);
+  count("password_reset");
+  log.info("AUTH_PASSWORD_RESET", { ip: input.ip });
+}
+
+export function logPasswordChanged(input: { userId: string; ip: string | null }): void {
+  setRequestUser(input.userId);
+  count("password_changed");
+  log.info("AUTH_PASSWORD_CHANGED", { ip: input.ip });
+}
+
+export function logSessionsRevoked(input: { userId: string; by: "self" | "admin" }): void {
+  count("sessions_revoked");
+  log.info("AUTH_SESSIONS_REVOKED", { by: input.by, targetUserId: input.userId });
+}
+
+export function logContactVerified(input: { userId: string; channel: "EMAIL" | "SMS" }): void {
+  setRequestUser(input.userId);
+  count("contact_verified");
+  log.info("AUTH_CONTACT_VERIFIED", { channel: input.channel });
+}

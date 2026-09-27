@@ -9,7 +9,8 @@ import { withTransaction } from "@/lib/transaction";
 
 const schema = z.object({ accountId: z.string() });
 
-async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const installment = await prisma.installment.findFirst({
@@ -81,7 +82,8 @@ async function POST(req: NextRequest, { params }: { params: { id: string } }) {
  * this now-dead row on that same unique constraint). Clearing it is safe precisely because every
  * lookup by installmentId elsewhere already filters deletedAt: null too, so a soft-deleted,
  * unlinked row was never visible through that column anyway. */
-async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const installment = await prisma.installment.findFirst({

@@ -16,7 +16,8 @@ function startOfDay(d: Date) {
 }
 
 /** Toggles the check-in for a habit on a given day (defaults to today). */
-async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const habit = await prisma.habit.findFirst({ where: { id: params.id, userId, deletedAt: null } });
@@ -89,7 +90,8 @@ const durationBodySchema = z.object({
  * already (a duration only makes sense for a day the habit was actually done), and re-syncs
  * the day's virtual asset value, which now factors the duration in — see habitSync.ts.
  */
-async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const habit = await prisma.habit.findFirst({ where: { id: params.id, userId, deletedAt: null } });

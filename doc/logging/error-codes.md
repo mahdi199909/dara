@@ -11,6 +11,11 @@
 | `AUTH-003` | SESSION_INVALID | 401 | no | yes | The session token is missing, malformed, expired or signed with another secret. |
 | `AUTH-004` | FORBIDDEN | 403 | no | yes | Signed in, but not allowed to do this (e.g. an admin-only route). |
 | `AUTH-005` | EMAIL_ALREADY_REGISTERED | 409 | no | yes | An account with this email already exists. |
+| `AUTH-006` | CODE_INVALID | 400 | no | yes | A one-time code was wrong, expired or already used. |
+| `AUTH-007` | ACCOUNT_DISABLED | 403 | no | yes | The account was suspended by the owner. |
+| `AUTH-008` | MESSAGING_UNAVAILABLE | 503 | yes | yes | Email or SMS sending is not configured, or the provider refused the message. |
+| `AUTH-009` | PHONE_ALREADY_REGISTERED | 409 | no | yes | This phone number already belongs to another account. |
+| `AUTH-010` | CODE_TOO_SOON | 429 | yes | yes | A new code was requested before the previous one may be resent. |
 | `VAL-001` | INVALID_INPUT | 400 | no | yes | The request body or parameters failed schema validation. |
 | `DB-001` | CONNECTION_ERROR | 503 | yes | yes | The database could not be reached. |
 | `DB-002` | QUERY_ERROR | 500 | no | yes | A database query failed. |

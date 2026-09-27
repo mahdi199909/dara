@@ -38,7 +38,23 @@ services:
       # Day boundaries (habit check-ins, reports, calendar) follow this — see the Dockerfile.
       TZ: ${TZ:-Asia/Tehran}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      # In production the owner is fixed in code (src/lib/adminIdentity.ts); ADMIN_EMAIL only matters in development.
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      # Behind exactly one proxy (nginx). See src/lib/clientIp.ts.
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      # One-time codes by email (SMTP) and SMS. Empty = that channel is off (see DEPLOYMENT.md "Email and SMS").
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-}
+      KAVENEGAR_API_KEY: ${KAVENEGAR_API_KEY:-}
+      KAVENEGAR_OTP_TEMPLATE: ${KAVENEGAR_OTP_TEMPLATE:-}
+      SMSIR_API_KEY: ${SMSIR_API_KEY:-}
+      SMSIR_TEMPLATE_ID: ${SMSIR_TEMPLATE_ID:-}
+      SMSIR_PARAM_NAME: ${SMSIR_PARAM_NAME:-CODE}
       # Logging (see doc/logging/architecture.md). One JSON line per record on stdout.
       APP_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
@@ -62,8 +78,11 @@ services:
       # The audit trail (see doc/logging/audit.md).
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-730}
       AUDIT_MONEY_MODE: ${AUDIT_MONEY_MODE:-values}
+    # Loopback only: the app is reached through nginx on the same host (TLS, body-size limit, and the
+    # X-Forwarded-For entry the rate limits trust — see src/lib/clientIp.ts). Published on every
+    # interface, as it used to be, anyone could skip all three at http://<server-ip>:3000.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - hesabkon_logs:/app/logs
     # Docker keeps container stdout in one ever-growing file unless told otherwise. Five files of

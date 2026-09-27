@@ -23,6 +23,7 @@ import { TABLE_LABELS_FA } from "@/lib/backupLabels";
 import WebBackupTab from "@/components/settings/WebBackupTab";
 import DiagnosticReportCard from "@/components/settings/DiagnosticReportCard";
 import NotificationsCard from "@/components/settings/NotificationsCard";
+import AccountSecurityTab from "@/components/settings/AccountSecurityTab";
 import { pickWidgetTextTone, widgetTextColor } from "@/lib/widgetContrast";
 import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
@@ -39,6 +40,7 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
 // account's server-side data (WebBackupTab). Both read and write the same file format.
 const TABS = [
   { key: "personal", label: "شخصی" },
+  { key: "security", label: "حساب و امنیت" },
   { key: "financial", label: "مالی" },
   { key: "categories", label: "دسته‌بندی‌ها" },
   { key: "history", label: "سابقه" },
@@ -66,6 +68,17 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   BACKUP_IMPORT: "بازیابی پشتیبان",
   ADMIN_LICENSE_UPDATE: "تغییر اشتراک کاربر",
   ADMIN_RELEASE_UPDATE: "تغییر تنظیم نسخه‌ی برنامه",
+  LOGIN_OTP: "ورود با کد یکبار مصرف",
+  VERIFY_EMAIL: "تأیید ایمیل",
+  VERIFY_PHONE: "تأیید شماره موبایل",
+  REMOVE_PHONE: "حذف شماره موبایل",
+  PASSWORD_RESET: "بازیابی رمز عبور",
+  PASSWORD_CHANGE: "تغییر رمز عبور",
+  LOGOUT_ALL: "خروج از همه‌ی دستگاه‌ها",
+  ADMIN_USER_DISABLE: "غیرفعال‌کردن حساب کاربر",
+  ADMIN_USER_ENABLE: "فعال‌کردن حساب کاربر",
+  ADMIN_USER_SIGNOUT: "خارج‌کردن کاربر از همه‌ی دستگاه‌ها",
+  ADMIN_USER_VERIFY: "تأیید دستی ایمیل کاربر",
 };
 
 export default function SettingsPage() {
@@ -100,6 +113,7 @@ export default function SettingsPage() {
       </div>
 
       {tab === "personal" && <PersonalTab />}
+      {tab === "security" && <AccountSecurityTab />}
       {tab === "financial" && <FinancialTab />}
       {tab === "categories" && <CategoriesTab />}
       {tab === "history" && <HistoryTab />}

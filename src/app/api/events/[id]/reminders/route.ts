@@ -8,7 +8,8 @@ import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
 const schema = z.object({ offsetMinutes: z.number().int().min(0) });
 
-async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const event = await prisma.event.findFirst({ where: { id: params.id, userId, deletedAt: null } });

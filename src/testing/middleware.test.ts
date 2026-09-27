@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { adminEmails } from "@/lib/adminIdentity";
 import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 // Lives in src/testing: the Android export deletes src/middleware.ts, and this file with it.
@@ -30,9 +31,27 @@ describe("which API paths need a session", () => {
     }
   });
 
-  it("lets a signed-in request through to the owner's routes (the route decides whether it is the owner)", async () => {
+  async function tokenFor(email: string): Promise<string> {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-secret-change-me-in-production");
-    const token = await new SignJWT({ sub: "someone" }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(secret);
+    return new SignJWT({ userId: "someone", email }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(secret);
+  }
+
+  it("lets the owner's signed-in request through to the owner's routes (the route then checks the account itself)", async () => {
+    const token = await tokenFor(adminEmails()[0]);
     expect(passesOn(await call("/api/admin/health", { headers: { authorization: `Bearer ${token}` } }))).toBe(true);
+  });
+
+  it("turns anyone else away from the owner's routes and pages before any route code runs", async () => {
+    const token = await tokenFor("someone.else@example.test");
+    const api = await call("/api/admin/health", { headers: { authorization: `Bearer ${token}` } });
+    expect(passesOn(api)).toBe(false);
+    expect(api.status).toBe(403);
+    for (const page of ["/dashboard", "/dashboard/users", "/admin"]) {
+      const res = await call(page, { headers: { authorization: `Bearer ${token}` } });
+      expect(res.status, page).toBe(404);
+      const anonymous = await call(page);
+      expect(anonymous.status, page + " without a session").toBe(307);
+      expect(anonymous.headers.get("location"), page).toContain("/login");
+    }
   });
 });

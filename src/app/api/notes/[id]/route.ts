@@ -13,7 +13,8 @@ async function getOwned(userId: string, id: string) {
   return note;
 }
 
-async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
@@ -34,7 +35,8 @@ async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   }
 }
 
-async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);

@@ -17,6 +17,9 @@ const config: CapacitorConfig = {
   appName: "parva",
   // Next.js's static export (see next.config.mjs's BUILD_TARGET=capacitor branch) writes here.
   webDir: "out",
+  // Never inspectable from a computer over USB (chrome://inspect): the WebView holds the person's own
+  // data and their session token. (The debug build type is also not debuggable — android/app/build.gradle.)
+  android: { webContentsDebuggingEnabled: false },
 };
 
 export default config;

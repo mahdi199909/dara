@@ -49,4 +49,7 @@ ENV GIT_COMMIT=$GIT_COMMIT
 # precedence over the PORT env var in Next.js's own port resolution, so this pins the
 # app to a fixed, known port regardless of whatever the platform injects, and the
 # platform's public domain just needs to target that same fixed port once.
-CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npx next start -p 3000"]
+# No --accept-data-loss here any more: a schema change that would drop or rewrite data (or add a unique
+# index) now stops the start instead of silently applying it to production. Such a change is applied once,
+# by hand, after reviewing "prisma migrate diff" and taking a backup — see DEPLOYMENT.md "Schema changes".
+CMD ["sh", "-c", "npx prisma db push --skip-generate && npx next start -p 3000"]

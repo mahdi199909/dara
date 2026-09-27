@@ -17,6 +17,7 @@ import {
   type ResolvedAuditIdentity,
 } from "./observability";
 import { getRequestContext } from "./observability/server/requestContext";
+import { clientIp } from "./clientIp";
 import { afterCommit, inTransaction } from "./observability/server/transactionContext";
 import { prisma } from "./db";
 
@@ -156,10 +157,8 @@ export const audit = {
 };
 
 export function requestMeta(req: Request): { ipAddress: string | null; userAgent: string | null } {
-  const ipAddress =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    null;
+  // The address nginx saw, not the forgeable left end of X-Forwarded-For — see clientIp.ts.
+  const ipAddress = clientIp(req);
   const userAgent = req.headers.get("user-agent");
   return { ipAddress, userAgent };
 }

@@ -31,11 +31,22 @@ export const AUDIT_VOCABULARY: readonly AuditVocabularyEntry[] = [
   entry("User", "REGISTER", "USER_REGISTERED"),
   entry("User", "LOGIN", "USER_LOGGED_IN"),
   entry("User", "LOGOUT", "USER_LOGGED_OUT"),
+  entry("User", "LOGIN_OTP", "USER_CODE_LOGGED_IN"),
+  entry("User", "VERIFY_EMAIL", "USER_EMAIL_VERIFIED"),
+  entry("User", "VERIFY_PHONE", "USER_PHONE_VERIFIED"),
+  entry("User", "REMOVE_PHONE", "USER_PHONE_REMOVED"),
+  entry("User", "PASSWORD_RESET", "USER_PASSWORD_RECOVERED"),
+  entry("User", "PASSWORD_CHANGE", "USER_PASSWORD_CHANGED"),
+  entry("User", "LOGOUT_ALL", "USER_SESSIONS_REVOKED"),
   entry("Settings", "CHANGE_SETTINGS", "SETTINGS_UPDATED", "SETTINGS_UPDATE_SUCCESS"),
   entry("License", "LICENSE_TRIAL_START", "LICENSE_TRIAL_STARTED", "LICENSE_TRIAL_START_SUCCESS"),
 
   // Owner-only administration (an /api/admin route): the actor is the signed-in owner.
   entry("License", "ADMIN_LICENSE_UPDATE", "LICENSE_ADMIN_UPDATED"),
+  entry("User", "ADMIN_USER_DISABLE", "USER_ADMIN_DISABLED"),
+  entry("User", "ADMIN_USER_ENABLE", "USER_ADMIN_ENABLED"),
+  entry("User", "ADMIN_USER_SIGNOUT", "USER_ADMIN_SESSIONS_REVOKED"),
+  entry("User", "ADMIN_USER_VERIFY", "USER_ADMIN_VERIFIED"),
   entry("AppRelease", "ADMIN_RELEASE_UPDATE", "RELEASE_ADMIN_UPDATED"),
   entry("LogSettings", "ADMIN_LOG_LEVEL_UPDATE", "LOG_LEVEL_ADMIN_UPDATED"),
 

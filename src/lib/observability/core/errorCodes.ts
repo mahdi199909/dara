@@ -19,6 +19,11 @@ export const ERROR_CODES = {
   "AUTH-003": { name: "SESSION_INVALID", description: "The session token is missing, malformed, expired or signed with another secret.", httpStatus: 401, retryable: false },
   "AUTH-004": { name: "FORBIDDEN", description: "Signed in, but not allowed to do this (e.g. an admin-only route).", httpStatus: 403, retryable: false },
   "AUTH-005": { name: "EMAIL_ALREADY_REGISTERED", description: "An account with this email already exists.", httpStatus: 409, retryable: false },
+  "AUTH-006": { name: "CODE_INVALID", description: "A one-time code was wrong, expired or already used.", httpStatus: 400, retryable: false },
+  "AUTH-007": { name: "ACCOUNT_DISABLED", description: "The account was suspended by the owner.", httpStatus: 403, retryable: false },
+  "AUTH-008": { name: "MESSAGING_UNAVAILABLE", description: "Email or SMS sending is not configured, or the provider refused the message.", httpStatus: 503, retryable: true },
+  "AUTH-009": { name: "PHONE_ALREADY_REGISTERED", description: "This phone number already belongs to another account.", httpStatus: 409, retryable: false },
+  "AUTH-010": { name: "CODE_TOO_SOON", description: "A new code was requested before the previous one may be resent.", httpStatus: 429, retryable: true },
 
   // --- Input validation
   "VAL-001": { name: "INVALID_INPUT", description: "The request body or parameters failed schema validation.", httpStatus: 400, retryable: false },

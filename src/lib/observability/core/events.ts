@@ -168,6 +168,15 @@ const STANDALONE = {
   AUTH_SESSION_INVALID: s("WARN", "A missing or invalid session token was presented.", { security: true, protected: true }),
   AUTH_RATE_LIMITED: s("WARN", "Login attempts were throttled.", { security: true, protected: true }),
   AUTH_FORBIDDEN: s("WARN", "A signed-in user tried something they may not do.", { security: true, protected: true }),
+  AUTH_ACCOUNT_DISABLED: s("WARN", "A suspended account tried to sign in or use a session.", { security: true, protected: true }),
+  AUTH_OTP_SENT: s("INFO", "A one-time code was sent (verification, sign-in or password reset).", { security: true }),
+  AUTH_OTP_FAILED: s("WARN", "A one-time code was wrong, expired or used up.", { security: true, protected: true }),
+  AUTH_OTP_LOGIN_SUCCESS: s("INFO", "A sign-in with a one-time code succeeded.", { security: true }),
+  AUTH_PASSWORD_RESET: s("INFO", "A password was reset with a one-time code; every other session ended.", { security: true }),
+  AUTH_PASSWORD_CHANGED: s("INFO", "A signed-in person changed their password; every other session ended.", { security: true }),
+  AUTH_SESSIONS_REVOKED: s("INFO", "Every session of an account was ended (by the person or the owner).", { security: true }),
+  AUTH_CONTACT_VERIFIED: s("INFO", "An email address or phone number was verified.", { security: true }),
+  AUTH_MESSAGE_SEND_FAILED: s("ERROR", "An email or SMS could not be handed to the provider.", { protected: true }),
 
   // --- HTTP and API
   HTTP_REQUEST_STARTED: s("DEBUG", "An HTTP request arrived.", { highVolume: true }),

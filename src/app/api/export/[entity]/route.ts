@@ -6,7 +6,8 @@ import { toCsv } from "@/lib/csv";
 import { formatJalali } from "@/lib/jalali";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-async function GET(_req: NextRequest, { params }: { params: { entity: string } }) {
+async function GET(_req: NextRequest, props: { params: Promise<{ entity: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
 

@@ -127,6 +127,36 @@ app.example.com {
 
 Either way, once SSL terminates at the proxy, cookies are sent over HTTPS and `secure: true` (already set in `src/lib/auth.ts` when `NODE_ENV=production`) applies correctly.
 
+**The app must only be reachable through the proxy.** `docker-compose.yml` publishes port 3000 on `127.0.0.1` alone;
+before that it listened on every interface, so `http://<server-ip>:3000` skipped TLS, the body-size limit and the
+proxy-written `X-Forwarded-For` entry the rate limits trust (`src/lib/clientIp.ts` reads the *last* entry, the one
+nginx appends — keep `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` as above). If a firewall is in use,
+allow only 22, 80 and 443. The security headers (CSP, HSTS, X-Frame-Options …) come from the app itself
+(`next.config.mjs`); in nginx add `server_tokens off;` so the version is not announced.
+
+## 5e. Email and SMS (one-time codes)
+
+Verifying an email or phone, signing in with a code and "forgot password" send a 6-digit code. Configure one or both
+channels in `/opt/parva/.env` (names in `.env.example`, passed through by `docker-compose.yml`), then
+`docker compose up -d` (no rebuild needed):
+
+- **Email:** any SMTP account — `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (`SMTP_SECURE=true` for port 465).
+  Check that the VPS can reach the SMTP host on that port; some providers block Iranian addresses — a local provider
+  or one reachable from the VPS is safer.
+- **SMS:** `SMS_PROVIDER=kavenegar` with `KAVENEGAR_API_KEY` and `KAVENEGAR_OTP_TEMPLATE` (a *verify/lookup* template
+  whose `%token` is the code), or `SMS_PROVIDER=smsir` with `SMSIR_API_KEY`, `SMSIR_TEMPLATE_ID`, `SMSIR_PARAM_NAME`.
+
+Until a channel is configured, production refuses to send on it (`AUTH-008`) and the app says so; password sign-in
+keeps working. The owner dashboard's «ایمیل و پیامک» page shows what is configured and sends a test message.
+
+## 5f. The owner dashboard
+
+`https://my.parvaapp.ir/dashboard` — every account, its subscription and days left, extensions (+1 month, custom days,
+an exact end date, lifetime, cancel), suspension, "sign out everywhere", server health, logs, the app-update settings
+and messaging. Only `m.gh.hut@gmail.com` gets in (fixed in `src/lib/adminIdentity.ts`; in production `ADMIN_EMAIL` is
+ignored). An account with that address created after 2026-09-28 must have verified it first. Everyone else gets a
+404; the old `/admin` redirects here.
+
 ## 5b. Updating a running deployment
 
 ```bash
@@ -138,12 +168,29 @@ GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build   # rebuil
 `GIT_COMMIT` is baked into the image so every log line says which build wrote it (the image has no `.git`
 to ask). Leaving it out is harmless — the records then say `git_commit: "unknown"`.
 
-`db push` runs with `--accept-data-loss` (see the `Dockerfile`), which is safe for the changes shipped so far: it adds new
-tables/columns (such as `SyncTombstone`, `Reminder.updatedAt`) and converts the money columns from `integer` to
-`double precision` **in place, keeping every value** (a whole-Toman amount is exact in a double up to ~9 quadrillion).
-That conversion is what lifts the old ~2.1 billion Toman ceiling (PostgreSQL's 32-bit `integer`); it was checked on a
-real PostgreSQL 16 by loading the previous schema with data, running exactly this command, and reading the values back.
-Back up first anyway (`pg_dump`, see section 5) — it is one command and the conversion rewrites those tables.
+### Schema changes
+
+Since the account-security release the container starts with a plain `prisma db push` — **without**
+`--accept-data-loss`. A change Prisma considers risky (dropping or retyping a column, adding a unique index) no longer
+applies itself at start: the new container stops with Prisma's warning instead, and the old data is untouched. Such a
+change is applied once, by hand, before starting the new image:
+
+```bash
+docker exec parva-postgres-1 sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' | gzip > /root/backups/parva-pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz
+GIT_COMMIT=$(git rev-parse --short HEAD) docker compose build app
+# Read what would change (inside the new image, against the live database):
+docker compose run --rm --no-deps app npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script
+# Only if that is what you expect:
+docker compose run --rm --no-deps app npx prisma db push --skip-generate --accept-data-loss
+GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up -d
+```
+
+(Inside `docker compose run`, `$DATABASE_URL` is the container's own; quote the command so the host shell does not
+expand it.) The account-security release needs this once: it adds `User.phone` with a unique index, plus nullable
+columns and the `VerificationCode` table — nothing is dropped.
+
+Earlier releases relied on `--accept-data-loss` at start, e.g. to convert the money columns from `integer` to
+`double precision` in place (checked on a real PostgreSQL 16; every value kept).
 
 After pulling a release that touches the sync routes (`src/app/api/sync/*`), redeploy the server **before** (or
 together with) shipping the matching Android build: an updated app works against an older server but
@@ -231,8 +278,21 @@ always grows with the version and is known before the APK exists. Builds made be
 login needed — it also reaches phones that only ever worked offline) and compares its own `versionCode` with
 `latestVersionCode`. Older → the update notice with the download link; below `minSupportedVersionCode` → the
 blocking "به‌روزرسانی لازم است" screen. The minimum is `1` (nobody is ever forced) unless an admin raises it at
-`/admin` → «کنترل نسخه اپ اندروید», which also lets the owner announce a higher number or use another download link;
+`/dashboard/release` («نسخه‌ی اپ اندروید»), which also lets the owner announce a higher number or use another download link;
 what is saved there only overrides the release shipped in code, so a stale row can never hide a newer release.
+
+**Signing the APK.** The published APK is still signed with the committed, public debug key — anyone could sign an
+"update" that installs over it. The build is no longer *debuggable* (no `run-as`, no WebView inspection over USB), but
+the key itself is the last big item before a wide public launch. To switch, once, to a private key:
+
+1. Create it on your own computer (keep the file and both passwords somewhere safe — losing them means no update can
+   ever be installed over the app again):
+   `keytool -genkeypair -v -keystore parva.jks -keyalg RSA -keysize 4096 -validity 36500 -alias parva`
+2. In GitHub → Settings → Secrets and variables → Actions → *Secrets*, add `PARVA_KEYSTORE_BASE64` (the output of
+   `base64 -w0 parva.jks`), `PARVA_KEYSTORE_PASSWORD`, `PARVA_KEY_ALIAS` (`parva`) and `PARVA_KEY_PASSWORD`.
+3. The next build signs with it (the CI log says "Signing with the private key."). **Every existing install must be
+   uninstalled once** before the new APK installs — tell users to sync (or export a backup) first, since uninstalling
+   deletes the on-device data. Do this before the user count grows.
 
 ## 6. Migrations going forward
 

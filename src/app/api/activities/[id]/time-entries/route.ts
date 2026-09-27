@@ -13,7 +13,8 @@ const schema = z.object({
   endAt: z.string().datetime().optional(),
 });
 
-async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const userId = await requireUserId();
     const activity = await prisma.activity.findFirst({ where: { id: params.id, userId, deletedAt: null } });

@@ -159,7 +159,7 @@ describe("audit.log — the developer-facing facade", () => {
   });
 
   it("takes the caller's address and browser from the request", async () => {
-    const req = new Request("http://localhost/api/x", { headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1", "user-agent": "Parva/1.1" } });
+    const req = new Request("http://localhost/api/x", { headers: { "x-forwarded-for": "10.0.0.1, 203.0.113.9", "user-agent": "Parva/1.1" } });
     await audit.log({ userId: "usr_1", event: "CATEGORIES_REORDERED", req });
     expect(storedRow()).toMatchObject({ ipAddress: "203.0.113.9", userAgent: "Parva/1.1" });
   });
@@ -172,8 +172,8 @@ describe("audit.log — the developer-facing facade", () => {
 });
 
 describe("requestMeta", () => {
-  it("prefers the first forwarded address, then x-real-ip, and allows neither", () => {
-    expect(requestMeta(new Request("http://x", { headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2", "user-agent": "UA" } }))).toEqual({ ipAddress: "1.1.1.1", userAgent: "UA" });
+  it("takes the address the trusted proxy appended (the last one, not the forgeable first), then x-real-ip, and allows neither", () => {
+    expect(requestMeta(new Request("http://x", { headers: { "x-forwarded-for": "1.1.1.1, 2.2.2.2", "user-agent": "UA" } }))).toEqual({ ipAddress: "2.2.2.2", userAgent: "UA" });
     expect(requestMeta(new Request("http://x", { headers: { "x-real-ip": "3.3.3.3" } }))).toEqual({ ipAddress: "3.3.3.3", userAgent: null });
     expect(requestMeta(new Request("http://x"))).toEqual({ ipAddress: null, userAgent: null });
   });

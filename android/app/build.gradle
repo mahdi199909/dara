@@ -39,10 +39,26 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // The private release key, opt-in: CI sets these only when the repository has the signing
+        // secrets (see .github/workflows/build-android.yml and DEPLOYMENT.md "Signing the APK").
+        // Switching keys is a one-way door — every existing install must be uninstalled once — so
+        // until those secrets exist the build keeps using the debug key above.
+        if (System.getenv("PARVA_KEYSTORE_FILE")) {
+            parva {
+                storeFile file(System.getenv("PARVA_KEYSTORE_FILE"))
+                storePassword System.getenv("PARVA_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("PARVA_KEY_ALIAS")
+                keyPassword System.getenv("PARVA_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            signingConfig System.getenv("PARVA_KEYSTORE_FILE") ? signingConfigs.parva : signingConfigs.debug
+            // The published APK is this build type. Not debuggable: no "run-as" or USB debugger can
+            // read the app's private files (the on-device database, the session token), and Capacitor
+            // follows this flag for WebView remote debugging (chrome://inspect) too.
+            debuggable false
         }
         release {
             minifyEnabled false

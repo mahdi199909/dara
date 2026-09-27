@@ -9,6 +9,34 @@ const { version: APP_VERSION } = JSON.parse(readFileSync(new URL("./package.json
 // the VPS runs, which never sets ANDROID_EXPORT_BUILD.
 const isAndroidExport = process.env.ANDROID_EXPORT_BUILD === "1";
 
+// Sent with every response of the web server (not the static export, which has no server). The
+// app loads nothing from other origins, so everything is pinned to 'self'. Next's own bootstrap
+// is inline <script>, hence 'unsafe-inline'; the dev server's hot reload also needs 'unsafe-eval'.
+const isDev = process.env.NODE_ENV !== "production";
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  `connect-src 'self'${isDev ? " ws:" : ""}`,
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy", value: CONTENT_SECURITY_POLICY },
+  // Browsers only honour this over HTTPS, so it is harmless on http://localhost.
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
@@ -20,9 +48,12 @@ const nextConfig = {
   ...(isAndroidExport
     ? { output: "export", images: { unoptimized: true } }
     : {
-        // src/instrumentation.ts starts the server's process-level logging (startup, crash and
-        // shutdown records). Not needed — and not present — in the static export.
-        experimental: { instrumentationHook: true },
+        // src/instrumentation.ts (the server's startup, crash and shutdown records) is picked up
+        // automatically since Next 15 — no flag. It is not present in the static export.
+        poweredByHeader: false,
+        async headers() {
+          return [{ source: "/:path*", headers: SECURITY_HEADERS }];
+        },
         // The permanent download link (APK_STATIC_URL in src/lib/appVersion.ts). GitHub serves
         // whichever release is newest at the "latest" address, so publishing a release — pushing a
         // vX.Y.Z tag, see .github/workflows/build-android.yml — is all it takes to change what this
@@ -31,6 +62,8 @@ const nextConfig = {
         // (Not part of the static export, which has no server to redirect from.)
         async redirects() {
           return [
+            // The owner's tools moved to /dashboard (the middleware answers 404 here for anyone else first).
+            { source: "/admin", destination: "/dashboard", permanent: false },
             {
               source: "/parvaapp.apk",
               destination: "https://github.com/mahdi199909/dara/releases/latest/download/parvaapp.apk",

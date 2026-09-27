@@ -38,6 +38,13 @@ if (existsSync(apiDir)) {
   rmSync(apiDir, { recursive: true, force: true });
   console.log("Removed src/app/api (Android never calls it — see src/lib/localDispatcher.ts).");
 }
+// The owner's dashboard is a server-rendered, web-only area (its layout reads the session and the
+// database) — a static export cannot build it, and the app has no use for it.
+const dashboardDir = join(root, "src/app/dashboard");
+if (existsSync(dashboardDir)) {
+  rmSync(dashboardDir, { recursive: true, force: true });
+  console.log("Removed src/app/dashboard (the owner's web-only dashboard).");
+}
 if (existsSync(testingDir)) {
   rmSync(testingDir, { recursive: true, force: true });
   console.log("Removed src/testing (test rig for the API routes that were just removed).");
