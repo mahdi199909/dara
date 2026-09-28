@@ -36,6 +36,10 @@ describe("which API paths need a session", () => {
     expect(passesOn(await call("/api/app/apk"))).toBe(true);
   });
 
+  it("serves robots.txt to crawlers instead of sending them to /login", async () => {
+    expect(passesOn(await call("/robots.txt"))).toBe(true);
+  });
+
   async function tokenFor(email: string): Promise<string> {
     const secret = new TextEncoder().encode(process.env.JWT_SECRET || "dev-only-secret-change-me-in-production");
     return new SignJWT({ userId: "someone", email }).setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(secret);

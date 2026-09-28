@@ -31,6 +31,9 @@ export const metadata: Metadata = {
   description: APP_TAGLINE,
   manifest: "/manifest.json",
   icons: { icon: "/icon.png", apple: "/icon.png" },
+  // The app is never meant to appear in search results (the X-Robots-Tag header in next.config.mjs
+  // says the same for non-HTML responses); the landing page on parvaapp.ir is.
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {

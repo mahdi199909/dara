@@ -35,6 +35,9 @@ const SECURITY_HEADERS = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
   { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // my.parvaapp.ir is the app, not the site: the landing page on parvaapp.ir is what search engines
+  // should show. Covers every response — pages, API, the APK — not just the HTML <meta> tag.
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
 ];
 
 /** @type {import('next').NextConfig} */

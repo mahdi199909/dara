@@ -20,7 +20,8 @@ const ADMIN_API_PREFIX = "/api/admin";
 // that path, not a prefix — nothing else may become public by starting with the same letters.
 const PUBLIC_API_PATHS = ["/api/metrics"];
 // The APK download link (rewritten to /api/app/apk): people download the app before they have an account.
-const PUBLIC_FILE_PATHS = ["/parvaapp.apk"];
+// robots.txt: crawlers must reach it (not a redirect to /login) to learn this host is not for indexing.
+const PUBLIC_FILE_PATHS = ["/parvaapp.apk", "/robots.txt"];
 
 const log = getLogger("auth", "middleware");
 
