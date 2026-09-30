@@ -171,6 +171,20 @@ git pull
 GIT_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build   # rebuilds the app image; `prisma db push` runs again at container start
 ```
 
+On the production server use the script instead, which wraps the same build with what went wrong before:
+
+```bash
+cd /opt/parva
+nohup setsid scripts/server-deploy.sh v1.7.4 > /root/backups/deploy-$(date +%Y%m%d-%H%M%S).log 2>&1 < /dev/null &
+```
+
+(`scripts/server-deploy.sh` without a tag updates the code only.) It refuses to start with less than 8 GB free, backs
+the database up, keeps the running image as `parva-app:rollback` (one image, not one per release), pulls, fetches the
+APK, builds, waits for `/login`, then clears the build cache. **Disk space matters here:** on 2026-09-30 the 40 GB disk
+filled with rollback images and build cache; nginx cut every large response short (the APK stopped at ~80 KB) and
+Postgres crash-looped on "No space left on device" until `docker builder prune -af` freed it. A download that stops
+half way or a sudden «مشکلی پیش آمد» on every page: look at `df -h /` first.
+
 `GIT_COMMIT` is baked into the image so every log line says which build wrote it (the image has no `.git`
 to ask). Leaving it out is harmless — the records then say `git_commit: "unknown"`.
 
