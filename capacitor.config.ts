@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   // changing it would orphan every existing test install (including the ones from this same
   // session) rather than updating them — see this rebrand's own discussion for why that's a
   // one-way door best pulled right before a real public launch, not casually now.
-  appId: "ir.mganic.dara",
+  appId: "ir.parvaapp",
   // The DISPLAYED name (launcher, widget picker) — same value as APP_DISPLAY_NAME in
   // src/lib/appVersion.ts, deliberately NOT the same string as that file's APP_NAME ("parvaapp"),
   // which also names the downloadable file (parvaapp.apk) and a URL path and always carries the

@@ -56,7 +56,7 @@ reconcileReminderNotifications() src/local/reminderNotifications.ts   ← every 
 2. **The diagnostic report** (Settings → پشتیبان‌گیری → گزارش تشخیصی): `LOCAL_NOTIFICATION_STATUS` at every launch and
    return; `LOCAL_NOTIFICATION_SKIPPED` (DEBUG) says why a given reminder was left out; `LOCAL_NOTIFICATION_FAILED`
    (`NOTIF-001`) carries the plugin's own error; `LOCAL_NOTIFICATION_PERMISSION_FAILED` (`NOTIF-002`) a refusal.
-3. `adb shell dumpsys alarm | grep ir.mganic.dara` lists what AlarmManager actually holds (type `RTC_WAKEUP`, exact vs
+3. `adb shell dumpsys alarm | grep ir.parvaapp` lists what AlarmManager actually holds (type `RTC_WAKEUP`, exact vs
    inexact); `adb shell dumpsys notification | grep -A5 parva_reminders` shows the channel's importance.
 
 ## Pitfalls (each one bit, or nearly did)

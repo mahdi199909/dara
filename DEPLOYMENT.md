@@ -264,7 +264,7 @@ copying a new file there (step 3 below) is what changes what it downloads.
 **Versions.** `package.json`'s version is the only source. The APK's `versionName` is that version and its `versionCode`
 is derived from it (`1.1.0` → `10100`, i.e. major·10000 + minor·100 + patch, with minor and patch below 100), so it
 always grows with the version and is known before the APK exists. Builds made before 1.1.0 used the CI run number
-(always far below 10000), so they read as older. Never change the application id (`ir.mganic.dara`), delete `android/app/debug.keystore` or replace the private key
+(always far below 10000), so they read as older. Never change the application id (`ir.parvaapp` since the re-issued 1.7.2 of 2026-09-30; builds before it were `ir.mganic.dara`, which Android treats as a different app), delete `android/app/debug.keystore` or replace the private key
 (see "Signing the APK" below): Android would treat the result as a different app and refuse to install it over the old one.
 
 **To release X.Y.Z**

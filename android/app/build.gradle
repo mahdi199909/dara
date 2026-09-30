@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "ir.mganic.dara"
+    namespace = "ir.parvaapp"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "ir.mganic.dara"
+        applicationId "ir.parvaapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Driven by CI from package.json's version (scripts/app-version.ts): ANDROID_VERSION_NAME

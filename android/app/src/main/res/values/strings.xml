@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">parva</string>
     <string name="title_activity_main">parva</string>
-    <string name="package_name">ir.mganic.dara</string>
-    <string name="custom_url_scheme">ir.mganic.dara</string>
+    <string name="package_name">ir.parvaapp</string>
+    <string name="custom_url_scheme">ir.parvaapp</string>
     <string name="widget_capture_title">ثبت سریع کار</string>
     <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ parva</string>
     <string name="widget_today_events_title">رویدادهای امروز</string>

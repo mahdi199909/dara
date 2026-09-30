@@ -1,4 +1,4 @@
-package ir.mganic.dara;
+package ir.parvaapp;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -40,7 +40,7 @@ import java.util.Calendar;
 // list rolls over to the new day on its own.
 public class HabitsWidgetProvider extends AppWidgetProvider {
 
-    static final String ACTION_TOGGLE_CHECKIN = "ir.mganic.dara.action.TOGGLE_HABIT_CHECKIN";
+    static final String ACTION_TOGGLE_CHECKIN = "ir.parvaapp.action.TOGGLE_HABIT_CHECKIN";
     static final String EXTRA_HABIT_ID = "habitId";
 
     /** The widget's own original background (WidgetTheme paints something else only when the user picked a colour). */

@@ -1,4 +1,4 @@
-package ir.mganic.dara;
+package ir.parvaapp;
 
 import android.content.ComponentName;
 import android.content.Context;

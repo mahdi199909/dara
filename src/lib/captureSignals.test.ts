@@ -275,7 +275,7 @@ describe("what a keyboard or a paste brings along", () => {
 
 // The widget's own parser is a port of this file; the patterns must not drift apart.
 describe("the Android widget's parser", () => {
-  const java = readFileSync("android/app/src/main/java/ir/mganic/dara/QuickTextParser.java", "utf8");
+  const java = readFileSync("android/app/src/main/java/ir/parvaapp/QuickTextParser.java", "utf8");
 
   // A Java string literal's value: \\ is one backslash, \" a quote, \uXXXX the character.
   function javaString(literal: string): string {

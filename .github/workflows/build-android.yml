@@ -129,7 +129,7 @@ jobs:
           AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)"
           "$AAPT2" dump badging parvaapp.apk > badging.txt
           grep -E "^(package:|application-label:)" badging.txt
-          grep -E "^package: " badging.txt | grep -q "name='ir.mganic.dara'"
+          grep -E "^package: " badging.txt | grep -q "name='ir.parvaapp'"
           grep -E "^package: " badging.txt | grep -q "versionCode='$ANDROID_VERSION_CODE'"
           grep -E "^package: " badging.txt | grep -q "versionName='$ANDROID_VERSION_NAME'"
           grep -q "^application-label:'parva'$" badging.txt

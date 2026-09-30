@@ -1,4 +1,4 @@
-package ir.mganic.dara;
+package ir.parvaapp;
 
 import org.json.JSONException;
 import org.json.JSONObject;

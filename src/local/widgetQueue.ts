@@ -1,5 +1,5 @@
 // Consumes captures (and habit check-in toggles) queued by the Android home-screen widgets —
-// see android/app/src/main/java/ir/mganic/dara/QuickCaptureActivity.java and
+// see android/app/src/main/java/ir/parvaapp/QuickCaptureActivity.java and
 // HabitsWidgetProvider.java — that native code never touches the app's own SQLite file directly
 // (a concurrent write there could be silently overwritten by this app's own in-memory database
 // the next time it saves), so it hands off through @capacitor/preferences instead. This drains

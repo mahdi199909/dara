@@ -1,4 +1,4 @@
-package ir.mganic.dara;
+package ir.parvaapp;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -40,7 +40,7 @@ import java.util.TimeZone;
 // to repaint after a tap.
 public class CapitalWidgetProvider extends AppWidgetProvider {
 
-    static final String ACTION_QUICK_CAPTURE = "ir.mganic.dara.action.WIDGET_QUICK_CAPTURE";
+    static final String ACTION_QUICK_CAPTURE = "ir.parvaapp.action.WIDGET_QUICK_CAPTURE";
     static final String EXTRA_CATEGORY_ID = "categoryId";
     static final String EXTRA_CATEGORY_LABEL = "categoryLabel";
 
