@@ -290,22 +290,24 @@ blocking "به‌روزرسانی لازم است" screen. The minimum is `1` (n
 `/dashboard/release` («نسخه‌ی اپ اندروید»), which also lets the owner announce a higher number or use another download link;
 what is saved there only overrides the release shipped in code, so a stale row can never hide a newer release.
 
-**Signing the APK (private key, via key rotation).** Gradle signs with the committed debug key; CI then re-signs the
-published APK with the private key through APK Signature Scheme v3 *key rotation* (`scripts/sign-apk-rotated.sh`):
+**Signing the APK (private key only).** Gradle signs with the committed debug key; CI then signs the APK again with
+the private key (`scripts/sign-apk.sh`), which replaces the debug signature completely. The script fails the build unless
+every Android version (7 through the newest) sees exactly one signer, the private key, and that key is not the debug key.
+Because every release is signed with the same key, each one installs over the previous as an ordinary update — no
+uninstall.
 
-- Android 9 and newer see the private key plus a proof, signed by the old debug key, that the app moved to it. They install
-  the update **without an uninstall**, and from then on only the private key can sign an update (the debug key keeps no
-  right to sign updates — "rollback" off).
-- Android 7–8 do not understand rotation: they keep checking the debug-key signature, so they also update without an
-  uninstall, but stay protected only by the public key.
+History: up to 1.7.2 the app's id was `ir.mganic.dara`, first published debug-signed and then moved to the private key
+through key rotation. With the id `ir.parvaapp` (published from 1.7.4; 1.7.3 was tagged but never published) there was no older install to stay compatible with, so the
+rotation was dropped and the debug key no longer appears in the file at all. An install of the old id is a different app
+to Android: it is not updated by these builds (install the new one, sign in, the data returns through sync).
 
 The key lives only with the owner (created 2026-09-27 in `C:/Users/asus/parva-signing/`, never in the repository) and in
 two repository secrets (GitHub → Settings → Secrets and variables → Actions → *New repository secret*):
 `PARVA_KEYSTORE_BASE64` (the contents of `parva.p12.base64.txt`) and `PARVA_KEYSTORE_PASSWORD` (the contents of
-`keystore-password.txt`). Without them the build warns, publishes a debug-signed APK, and still runs the rotation with a
-throwaway key as a self-test. **Back the key up** (the `parva-signing` folder, somewhere offline): losing it means no
-further update can be installed over the rotated app. **Once a rotated APK is out, never publish a debug-only build again**
-(phones that took the rotated one refuse it) — keep the secrets in place.
+`keystore-password.txt`). Without them a plain master build warns and keeps a debug-signed artifact (and still runs the
+signing script with a throwaway key as a self-test); a release tag fails rather than publish it. **Back the key up** (the
+`parva-signing` folder, somewhere offline): losing it means no further update can be installed over the app — every
+person would have to uninstall and reinstall.
 
 
 ## 6. Migrations going forward

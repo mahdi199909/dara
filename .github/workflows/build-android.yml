@@ -86,27 +86,27 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      # The private key (see scripts/sign-apk-rotated.sh and DEPLOYMENT.md "Signing the APK"). With the two
-      # repository secrets PARVA_KEYSTORE_BASE64 and PARVA_KEYSTORE_PASSWORD, the APK is re-signed through key
-      # rotation: Android 9+ trust only the private key from then on, and every phone still installs it as an
-      # update. Without them the APK stays debug-signed — and the rotation path is still exercised with a
-      # throwaway key, so it is known to work before the real key is ever used.
-      - name: Sign with the private key (key rotation)
+      # The private key (see scripts/sign-apk.sh and DEPLOYMENT.md "Signing the APK"). With the two repository
+      # secrets PARVA_KEYSTORE_BASE64 and PARVA_KEYSTORE_PASSWORD, the APK Gradle signed with the debug key is
+      # signed again with the private key only — the app's id is new (ir.parvaapp), so there is no older
+      # install to stay compatible with and no key rotation. Without the secrets the APK stays debug-signed
+      # (never published: a release tag fails), and the signing path is still exercised with a throwaway key.
+      - name: Sign with the private key
         env:
           KEYSTORE_BASE64: ${{ secrets.PARVA_KEYSTORE_BASE64 }}
           PARVA_KEYSTORE_PASSWORD: ${{ secrets.PARVA_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          chmod +x scripts/sign-apk-rotated.sh
+          chmod +x scripts/sign-apk.sh
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           if [ -n "$KEYSTORE_BASE64" ] && [ -n "$PARVA_KEYSTORE_PASSWORD" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/parva.p12"
-            scripts/sign-apk-rotated.sh "$APK" parvaapp.apk "$RUNNER_TEMP/parva.p12" PARVA_KEYSTORE_PASSWORD
+            scripts/sign-apk.sh "$APK" parvaapp.apk "$RUNNER_TEMP/parva.p12" PARVA_KEYSTORE_PASSWORD
             rm -f "$RUNNER_TEMP/parva.p12"
-            echo "Signed with the private key (rotated from the debug key)."
+            echo "Signed with the private key."
           else
-            # From 1.7.2 on, phones trust only the private key: a debug-only release would not install
-            # over it. A release tag without the key therefore fails instead of publishing.
+            # Every published APK is signed with the private key: a debug-signed release could never be
+            # updated by a properly signed one. A release tag without the key fails instead of publishing.
             if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
               echo "::error::Release builds must be signed with the private key (repository secrets PARVA_KEYSTORE_BASE64 / PARVA_KEYSTORE_PASSWORD)."
               exit 1
@@ -114,10 +114,10 @@ jobs:
             cp "$APK" parvaapp.apk
             echo "::warning::No private key in the repository secrets: parvaapp.apk is signed with the public debug key."
             export SELFTEST_PASSWORD="$(openssl rand -hex 16)"
-            openssl req -x509 -newkey rsa:2048 -sha256 -days 30 -nodes -keyout "$RUNNER_TEMP/t.key" -out "$RUNNER_TEMP/t.crt" -subj "/CN=rotation-selftest" 2>/dev/null
+            openssl req -x509 -newkey rsa:2048 -sha256 -days 30 -nodes -keyout "$RUNNER_TEMP/t.key" -out "$RUNNER_TEMP/t.crt" -subj "/CN=signing-selftest" 2>/dev/null
             openssl pkcs12 -export -name parva -inkey "$RUNNER_TEMP/t.key" -in "$RUNNER_TEMP/t.crt" -out "$RUNNER_TEMP/t.p12" -passout env:SELFTEST_PASSWORD
-            scripts/sign-apk-rotated.sh "$APK" "$RUNNER_TEMP/selftest.apk" "$RUNNER_TEMP/t.p12" SELFTEST_PASSWORD
-            echo "Rotation self-test passed (throwaway key; nothing published with it)."
+            scripts/sign-apk.sh "$APK" "$RUNNER_TEMP/selftest.apk" "$RUNNER_TEMP/t.p12" SELFTEST_PASSWORD
+            echo "Signing self-test passed (throwaway key; nothing published with it)."
           fi
 
       # The one name everything uses. The badging check fails the build if the file doesn't carry the
@@ -150,12 +150,22 @@ jobs:
         run: |
           set -euo pipefail
           TAG="$GITHUB_REF_NAME"
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            # A re-run of the same tag replaces the file instead of failing.
-            gh release upload "$TAG" parvaapp.apk --clobber
-          else
-            gh release create "$TAG" parvaapp.apk \
-              --title "parva $ANDROID_VERSION_NAME" \
-              --notes "parva $ANDROID_VERSION_NAME (build $ANDROID_VERSION_CODE). Permanent download link: https://my.parvaapp.ir/parvaapp.apk" \
-              --verify-tag
-          fi
+          publish() {
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              # A re-run of the same tag (or a second attempt below) replaces the file instead of failing.
+              gh release upload "$TAG" parvaapp.apk --clobber
+            else
+              gh release create "$TAG" parvaapp.apk \
+                --title "parva $ANDROID_VERSION_NAME" \
+                --notes "parva $ANDROID_VERSION_NAME (build $ANDROID_VERSION_CODE). Permanent download link: https://my.parvaapp.ir/parvaapp.apk" \
+                --verify-tag
+            fi
+          }
+          # The release API fails now and then for no reason of ours (v1.7.3's first run did, after a clean
+          # build); three tries, a little apart, before giving up.
+          for attempt in 1 2 3; do
+            if publish; then exit 0; fi
+            echo "::warning::publishing $TAG failed (attempt $attempt)"
+            sleep $((attempt * 20))
+          done
+          exit 1
