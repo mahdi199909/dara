@@ -11,6 +11,8 @@ const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   type: z.enum(ACCOUNT_TYPES).optional(),
   isActive: z.boolean().optional(),
+  // true makes this the account new expenses and income go to, and takes the mark off the others.
+  isDefault: z.boolean().optional(),
 });
 
 async function getOwned(userId: string, id: string) {
@@ -26,7 +28,14 @@ async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> 
     const existing = await getOwned(userId, params.id);
     const body = updateSchema.parse(await req.json());
 
-    const account = await prisma.financeAccount.update({ where: { id: params.id }, data: body });
+    // One default at most: marking this account takes the mark off the person's other accounts, in the
+    // same transaction (each of those rows gets a fresh updatedAt, so the change reaches their phone too).
+    const account = await prisma.$transaction(async (tx) => {
+      if (body.isDefault) {
+        await tx.financeAccount.updateMany({ where: { userId, isDefault: true, id: { not: params.id } }, data: { isDefault: false } });
+      }
+      return tx.financeAccount.update({ where: { id: params.id }, data: body });
+    });
 
     const { ipAddress, userAgent } = requestMeta(req);
     await writeAuditLog({

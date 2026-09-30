@@ -61,8 +61,8 @@ async function POST(req: NextRequest) {
           },
         });
 
-        if (task.directCost > 0) await syncTaskDirectCostTransaction(task.id);
-        if (task.incomeAmount > 0) await syncTaskIncomeTransaction(task.id);
+        if (task.directCost > 0) await syncTaskDirectCostTransaction(task.id, body.accountId);
+        if (task.incomeAmount > 0) await syncTaskIncomeTransaction(task.id, body.accountId);
         if (task.startAt && task.endAt) await syncTaskVirtualAsset(task.id);
         const fresh = await prisma.task.findUnique({ where: { id: task.id }, include: { category: true, project: true } });
         return { task, fresh };

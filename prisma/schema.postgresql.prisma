@@ -425,6 +425,9 @@ model FinanceAccount {
   type           String  @default("BANK_ACCOUNT") // BANK_CARD | BANK_ACCOUNT | CASH | WALLET | INVESTMENT
   initialBalance Float   @default(0)
   isActive       Boolean @default(true)
+  // Where a new expense or income goes when the person names no account (see resolveDefaultAccountId).
+  // At most one per person: the accounts routes clear it on the others when it is set.
+  isDefault      Boolean @default(false)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

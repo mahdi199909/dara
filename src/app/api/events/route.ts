@@ -33,6 +33,8 @@ const createSchema = z
     reminderOffsets: z.array(z.number().int().min(0)).optional(),
     // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
     allowOverlap: z.boolean().optional(),
+    // The account this entry's expense or income is booked to; the person's default account when left out.
+    accountId: z.string().optional(),
   })
   .refine((b) => !(b.recurrenceUntil && b.recurrenceCount), {
     message: "پایان تکرار را یا با تاریخ یا با تعداد مشخص کنید، نه هر دو.",
@@ -136,8 +138,8 @@ async function POST(req: NextRequest) {
           },
         });
 
-        if (event.directCost > 0) await syncEventDirectCostTransaction(event.id);
-        if (event.incomeAmount > 0) await syncEventIncomeTransaction(event.id);
+        if (event.directCost > 0) await syncEventDirectCostTransaction(event.id, body.accountId);
+        if (event.incomeAmount > 0) await syncEventIncomeTransaction(event.id, body.accountId);
 
         if (body.reminderOffsets?.length) {
           await prisma.reminder.createMany({

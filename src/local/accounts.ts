@@ -8,10 +8,10 @@
 // so would not be a faithful port.
 import type { LocalDb } from "./db";
 
-/** Returns the user's first active account, creating a default cash account if none exists yet. */
+/** The active account marked as the default, otherwise the oldest active one; a cash account is created if there is none. */
 export function resolveDefaultAccountId(db: LocalDb, userId: string): string {
   const existing = db.get<{ id: string }>(
-    `SELECT "id" FROM "FinanceAccount" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 ORDER BY "createdAt" ASC LIMIT 1`,
+    `SELECT "id" FROM "FinanceAccount" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 ORDER BY "isDefault" DESC, "createdAt" ASC LIMIT 1`,
     [userId]
   );
   if (existing) return existing.id;
@@ -23,4 +23,13 @@ export function resolveDefaultAccountId(db: LocalDb, userId: string): string {
     [id, userId, "صندوق", "CASH", 0, 1, now, now]
   );
   return id;
+}
+
+/** The account the person picked for this entry when it is really theirs; the default one otherwise. */
+export function resolveAccountId(db: LocalDb, userId: string, preferredAccountId?: string | null): string {
+  if (preferredAccountId) {
+    const owned = db.get<{ id: string }>(`SELECT "id" FROM "FinanceAccount" WHERE "id" = ? AND "userId" = ? AND "deletedAt" IS NULL`, [preferredAccountId, userId]);
+    if (owned) return owned.id;
+  }
+  return resolveDefaultAccountId(db, userId);
 }

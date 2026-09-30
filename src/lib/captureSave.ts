@@ -38,6 +38,8 @@ export interface SaveCaptureInput {
   amount: number | undefined;
   /** True only once the person has seen an overlap warning and chosen to save anyway. */
   allowOverlap?: boolean;
+  /** The account the amount moved through, when the person picked one; their default account otherwise. */
+  accountId?: string | null;
 }
 
 function dayIso(d: Date) {
@@ -67,6 +69,8 @@ export function planSaveCapture(input: SaveCaptureInput, options: PlanSaveOption
   const targets = (previous: unknown[]) => options.resolveTargets?.(previous) ?? { categoryId: input.categoryId, projectId: input.projectId };
   const amountNum = input.amount;
   const day10 = dayIso(input.day);
+  // Only an entry that moves money names an account.
+  const accountId = amountNum && amountNum > 0 && input.accountId ? input.accountId : undefined;
 
   if (input.entityType === "TASK") {
     const dueDate = new Date(`${day10}T00:00:00`);
@@ -93,6 +97,7 @@ export function planSaveCapture(input: SaveCaptureInput, options: PlanSaveOption
           startAt: startAt?.toISOString(),
           endAt: endAt?.toISOString(),
           allowOverlap: input.allowOverlap || undefined,
+          accountId,
         },
       }),
     ];
@@ -127,6 +132,7 @@ export function planSaveCapture(input: SaveCaptureInput, options: PlanSaveOption
         directCost: input.flowType === "COST" ? amountNum : undefined,
         incomeAmount: input.flowType === "INCOME" ? amountNum : undefined,
         allowOverlap: input.allowOverlap || undefined,
+        accountId,
       },
     }),
   ];

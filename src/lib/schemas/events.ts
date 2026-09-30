@@ -27,6 +27,8 @@ export const createEventSchema = z
     reminderOffsets: z.array(z.number().int().min(0)).optional(),
   // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
     allowOverlap: z.boolean().optional(),
+    // The account this entry's expense or income is booked to; the person's default account when left out.
+    accountId: z.string().optional(),
   })
   .refine((b) => !(b.recurrenceUntil && b.recurrenceCount), {
     message: "پایان تکرار را یا با تاریخ یا با تعداد مشخص کنید، نه هر دو.",

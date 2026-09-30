@@ -8,6 +8,7 @@ import type { CaptureIntent } from "./captureIntent";
 import type { CaptureStep } from "./captureSteps";
 import { captureSummary, hhmm, planSaveCapture, type CaptureSummary, type SaveCaptureInput } from "./captureSave";
 import { matchCategoryHint, matchProjectHint, type CapturePrefill } from "./smartCapture";
+import { pickDefaultAccount } from "./defaultAccount";
 import { CAPTURE_TYPE_LABELS, type ValueType } from "./types";
 import { formatJalali } from "./jalali";
 import { toPersianDigits } from "./money";
@@ -35,6 +36,7 @@ export interface SnapshotAccount {
   id: string;
   name: string;
   isActive: boolean;
+  isDefault?: boolean;
   createdAt: string;
 }
 
@@ -144,11 +146,7 @@ export function bestMatch<T>(hint: string, items: T[], nameOf: (item: T) => stri
   return shared >= 0 ? items[shared] : null;
 }
 
-function defaultAccount(accounts: SnapshotAccount[]): SnapshotAccount | null {
-  const active = accounts.filter((a) => a.isActive);
-  active.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  return active[0] ?? null;
-}
+const defaultAccount = (accounts: SnapshotAccount[]): SnapshotAccount | null => pickDefaultAccount(accounts);
 
 const CREATE_DEFAULT_ACCOUNT: CaptureStep = () => ({ method: "POST", url: "/api/accounts", body: { name: "صندوق", type: "CASH" } });
 const createdAccountId = (result: unknown) => (result as { account: { id: string } }).account.id;
@@ -165,7 +163,7 @@ function entryKindLabel(prefill: CapturePrefill): string {
 }
 
 /** What smart capture saves for an entry, matched against the person's categories and projects. */
-export function resolveEntry(prefill: CapturePrefill, categories: SnapshotCategory[], now: Date, extra?: { allowOverlap?: boolean }): CaptureResolution {
+export function resolveEntry(prefill: CapturePrefill, categories: SnapshotCategory[], now: Date, extra?: { allowOverlap?: boolean; accountId?: string | null }): CaptureResolution {
   const matchedCategory = prefill.categoryHint ? matchCategoryHint(prefill.categoryHint, categories) : null;
   const matchedProject = prefill.projectHint ? matchProjectHint(prefill.projectHint, categories) : null;
   const projectToCreate = prefill.projectHint && !matchedProject ? prefill.projectHint : null;
@@ -194,6 +192,7 @@ export function resolveEntry(prefill: CapturePrefill, categories: SnapshotCatego
     flowType: prefill.flowType,
     amount: prefill.amount ?? undefined,
     allowOverlap: extra?.allowOverlap,
+    accountId: extra?.accountId,
   };
 
   const steps: CaptureStep[] = [];

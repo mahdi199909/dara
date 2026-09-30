@@ -15,5 +15,7 @@ export const updateAccountSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   type: z.enum(ACCOUNT_TYPES).optional(),
   isActive: z.boolean().optional(),
+  // true makes this the account new expenses and income go to, and takes the mark off the others.
+  isDefault: z.boolean().optional(),
 });
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;

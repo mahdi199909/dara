@@ -51,7 +51,7 @@ export async function syncUntilQuiet(phone: Phone, maxRounds = 4): Promise<SyncO
 const VOLATILE_KEYS = new Set(["userId"]);
 // The phone's repositories hand nested rows back exactly as SQLite stores them (0/1), the web's
 // Prisma returns real booleans — a representation difference, not a data difference.
-const BOOLEAN_KEYS = new Set(["isActive", "generatesVirtualAsset", "isRunning", "isTrial", "allDay", "isCancelled", "notified", "dismissed", "dailyMomentEnabled", "companionEnabled"]);
+const BOOLEAN_KEYS = new Set(["isActive", "isDefault", "generatesVirtualAsset", "isRunning", "isTrial", "allDay", "isCancelled", "notified", "dismissed", "dailyMomentEnabled", "companionEnabled"]);
 
 /** Order- and noise-free form of a JSON value: what would cross the wire (Dates become strings),
  * arrays of objects with ids sort by id, userId (a real id on the server, a placeholder on the

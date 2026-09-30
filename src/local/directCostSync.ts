@@ -4,7 +4,7 @@
 // bypasses its own /api/transactions route and talks to Prisma directly.
 import { computeVirtualAssetValue } from "@/lib/timeCost";
 import type { LocalDb } from "./db";
-import { resolveDefaultAccountId } from "./accounts";
+import { resolveAccountId, resolveDefaultAccountId } from "./accounts";
 import { deleteRowsWithTombstones } from "./tombstones";
 
 function now() {
@@ -42,7 +42,7 @@ export function syncActivityDirectCostTransaction(db: LocalDb, activityId: strin
   }
 }
 
-export function syncTaskDirectCostTransaction(db: LocalDb, taskId: string) {
+export function syncTaskDirectCostTransaction(db: LocalDb, taskId: string, preferredAccountId?: string | null) {
   const task = db.get<any>(`SELECT * FROM "Task" WHERE "id" = ?`, [taskId]);
   if (!task) throw new Error(`Task ${taskId} not found`);
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "taskId" = ? AND "activityId" IS NULL AND "type" = 'EXPENSE' AND "deletedAt" IS NULL`, [taskId]);
@@ -62,7 +62,7 @@ export function syncTaskDirectCostTransaction(db: LocalDb, taskId: string) {
       existingTx.id,
     ]);
   } else {
-    const accountId = resolveDefaultAccountId(db, task.userId);
+    const accountId = resolveAccountId(db, task.userId, preferredAccountId);
     const id = crypto.randomUUID();
     db.run(
       `INSERT INTO "Transaction" ("id","userId","type","amount","date","description","accountId","categoryId","projectId","taskId","createdAt","updatedAt")
@@ -72,7 +72,7 @@ export function syncTaskDirectCostTransaction(db: LocalDb, taskId: string) {
   }
 }
 
-export function syncTaskIncomeTransaction(db: LocalDb, taskId: string) {
+export function syncTaskIncomeTransaction(db: LocalDb, taskId: string, preferredAccountId?: string | null) {
   const task = db.get<any>(`SELECT * FROM "Task" WHERE "id" = ?`, [taskId]);
   if (!task) throw new Error(`Task ${taskId} not found`);
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "taskId" = ? AND "activityId" IS NULL AND "type" = 'INCOME' AND "deletedAt" IS NULL`, [taskId]);
@@ -92,7 +92,7 @@ export function syncTaskIncomeTransaction(db: LocalDb, taskId: string) {
       existingTx.id,
     ]);
   } else {
-    const accountId = resolveDefaultAccountId(db, task.userId);
+    const accountId = resolveAccountId(db, task.userId, preferredAccountId);
     const id = crypto.randomUUID();
     db.run(
       `INSERT INTO "Transaction" ("id","userId","type","amount","date","description","accountId","categoryId","projectId","taskId","createdAt","updatedAt")
@@ -132,7 +132,7 @@ export function syncTaskVirtualAsset(db: LocalDb, taskId: string) {
   }
 }
 
-export function syncEventDirectCostTransaction(db: LocalDb, eventId: string) {
+export function syncEventDirectCostTransaction(db: LocalDb, eventId: string, preferredAccountId?: string | null) {
   const event = db.get<any>(`SELECT * FROM "Event" WHERE "id" = ?`, [eventId]);
   if (!event) throw new Error(`Event ${eventId} not found`);
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "eventId" = ? AND "type" = 'EXPENSE' AND "deletedAt" IS NULL`, [eventId]);
@@ -152,7 +152,7 @@ export function syncEventDirectCostTransaction(db: LocalDb, eventId: string) {
       existingTx.id,
     ]);
   } else {
-    const accountId = resolveDefaultAccountId(db, event.userId);
+    const accountId = resolveAccountId(db, event.userId, preferredAccountId);
     const id = crypto.randomUUID();
     db.run(
       `INSERT INTO "Transaction" ("id","userId","type","amount","date","description","accountId","categoryId","projectId","eventId","createdAt","updatedAt")
@@ -162,7 +162,7 @@ export function syncEventDirectCostTransaction(db: LocalDb, eventId: string) {
   }
 }
 
-export function syncEventIncomeTransaction(db: LocalDb, eventId: string) {
+export function syncEventIncomeTransaction(db: LocalDb, eventId: string, preferredAccountId?: string | null) {
   const event = db.get<any>(`SELECT * FROM "Event" WHERE "id" = ?`, [eventId]);
   if (!event) throw new Error(`Event ${eventId} not found`);
   const existingTx = db.get<{ id: string }>(`SELECT "id" FROM "Transaction" WHERE "eventId" = ? AND "type" = 'INCOME' AND "deletedAt" IS NULL`, [eventId]);
@@ -182,7 +182,7 @@ export function syncEventIncomeTransaction(db: LocalDb, eventId: string) {
       existingTx.id,
     ]);
   } else {
-    const accountId = resolveDefaultAccountId(db, event.userId);
+    const accountId = resolveAccountId(db, event.userId, preferredAccountId);
     const id = crypto.randomUUID();
     db.run(
       `INSERT INTO "Transaction" ("id","userId","type","amount","date","description","accountId","categoryId","projectId","eventId","createdAt","updatedAt")

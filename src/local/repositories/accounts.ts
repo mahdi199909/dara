@@ -19,6 +19,7 @@ interface FinanceAccountRow {
   type: string;
   initialBalance: number;
   isActive: number;
+  isDefault: number;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -26,7 +27,7 @@ interface FinanceAccountRow {
 
 /** Converts SQLite's integer boolean storage to a real boolean, matching Prisma's JSON shape. */
 function toAccount(row: FinanceAccountRow) {
-  return { ...row, isActive: !!row.isActive };
+  return { ...row, isActive: !!row.isActive, isDefault: !!row.isDefault };
 }
 
 function sumAmount(db: LocalDb, sql: string, params: unknown[]): number {
@@ -99,8 +100,15 @@ export function updateAccount(db: LocalDb, userId: string, id: string, input: Up
   if (input.name !== undefined) set("name", input.name);
   if (input.type !== undefined) set("type", input.type);
   if (input.isActive !== undefined) set("isActive", input.isActive ? 1 : 0);
-  set("updatedAt", new Date().toISOString());
+  if (input.isDefault !== undefined) set("isDefault", input.isDefault ? 1 : 0);
+  const stamp = new Date().toISOString();
+  set("updatedAt", stamp);
 
+  // One default at most — same as the web route: the others lose the mark (and get a fresh updatedAt, so
+  // the change syncs). Callers run inside the dispatcher's transaction, so both writes land together.
+  if (input.isDefault) {
+    db.run(`UPDATE "FinanceAccount" SET "isDefault" = 0, "updatedAt" = ? WHERE "userId" = ? AND "isDefault" = 1 AND "id" <> ?`, [stamp, userId, id]);
+  }
   db.run(`UPDATE "FinanceAccount" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, id]);
 
   const row = db.get<FinanceAccountRow>(`SELECT * FROM "FinanceAccount" WHERE "id" = ?`, [id])!;

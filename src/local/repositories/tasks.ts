@@ -110,8 +110,8 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
     ]
   );
 
-  if ((input.directCost ?? 0) > 0) syncTaskDirectCostTransaction(db, id);
-  if ((input.incomeAmount ?? 0) > 0) syncTaskIncomeTransaction(db, id);
+  if ((input.directCost ?? 0) > 0) syncTaskDirectCostTransaction(db, id, input.accountId);
+  if ((input.incomeAmount ?? 0) > 0) syncTaskIncomeTransaction(db, id, input.accountId);
   if (input.startAt && input.endAt) syncTaskVirtualAsset(db, id);
 
   const fresh = getTaskById(db, userId, id)!;

@@ -26,6 +26,7 @@ import type {
   JourneyTaskRow,
   JourneyWorkRow,
 } from "./journeyTypes";
+import { naturalPhrase } from "./journeyPhrases";
 
 // ---------------------------------------------------------------------------------------------
 // Months
@@ -273,6 +274,59 @@ function tasksSentence(titles: string[], dayKey: string, hasTimeSentence: boolea
 }
 
 // ---------------------------------------------------------------------------------------------
+// Everyday entries, said the way a person would (see ./journeyPhrases.ts)
+
+interface EverydayEntry {
+  text: string;
+  travel: boolean;
+  minutes: number;
+  at: string;
+}
+
+/** At most this many are told one by one; a day with more keeps the rest in the ordinary list of finished tasks. */
+const MAX_EVERYDAY = 4;
+
+/**
+ * Pulls out of the day's tasks and tracked time the entries that read better as a plain sentence — a trip, a
+ * purchase, a call — and leaves everything else (anything tied to a project, anything the lexicon does not
+ * know) to be told as work. The two halves never overlap, so nothing is said twice.
+ */
+function splitEveryday(bucket: DayBucket): { everyday: EverydayEntry[]; rest: DayBucket } {
+  const everyday: EverydayEntry[] = [];
+  const tasks: JourneyTaskRow[] = [];
+  const work: JourneyWorkRow[] = [];
+  const seen = new Set<string>();
+  const take = (title: string, category: string | null, project: string | null, minutes: number, at: string): boolean => {
+    if (project || everyday.length >= MAX_EVERYDAY) return false;
+    const phrase = naturalPhrase(title, category);
+    if (!phrase) return false;
+    // The same trip logged as a task and as tracked time is one trip.
+    const twin = everyday.find((e) => e.text === phrase.text);
+    if (twin) twin.minutes = Math.max(twin.minutes, minutes);
+    else if (!seen.has(phrase.text)) everyday.push({ ...phrase, minutes, at });
+    seen.add(phrase.text);
+    return true;
+  };
+  for (const t of [...bucket.tasks].sort((a, b) => a.at.localeCompare(b.at))) {
+    if (!take(t.title, t.category, t.project, t.minutes ?? 0, t.at)) tasks.push(t);
+  }
+  for (const w of [...bucket.work].sort((a, b) => a.startAt.localeCompare(b.startAt))) {
+    if (!take(w.title, w.category, w.project, w.minutes, w.startAt)) work.push(w);
+  }
+  everyday.sort((a, b) => a.at.localeCompare(b.at));
+  return { everyday, rest: { ...bucket, tasks, work } };
+}
+
+/** «از تهران به قم حرکت کردم و حدود دو ساعت در راه بودم.» */
+function everydaySentences(entries: EverydayEntry[]): string[] {
+  return entries.map((e) => {
+    if (e.minutes < 15) return `${e.text}.`;
+    const dur = spokenDuration(e.minutes);
+    return e.travel ? `${e.text} و ${dur} در راه بودم.` : `${e.text}؛ ${dur} طول کشید.`;
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Habits
 
 /** A streak is worth saying aloud at these lengths, not on every single day of it. */
@@ -413,7 +467,9 @@ function composeDay(dayKey: string, bucket: DayBucket, ctx: DayContext): Journey
   const todayKey = dayKeyIso(ctx.now);
   const yesterday = new Date(ctx.now.getFullYear(), ctx.now.getMonth(), ctx.now.getDate() - 1);
 
-  const groups = groupWork(bucket);
+  // A trip or a purchase is told in its own words and is not counted as «work» in this day's sentences.
+  const { everyday, rest } = splitEveryday(bucket);
+  const groups = groupWork(rest);
   const workMinutes = totalMinutes(groups);
   const weight = weightOf(workMinutes, bucket);
 
@@ -432,7 +488,8 @@ function composeDay(dayKey: string, bucket: DayBucket, ctx: DayContext): Journey
   // A task closed inside tracked time is part of that stretch; the list still names it.
   const tasks = tasksSentence(allTasks, dayKey, time !== "");
   const workSentences = [time, tasks].filter(Boolean);
-  const hasActivity = calendar.length > 0 || workSentences.length > 0 || bucket.milestones.length > 0;
+  const daily = everydaySentences(everyday);
+  const hasActivity = calendar.length > 0 || daily.length > 0 || workSentences.length > 0 || bucket.milestones.length > 0;
   if (workSentences.length > 0 && workMinutes >= 240) {
     // One stretch of work already says the whole total: saying the number again would read like a stutter.
     const stretches = groups.filter((g) => g.minutes >= 15);
@@ -453,12 +510,12 @@ function composeDay(dayKey: string, bucket: DayBucket, ctx: DayContext): Journey
 
   // What is told about the day's doings flows as one paragraph when it is short, and splits at the calendar/work seam when it is long;
   // the habits always stand in a paragraph of their own. The lead-in never stands alone: it joins the first paragraph after it.
-  const doings = [...lead, ...calendar, ...workSentences];
+  const doings = [...lead, ...calendar, ...daily, ...workSentences];
   const paragraphs: string[] = [];
   if (doings.length <= 5) {
     if (doings.length > 0) paragraphs.push(doings.join(" "));
   } else {
-    const head = [...lead, ...calendar];
+    const head = [...lead, ...calendar, ...daily];
     if (head.length > 0) paragraphs.push(head.join(" "));
     if (workSentences.length > 0) paragraphs.push(workSentences.join(" "));
   }

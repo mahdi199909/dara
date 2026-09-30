@@ -9,6 +9,7 @@ import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
 import TimePicker from "@/components/ui/TimePicker";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
+import AccountPicker from "@/components/AccountPicker";
 import OverlapNotice from "@/components/day/OverlapNotice";
 import { overlapRefusal, type OverlapRefusal } from "@/lib/overlapClient";
 import { CAPTURE_TYPES, CAPTURE_TYPE_LABELS, VALUE_TYPES, VALUE_TYPE_LABELS, type CaptureEntityType, type ValueType } from "@/lib/types";
@@ -65,6 +66,8 @@ export default function CaptureForm({
   const [endTime, setEndTime] = useState(initialEnd ? hhmm(initialEnd) : "");
   const [flowType, setFlowType] = useState<FlowType>(initialFlowType ?? "COST");
   const [amount, setAmount] = useState(initialAmount ? String(initialAmount) : "");
+  // null = the person's default account (Finance → حساب‌ها); a pick here is for this entry only.
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Set when the chosen time lies on top of something already on the day — see OverlapNotice.
@@ -138,6 +141,7 @@ export default function CaptureForm({
         flowType,
         amount: amount ? Number(amount) : undefined,
         allowOverlap,
+        accountId,
       });
       onDone(summary);
     } catch (err) {
@@ -262,6 +266,8 @@ export default function CaptureForm({
         </div>
         <MoneyInput value={amount} onChange={setAmount} placeholder="۰" />
       </div>
+
+      {Number(amount) > 0 && <AccountPicker value={accountId} onChange={setAccountId} flow={flowType} />}
 
       {overlap && <OverlapNotice refusal={overlap} saving={loading} onSaveAnyway={() => void save(true)} />}
       {error && <p className="text-sm text-waste">{error}</p>}

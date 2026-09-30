@@ -285,8 +285,8 @@ export function createEvent(db: LocalDb, userId: string, input: CreateEventInput
 
   const row = db.get<EventRow>(`SELECT * FROM "Event" WHERE "id" = ?`, [id])!;
 
-  if (row.directCost > 0) syncEventDirectCostTransaction(db, id);
-  if (row.incomeAmount > 0) syncEventIncomeTransaction(db, id);
+  if (row.directCost > 0) syncEventDirectCostTransaction(db, id, input.accountId);
+  if (row.incomeAmount > 0) syncEventIncomeTransaction(db, id, input.accountId);
 
   if (input.reminderOffsets?.length) {
     for (const offsetMinutes of input.reminderOffsets) {

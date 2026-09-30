@@ -1,5 +1,5 @@
 import { prisma } from "./db";
-import { resolveDefaultAccountId } from "./accounts";
+import { resolveAccountId, resolveDefaultAccountId } from "./accounts";
 import { computeVirtualAssetValue } from "./timeCost";
 import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
 
@@ -10,6 +10,9 @@ import { deleteVirtualAssetEntriesWithTombstones } from "./tombstones";
  * Shared by Activity, Task, and Event, which all carry this directCost/incomeAmount shape.
  * Cost and income transactions are looked up by (link field + type) so a Task/Event can
  * carry both a linked EXPENSE and a linked INCOME transaction at once without colliding.
+ *
+ * `preferredAccountId` (tasks and events) is the account the person picked while saving; it only decides
+ * where a NEW linked transaction is booked — an existing one keeps its account.
  */
 
 export async function syncActivityDirectCostTransaction(activityId: string) {
@@ -51,7 +54,7 @@ export async function syncActivityDirectCostTransaction(activityId: string) {
   }
 }
 
-export async function syncTaskDirectCostTransaction(taskId: string) {
+export async function syncTaskDirectCostTransaction(taskId: string, preferredAccountId?: string | null) {
   const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
   const existingTx = await prisma.transaction.findFirst({
     where: { taskId, activityId: null, type: "EXPENSE", deletedAt: null },
@@ -73,7 +76,7 @@ export async function syncTaskDirectCostTransaction(taskId: string) {
       },
     });
   } else {
-    const accountId = await resolveDefaultAccountId(task.userId);
+    const accountId = await resolveAccountId(task.userId, preferredAccountId);
     await prisma.transaction.create({
       data: {
         userId: task.userId,
@@ -90,7 +93,7 @@ export async function syncTaskDirectCostTransaction(taskId: string) {
   }
 }
 
-export async function syncTaskIncomeTransaction(taskId: string) {
+export async function syncTaskIncomeTransaction(taskId: string, preferredAccountId?: string | null) {
   const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } });
   const existingTx = await prisma.transaction.findFirst({
     where: { taskId, activityId: null, type: "INCOME", deletedAt: null },
@@ -112,7 +115,7 @@ export async function syncTaskIncomeTransaction(taskId: string) {
       },
     });
   } else {
-    const accountId = await resolveDefaultAccountId(task.userId);
+    const accountId = await resolveAccountId(task.userId, preferredAccountId);
     await prisma.transaction.create({
       data: {
         userId: task.userId,
@@ -168,7 +171,7 @@ export async function syncTaskVirtualAsset(taskId: string) {
   }
 }
 
-export async function syncEventDirectCostTransaction(eventId: string) {
+export async function syncEventDirectCostTransaction(eventId: string, preferredAccountId?: string | null) {
   const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
   const existingTx = await prisma.transaction.findFirst({ where: { eventId, type: "EXPENSE", deletedAt: null } });
 
@@ -188,7 +191,7 @@ export async function syncEventDirectCostTransaction(eventId: string) {
       },
     });
   } else {
-    const accountId = await resolveDefaultAccountId(event.userId);
+    const accountId = await resolveAccountId(event.userId, preferredAccountId);
     await prisma.transaction.create({
       data: {
         userId: event.userId,
@@ -205,7 +208,7 @@ export async function syncEventDirectCostTransaction(eventId: string) {
   }
 }
 
-export async function syncEventIncomeTransaction(eventId: string) {
+export async function syncEventIncomeTransaction(eventId: string, preferredAccountId?: string | null) {
   const event = await prisma.event.findUniqueOrThrow({ where: { id: eventId } });
   const existingTx = await prisma.transaction.findFirst({ where: { eventId, type: "INCOME", deletedAt: null } });
 
@@ -225,7 +228,7 @@ export async function syncEventIncomeTransaction(eventId: string) {
       },
     });
   } else {
-    const accountId = await resolveDefaultAccountId(event.userId);
+    const accountId = await resolveAccountId(event.userId, preferredAccountId);
     await prisma.transaction.create({
       data: {
         userId: event.userId,

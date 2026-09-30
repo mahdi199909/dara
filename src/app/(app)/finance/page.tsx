@@ -7,6 +7,7 @@ import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories, useAccounts, useBudgets, useSavingsGoals } from "@/lib/hooks";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
 import { computeBudgetProgress } from "@/lib/budgetProgress";
+import { pickDefaultAccount } from "@/lib/defaultAccount";
 import { Card, EmptyState, StatItem } from "@/components/ui/Card";
 import { formatJalali, toJalali } from "@/lib/jalali";
 import { toPersianDigits, signed } from "@/lib/money";
@@ -486,6 +487,19 @@ function AccountsTab() {
     }
   }
 
+  // The account new expenses and income go to when none is picked: the one marked, otherwise the oldest active one.
+  const defaultAccountId = pickDefaultAccount(data?.accounts ?? [])?.id ?? null;
+
+  async function makeDefault(id: string) {
+    try {
+      await apiPatch(`/api/accounts/${id}`, { isDefault: true });
+      mutate();
+      notifySaved();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تغییر حساب پیش‌فرض انجام نشد.");
+    }
+  }
+
   async function remove(id: string) {
     if (!confirm("این حساب حذف شود؟")) return;
     try {
@@ -552,9 +566,19 @@ function AccountsTab() {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs text-muted">{ACCOUNT_TYPE_LABELS[a.type as AccountType]}</p>
-                <p className="font-bold text-ink mt-0.5 truncate">{a.name}</p>
+                <p className="font-bold text-ink mt-0.5 truncate">
+                  {a.name}
+                  {a.id === defaultAccountId && (
+                    <span className="mr-2 align-middle text-xs font-medium px-2 py-0.5 rounded-full bg-accent-soft text-accent">پیش‌فرض</span>
+                  )}
+                </p>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
+                {a.isActive && a.id !== defaultAccountId && (
+                  <button onClick={() => makeDefault(a.id)} className="px-2 py-1.5 rounded-lg text-xs text-accent hover:bg-canvas">
+                    پیش‌فرض کن
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setShowForm(false);
@@ -573,6 +597,9 @@ function AccountsTab() {
             <p className="text-lg font-bold text-accent mt-2">{format(a.balance, { withSuffix: true })}</p>
           </Card>
         ))}
+        {(data?.accounts.length ?? 0) > 1 && (
+          <p className="text-xs text-muted">خرج و درآمدی که برایش حسابی انتخاب نکنی، به حساب پیش‌فرض می‌رود. موقع ثبت هر مبلغ می‌توانی حساب دیگری را انتخاب کنی.</p>
+        )}
         {data?.accounts.length === 0 && <EmptyState message="هنوز حسابی ثبت نکرده‌اید." />}
       </div>
     </div>

@@ -13,6 +13,7 @@ import { formatJalali, formatTime as formatJalaliTime } from "@/lib/jalali";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { CAPTURE_TYPE_LABELS } from "@/lib/types";
 import { XIcon } from "./icons";
+import AccountPicker from "./AccountPicker";
 
 /**
  * What smart capture (src/lib/smartCapture.ts) shows instead of jumping straight to the full
@@ -34,6 +35,8 @@ export default function SmartCaptureConfirm({
   const { categories, mutate: mutateCategories } = useCategories();
   const { format } = useCurrencyUnit();
   const [saving, setSaving] = useState(false);
+  // null = the person's default account; a pick here is for this entry only.
+  const [accountId, setAccountId] = useState<string | null>(null);
 
   const matchedCategory = prefill.categoryHint ? matchCategoryHint(prefill.categoryHint, categories) : null;
   const matchedProjectCategory = prefill.projectHint ? matchProjectHint(prefill.projectHint, categories) : null;
@@ -47,7 +50,7 @@ export default function SmartCaptureConfirm({
     setSaving(true);
     try {
       // What is saved — and what a line typed into the phone's widget saves — is worked out in one place.
-      const resolution = resolveEntry(prefill, categories, new Date());
+      const resolution = resolveEntry(prefill, categories, new Date(), { accountId });
       const results = await runSteps(resolution.steps, (call) => (call.method === "GET" ? fetcher(call.url) : apiPost(call.url, call.body)));
       // A new project comes with a category of its own (read back above with a plain fetch). Revalidating
       // through useCategories' own `mutate` matters: refreshAllCaches below never touches /api/categories,
@@ -94,6 +97,8 @@ export default function SmartCaptureConfirm({
               <span className="font-bold text-ink">{format(prefill.amount, { withSuffix: true })}</span>
             </div>
           )}
+
+          {prefill.amount != null && prefill.amount > 0 && <AccountPicker value={accountId} onChange={setAccountId} flow={prefill.flowType} />}
 
           {matchedCategory && (
             <span className="inline-block text-xs px-2.5 py-1 rounded-full bg-accent-soft text-accent">{matchedCategory.name}</span>

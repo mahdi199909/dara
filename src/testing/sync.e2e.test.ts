@@ -595,6 +595,54 @@ describe("costs, reminders and large amounts", () => {
     await expectEndpointParity(server, phone, "/api/transactions");
   });
 
+  it("books an amount to the default account, or to the one picked for that entry — the same on the phone and the web, and the default travels", async () => {
+    const account = await server.registerUser();
+    server.setWebSession(account.token);
+    const phone = await linkedPhone(account);
+
+    // Two accounts made on the web; the second becomes the default there.
+    const cash = (await server.mustWeb("POST", "/api/accounts", { name: "نقد", type: "CASH" })).account;
+    await tick();
+    const bank = (await server.mustWeb("POST", "/api/accounts", { name: "بانک", type: "BANK_ACCOUNT" })).account;
+    await server.mustWeb("PATCH", `/api/accounts/${bank.id}`, { isDefault: true });
+    await syncUntilQuiet(phone);
+
+    type Acc = { id: string; isDefault: boolean };
+    const phoneAccounts = phone.must("GET", "/api/accounts").accounts as Acc[];
+    expect(phoneAccounts.find((a) => a.id === bank.id)?.isDefault).toBe(true);
+    expect(phoneAccounts.find((a) => a.id === cash.id)?.isDefault).toBe(false);
+
+    // No account named: the default. One named: that one. A stranger's id: the default again, not an error.
+    const accountOf = (txs: { description: string; accountId: string }[], title: string) => txs.find((t) => t.description === title)?.accountId;
+    phone.must("POST", "/api/tasks", { title: "ناهار", directCost: 350_000 });
+    phone.must("POST", "/api/tasks", { title: "تاکسی", directCost: 80_000, accountId: cash.id });
+    phone.must("POST", "/api/events", { title: "سینما", startAt: iso(1, 18), endAt: iso(1, 20), directCost: 200_000, accountId: cash.id });
+    phone.must("POST", "/api/tasks", { title: "ناشناس", directCost: 1_000, accountId: "not-mine" });
+    const phoneTx = phone.must("GET", "/api/transactions").transactions;
+    expect(accountOf(phoneTx, "ناهار")).toBe(bank.id);
+    expect(accountOf(phoneTx, "تاکسی")).toBe(cash.id);
+    expect(accountOf(phoneTx, "سینما")).toBe(cash.id);
+    expect(accountOf(phoneTx, "ناشناس")).toBe(bank.id);
+
+    await server.mustWeb("POST", "/api/tasks", { title: "شام", directCost: 500_000 });
+    await server.mustWeb("POST", "/api/tasks", { title: "قهوه", incomeAmount: 0, directCost: 90_000, accountId: cash.id });
+    const webTx = (await server.mustWeb("GET", "/api/transactions")).transactions;
+    expect(accountOf(webTx, "شام")).toBe(bank.id);
+    expect(accountOf(webTx, "قهوه")).toBe(cash.id);
+
+    // Moving the default on the phone takes the mark off the other account, and the web learns of it.
+    await tick();
+    phone.must("PATCH", `/api/accounts/${cash.id}`, { isDefault: true });
+    const after = phone.must("GET", "/api/accounts").accounts as Acc[];
+    expect(after.filter((a) => a.isDefault).map((a) => a.id)).toEqual([cash.id]);
+    const rounds = await syncUntilQuiet(phone);
+    for (const r of rounds) expect(r.error, r.error?.message).toBeUndefined();
+    const webAccounts = (await server.mustWeb("GET", "/api/accounts")).accounts as Acc[];
+    expect(webAccounts.filter((a) => a.isDefault).map((a) => a.id)).toEqual([cash.id]);
+    await server.mustWeb("POST", "/api/tasks", { title: "بعد از تغییر", directCost: 10_000 });
+    expect(accountOf((await server.mustWeb("GET", "/api/transactions")).transactions, "بعد از تغییر")).toBe(cash.id);
+  });
+
   it("changing an event's cost on the phone updates its expense instead of adding another, and clearing it removes it", async () => {
     const account = await server.registerUser();
     const phone = await linkedPhone(account);

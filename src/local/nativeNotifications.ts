@@ -144,9 +144,19 @@ async function armingOptions(plugin: Plugin): Promise<{ channelId: string | unde
   return { channelId, exact };
 }
 
+/**
+ * The status-bar icon and its tint. Without a name the plugin falls back to Android's generic "i" in a
+ * circle (ic_dialog_info), which reads as an upside-down exclamation mark, not as this app. The drawable is
+ * android/app/src/main/res/drawable/ic_stat_parva.xml (a white silhouette, as Android requires).
+ */
+export const NOTIFICATION_SMALL_ICON = "ic_stat_parva";
+export const NOTIFICATION_ICON_COLOR = "#0E5F54";
+
 function notificationFor(reminder: ScheduledReminder, options: { channelId: string | undefined; exact: boolean }) {
   return {
     id: reminderNotificationId(reminder.id),
+    smallIcon: NOTIFICATION_SMALL_ICON,
+    iconColor: NOTIFICATION_ICON_COLOR,
     title: reminder.title,
     body: reminder.body,
     schedule: { at: new Date(reminder.remindAt), allowWhileIdle: true },
@@ -304,6 +314,8 @@ export function sendTestNotification(options: { title: string; body: string; del
         notifications: [
           {
             id: TEST_NOTIFICATION_ID,
+            smallIcon: NOTIFICATION_SMALL_ICON,
+            iconColor: NOTIFICATION_ICON_COLOR,
             title: options.title,
             body: options.body,
             schedule: { at, allowWhileIdle: true },
