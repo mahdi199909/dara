@@ -3,9 +3,27 @@
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/apiError";
 import { computeCheckChange, computeMove, computeMoveTo, computeRecheck, descendantIds, nextSortOrder, type TreeRow } from "@/lib/checklistTree";
+import { planningColumns, resolveTreeRules } from "@/lib/checklistPlanning";
 import type { ChecklistItemDto, ChecklistTreeNode, CreateChecklistItemInput, CreateChecklistItemsInput, CreateChecklistTreeInput, UpdateChecklistItemInput } from "@/lib/schemas/checklists";
 
-const SELECT = { id: true, parentId: true, title: true, note: true, checked: true, checkedAt: true, sortOrder: true, createdAt: true, updatedAt: true } as const;
+const SELECT = {
+  id: true,
+  parentId: true,
+  title: true,
+  note: true,
+  checked: true,
+  checkedAt: true,
+  sortOrder: true,
+  durationMin: true,
+  depType: true,
+  depItemId: true,
+  lagMin: true,
+  linkedType: true,
+  linkedId: true,
+  linkedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 export const CHECKLIST_NOT_FOUND = "مورد چک‌لیست پیدا نشد.";
 
@@ -54,13 +72,22 @@ export async function createChecklistTree(userId: string, input: CreateChecklist
   if (parentId) await getOwnedChecklistItem(userId, parentId);
   const rows = await treeRows(userId);
   const created: ChecklistItemDto[] = [];
+  const named: { id: string; title: string; depType?: string | null; depTitle?: string | null }[] = [];
   const insert = async (node: ChecklistTreeNode, parent: string | null, sortOrder: number) => {
-    const item = await prisma.checklistItem.create({ data: { userId, parentId: parent, title: node.title, note: node.note || null, sortOrder }, select: SELECT });
+    const item = await prisma.checklistItem.create({
+      data: { userId, parentId: parent, title: node.title, note: node.note || null, sortOrder, durationMin: node.durationMin ?? null, lagMin: node.lagMin ?? 0 },
+      select: SELECT,
+    });
     created.push(item);
+    named.push({ id: item.id, title: node.title, depType: node.depType, depTitle: node.depTitle });
     let order = 0;
     for (const child of node.children ?? []) await insert(child, item.id, order++);
   };
   await insert(input.tree, parentId, nextSortOrder(rows, parentId));
+  for (const rule of resolveTreeRules(named)) {
+    const updated = await prisma.checklistItem.update({ where: { id: rule.id }, data: { depType: rule.depType, depItemId: rule.depItemId }, select: SELECT });
+    created[created.findIndex((c) => c.id === rule.id)] = updated;
+  }
   if (parentId) await applyChange(computeRecheck(await treeRows(userId), parentId));
   return created;
 }
@@ -73,10 +100,11 @@ async function applyChange({ check, uncheck }: { check: string[]; uncheck: strin
 
 export async function updateChecklistItem(userId: string, id: string, input: UpdateChecklistItemInput): Promise<ChecklistItemDto> {
   await getOwnedChecklistItem(userId, id);
-  if (input.title !== undefined || input.note !== undefined) {
+  const planning = planningColumns(await treeRows(userId), id, input, new Date());
+  if (input.title !== undefined || input.note !== undefined || Object.keys(planning).length > 0) {
     await prisma.checklistItem.update({
       where: { id },
-      data: { ...(input.title !== undefined ? { title: input.title } : {}), ...(input.note !== undefined ? { note: input.note || null } : {}) },
+      data: { ...(input.title !== undefined ? { title: input.title } : {}), ...(input.note !== undefined ? { note: input.note || null } : {}), ...planning },
     });
   }
   if (input.checked !== undefined) await applyChange(computeCheckChange(await treeRows(userId), id, input.checked));

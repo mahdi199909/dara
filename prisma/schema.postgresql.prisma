@@ -841,6 +841,18 @@ model ChecklistItem {
   checkedAt DateTime?
   sortOrder Int       @default(0)
 
+  // Planning (all optional; see src/lib/checklistSchedule.ts): how long the step takes, and when it
+  // happens relative to another item of the same list — AFTER it ends, BEFORE it starts, or WITH
+  // its start — plus a gap in minutes. depItemId is a plain column like parentId.
+  durationMin Int?
+  depType     String? // AFTER | BEFORE | WITH
+  depItemId   String?
+  lagMin      Int     @default(0)
+  // What the step was turned into (TASK, EVENT, TRANSACTION…), so the list can say it is already planned.
+  linkedType  String?
+  linkedId    String?
+  linkedAt    DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?

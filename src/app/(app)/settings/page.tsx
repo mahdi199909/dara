@@ -1590,7 +1590,7 @@ const WIDGET_OPACITY_KEY = "widget_theme_opacity";
 const DEFAULT_WIDGET_COLOR = "#0e5f54";
 const DEFAULT_WIDGET_OPACITY = 85;
 
-// Background theming for the four home-screen widgets (see the four *WidgetProvider.java files)
+// Background theming for the five home-screen widgets (see the five *WidgetProvider.java files)
 // — a solid color behind a bit of transparency, not a real backdrop blur: classic RemoteViews
 // (what Android widgets render through) has no API for blurring whatever sits behind the widget on
 // the launcher, only for the widget's own background color/alpha. The text on top picks itself: a
@@ -1643,7 +1643,7 @@ function WidgetsTab() {
       <div>
         <h2 className="font-bold text-ink text-sm">رنگ و شفافیت ویجت‌ها</h2>
         <p className="text-xs text-muted leading-relaxed mt-1">
-          روی پس‌زمینهٔ هر چهار ویجت صفحهٔ اصلی (ثبت سریع، عادت‌ها، رویدادهای امروز، سرمایه) اعمال می‌شود. برای دیدن تغییر، به صفحهٔ اصلی گوشی برگردید.
+          روی پس‌زمینهٔ هر پنج ویجت صفحهٔ اصلی (ثبت سریع، صندوق ورودی، عادت‌ها، رویدادهای امروز، سرمایه) اعمال می‌شود. برای دیدن تغییر، به صفحهٔ اصلی گوشی برگردید.
         </p>
       </div>
 

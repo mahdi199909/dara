@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the «صندوق ورودی» widget opens (InboxCaptureActivity): one box to write in, and ✓. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/inbox_scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#4D000000">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:layout_marginTop="80dp"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/capsule_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="4dp">
+
+        <EditText
+            android:id="@+id/inbox_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="به صندوق ورودی…"
+            android:textDirection="rtl"
+            android:gravity="right"
+            android:textColorHint="#9CA3AF"
+            android:textColor="#1A1D29"
+            android:textSize="15sp"
+            android:paddingTop="15dp"
+            android:paddingBottom="15dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="8dp"
+            android:background="@android:color/transparent"
+            android:inputType="textMultiLine|textCapSentences"
+            android:maxLines="5"
+            android:maxLength="5000" />
+
+        <TextView
+            android:id="@+id/inbox_save"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="6dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:text="✓"
+            android:textColor="#0E5F54"
+            android:textStyle="bold"
+            android:textSize="22sp"
+            android:contentDescription="ثبت در صندوق ورودی" />
+    </LinearLayout>
+</FrameLayout>

@@ -46,16 +46,66 @@ export const CHECKLIST_TEMPLATES: ChecklistTemplate[] = [
   {
     id: "seminar",
     title: "سمینار / رویداد",
-    description: "از گرفتن سالن تا جمع‌بندی بعد از رویداد",
+    description: "از گرفتن سالن تا جمع‌بندی — با مدت و ترتیب، آمادهٔ افزودن به تقویم",
     icon: "🎤",
     tree: {
       title: "سمینار",
       children: [
-        { title: "گرفتن سالن", children: items("پیدا کردن چند گزینه", "تماس و گرفتن قیمت", "بازدید", "بستن قرارداد و بیعانه") },
-        { title: "سخنران‌ها", children: items("دعوت", "هماهنگی موضوع و زمان", "گرفتن فایل ارائه") },
-        { title: "ثبت‌نام", children: items("فرم ثبت‌نام", "تعیین هزینه", "اطلاع‌رسانی", "فهرست نهایی شرکت‌کننده‌ها") },
-        { title: "روز رویداد", children: items("تست صدا و ویدئوپروژکتور", "پذیرایی", "خوشامدگویی و کارت نام", "عکاسی") },
-        { title: "بعد از رویداد", children: items("تشکر از شرکت‌کننده‌ها", "فرستادن فایل‌ها", "تسویهٔ هزینه‌ها", "جمع‌بندی: چه خوب بود، چه بهتر شود") },
+        {
+          title: "گرفتن سالن",
+          children: [
+            { title: "پیدا کردن چند گزینه", durationMin: 60 },
+            { title: "تماس و گرفتن قیمت", durationMin: 60 },
+            { title: "بازدید", durationMin: 120 },
+            { title: "بستن قرارداد و بیعانه", durationMin: 60 },
+          ],
+        },
+        {
+          title: "سخنران‌ها",
+          depType: "AFTER",
+          depTitle: "گرفتن سالن",
+          children: [
+            { title: "دعوت", durationMin: 60 },
+            { title: "هماهنگی موضوع و زمان", durationMin: 60 },
+            { title: "گرفتن فایل ارائه", durationMin: 30, depType: "AFTER", depTitle: "هماهنگی موضوع و زمان", lagMin: 7 * 24 * 60 },
+          ],
+        },
+        {
+          title: "ثبت‌نام",
+          depType: "AFTER",
+          depTitle: "هماهنگی موضوع و زمان",
+          children: [
+            { title: "فرم ثبت‌نام", durationMin: 60 },
+            { title: "تعیین هزینه", durationMin: 30 },
+            { title: "اطلاع‌رسانی", durationMin: 120 },
+            { title: "فهرست نهایی شرکت‌کننده‌ها", durationMin: 30, depType: "BEFORE", depTitle: "روز رویداد", lagMin: 24 * 60 },
+          ],
+        },
+        {
+          title: "روز رویداد",
+          depType: "AFTER",
+          depTitle: "گرفتن فایل ارائه",
+          lagMin: 2 * 24 * 60,
+          children: [
+            { title: "تست صدا و ویدئوپروژکتور", durationMin: 60 },
+            { title: "خوشامدگویی و کارت نام", durationMin: 30 },
+            { title: "برگزاری", durationMin: 240 },
+            { title: "پذیرایی", durationMin: 60, depType: "WITH", depTitle: "برگزاری", lagMin: 120 },
+            { title: "عکاسی", durationMin: 240, depType: "WITH", depTitle: "برگزاری" },
+          ],
+        },
+        {
+          title: "بعد از رویداد",
+          depType: "AFTER",
+          depTitle: "روز رویداد",
+          lagMin: 24 * 60,
+          children: [
+            { title: "تشکر از شرکت‌کننده‌ها", durationMin: 30 },
+            { title: "فرستادن فایل‌ها", durationMin: 30 },
+            { title: "تسویهٔ هزینه‌ها", durationMin: 60 },
+            { title: "جمع‌بندی: چه خوب بود، چه بهتر شود", durationMin: 30 },
+          ],
+        },
       ],
     },
   },

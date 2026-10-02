@@ -6,6 +6,7 @@ import { computeCheckChange, computeMove, computeMoveTo, computeRecheck, descend
 import type { ChecklistItemDto, ChecklistTreeNode, CreateChecklistItemInput, CreateChecklistItemsInput, CreateChecklistTreeInput, UpdateChecklistItemInput } from "@/lib/schemas/checklists";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
+import { planningColumns, resolveTreeRules } from "@/lib/checklistPlanning";
 
 interface ChecklistRow {
   id: string;
@@ -16,6 +17,13 @@ interface ChecklistRow {
   checked: number;
   checkedAt: string | null;
   sortOrder: number;
+  durationMin: number | null;
+  depType: string | null;
+  depItemId: string | null;
+  lagMin: number;
+  linkedType: string | null;
+  linkedId: string | null;
+  linkedAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -36,6 +44,13 @@ function toDto(row: ChecklistRow): ChecklistItemDto {
     checked: !!row.checked,
     checkedAt: row.checkedAt,
     sortOrder: row.sortOrder,
+    durationMin: row.durationMin ?? null,
+    depType: row.depType ?? null,
+    depItemId: row.depItemId ?? null,
+    lagMin: row.lagMin ?? 0,
+    linkedType: row.linkedType ?? null,
+    linkedId: row.linkedId ?? null,
+    linkedAt: row.linkedAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -114,12 +129,16 @@ export function createChecklistTree(db: LocalDb, userId: string, input: CreateCh
   const parentId = input.parentId ?? null;
   if (parentId) getOwnedRow(db, userId, parentId);
   const ids: string[] = [];
+  const named: { id: string; title: string; depType?: string | null; depTitle?: string | null }[] = [];
   const add = (node: ChecklistTreeNode, parent: string | null, sortOrder: number) => {
     const id = insert(db, userId, parent, node.title, node.note || null, sortOrder);
+    if (node.durationMin || node.lagMin) db.run(`UPDATE "ChecklistItem" SET "durationMin" = ?, "lagMin" = ? WHERE "id" = ?`, [node.durationMin ?? null, node.lagMin ?? 0, id]);
     ids.push(id);
+    named.push({ id, title: node.title, depType: node.depType, depTitle: node.depTitle });
     (node.children ?? []).forEach((child, i) => add(child, id, i));
   };
   add(input.tree, parentId, nextSortOrder(treeRows(db, userId), parentId));
+  for (const rule of resolveTreeRules(named)) db.run(`UPDATE "ChecklistItem" SET "depType" = ?, "depItemId" = ? WHERE "id" = ?`, [rule.depType, rule.depItemId, rule.id]);
   if (parentId) applyChange(db, computeRecheck(treeRows(db, userId), parentId));
   return ids.map((id) => {
     const row = getOwnedRow(db, userId, id);
@@ -139,6 +158,10 @@ export function updateChecklistItem(db: LocalDb, userId: string, id: string, inp
   if (input.note !== undefined) {
     sets.push(`"note" = ?`);
     params.push(input.note || null);
+  }
+  for (const [column, value] of Object.entries(planningColumns(treeRows(db, userId), id, input, new Date()))) {
+    sets.push(`"${column}" = ?`);
+    params.push(value instanceof Date ? value.toISOString() : value);
   }
   if (sets.length > 0) {
     sets.push(`"updatedAt" = ?`);

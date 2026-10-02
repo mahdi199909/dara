@@ -5,6 +5,8 @@
     <string name="package_name">ir.parvaapp</string>
     <string name="custom_url_scheme">ir.parvaapp</string>
     <string name="widget_capture_title">ثبت سریع کار</string>
+    <string name="widget_inbox_title">صندوق ورودی</string>
+    <string name="widget_inbox_description">هرچه در ذهنت است بنویس؛ می‌رود به صندوق ورودی parva تا بعداً درباره‌اش تصمیم بگیری</string>
     <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ parva</string>
     <string name="widget_today_events_title">رویدادهای امروز</string>
     <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>

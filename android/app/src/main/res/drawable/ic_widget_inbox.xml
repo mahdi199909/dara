@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The «صندوق ورودی» widget's icon: an inbox tray with an arrow dropping into it (white; the widget tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- tray -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3.5,13.5h5l1.5,2.5h4l1.5,-2.5h5M5,9.5l-1.5,4V19A1.5,1.5 0,0 0,5 20.5h14A1.5,1.5 0,0 0,20.5 19v-5.5l-1.5,-4" />
+    <!-- arrow into the tray -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,3v8M8.5,7.5L12,11l3.5,-3.5" />
+</vector>

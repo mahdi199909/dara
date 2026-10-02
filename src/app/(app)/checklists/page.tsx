@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { buildTree, progressOf, type TreeNode } from "@/lib/checklistTree";
-import { CHECKLIST_NOTE_MAX_LENGTH, CHECKLIST_TITLE_MAX_LENGTH, type ChecklistItemDto, type ChecklistTreeNode } from "@/lib/schemas/checklists";
+import { CHECKLIST_TITLE_MAX_LENGTH, type ChecklistItemDto, type ChecklistTreeNode } from "@/lib/schemas/checklists";
+import { describeRule } from "@/lib/checklistSchedule";
+import { formatDuration } from "@/lib/money";
+import ItemSettingsSheet, { LINK_LABELS } from "@/components/checklists/ItemSettingsSheet";
+import SchedulePanel from "@/components/checklists/SchedulePanel";
 import { CHECKLIST_TEMPLATES, templateLeafCount, type ChecklistTemplate } from "@/lib/checklistTemplates";
 import { toPersianDigits } from "@/lib/money";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -153,6 +157,8 @@ function ChecklistView({ id }: { id: string }) {
   const list = useMemo(() => findNode(tree, id), [tree, id]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<"LIST" | "PLAN">("LIST");
+  const [settingsFor, setSettingsFor] = useState<string | null>(null);
 
   async function run(action: () => Promise<unknown>, fallback: string): Promise<boolean> {
     setBusy(true);
@@ -185,7 +191,12 @@ function ChecklistView({ id }: { id: string }) {
   }
 
   const { done, total } = progressOf(items, id);
-  const ctx: RowContext = { run, busy };
+  const titleById = new Map(items.map((i) => [i.id, i.title]));
+  const ctx: RowContext = { run, busy, openSettings: setSettingsFor, titleOf: (itemId) => titleById.get(itemId) ?? null };
+
+  // The item whose settings are open, with what the sheet needs to know about its place.
+  const settingsItem = settingsFor ? items.find((i) => i.id === settingsFor) : undefined;
+  const siblings = settingsItem ? items.filter((i) => i.parentId === settingsItem.parentId).sort((a, b) => a.sortOrder - b.sortOrder || String(a.createdAt).localeCompare(String(b.createdAt))) : [];
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -197,16 +208,48 @@ function ChecklistView({ id }: { id: string }) {
       <ListHeader list={list} done={done} total={total} ctx={ctx} onDeleted={() => router.push("/checklists")} />
       {error && <p className="text-xs text-waste">{error}</p>}
 
-      <Card className="p-2">
-        {list.children.length === 0 ? (
-          <p className="text-sm text-muted text-center py-6">هنوز موردی نیست — اولین را پایین اضافه کن.</p>
-        ) : (
-          <SiblingList nodes={list.children} depth={0} ctx={ctx} />
-        )}
-        <div className="px-1 pt-2">
-          <AddItems parentId={id} ctx={ctx} placeholder="مورد تازه (هر خط یک مورد)" />
-        </div>
-      </Card>
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-canvas p-1">
+        {(
+          [
+            ["LIST", "فهرست"],
+            ["PLAN", "زمان‌بندی (پیشرفته)"],
+          ] as const
+        ).map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setTab(value)} className={`rounded-lg py-2 text-sm ${tab === value ? "bg-surface text-ink font-medium shadow-card" : "text-muted"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "LIST" ? (
+        <Card className="p-2">
+          {list.children.length === 0 ? (
+            <p className="text-sm text-muted text-center py-6">هنوز موردی نیست — اولین را پایین اضافه کن.</p>
+          ) : (
+            <SiblingList nodes={list.children} depth={0} ctx={ctx} />
+          )}
+          <div className="px-1 pt-2">
+            <AddItems parentId={id} ctx={ctx} placeholder="مورد تازه (هر خط یک مورد)" />
+          </div>
+          <p className="px-1 pt-2 text-[11px] text-muted">برای ویرایش، حذف، زمان و ترتیب هر مورد، روی خودش بزن.</p>
+        </Card>
+      ) : (
+        <SchedulePanel items={items} rootId={id} onEditItem={setSettingsFor} onChanged={mutate} />
+      )}
+
+      {settingsItem && (
+        <ItemSettingsSheet
+          key={settingsItem.id}
+          item={settingsItem}
+          items={items}
+          rootId={id}
+          hasChildren={items.some((i) => i.parentId === settingsItem.id)}
+          isFirst={siblings[0]?.id === settingsItem.id}
+          isLast={siblings[siblings.length - 1]?.id === settingsItem.id}
+          onClose={() => setSettingsFor(null)}
+          onChanged={mutate}
+        />
+      )}
     </div>
   );
 }
@@ -214,6 +257,9 @@ function ChecklistView({ id }: { id: string }) {
 interface RowContext {
   run: (action: () => Promise<unknown>, fallback: string) => Promise<boolean>;
   busy: boolean;
+  /** Opens the item's settings sheet (edit, delete, time, order, turn into…). */
+  openSettings: (id: string) => void;
+  titleOf: (id: string) => string | null;
 }
 
 function ListHeader({ list, done, total, ctx, onDeleted }: { list: Node; done: number; total: number; ctx: RowContext; onDeleted: () => void }) {
@@ -316,18 +362,15 @@ function AddItems({ parentId, ctx, placeholder, autoFocus, onDone }: { parentId:
   );
 }
 
-function ChecklistRow({ node, depth, ctx, isFirst, isLast, handle }: { node: Node; depth: number; ctx: RowContext; isFirst: boolean; isLast: boolean; handle: React.ReactNode }) {
+function ChecklistRow({ node, depth, ctx, handle }: { node: Node; depth: number; ctx: RowContext; isFirst: boolean; isLast: boolean; handle: React.ReactNode }) {
   const { item, children } = node;
   const [open, setOpen] = useState(true);
-  const [menu, setMenu] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(item.title);
-  const [note, setNote] = useState(item.note ?? "");
 
   const hasChildren = children.length > 0;
   const doneChildren = children.filter((c) => c.item.checked).length;
   const url = `${KEY}/${item.id}`;
+  const rule = describeRule(item.depType, item.depItemId ? ctx.titleOf(item.depItemId) : null, item.lagMin);
 
   return (
     <div>
@@ -351,70 +394,29 @@ function ChecklistRow({ node, depth, ctx, isFirst, isLast, handle }: { node: Nod
         >
           {item.checked && "✓"}
         </button>
-        <div className="flex-1 min-w-0">
-          {editing ? (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (title.trim() && (await ctx.run(() => apiPatch(url, { title, note: note.trim() || null }), "ذخیره انجام نشد."))) setEditing(false);
-              }}
-              className="space-y-1.5"
-            >
-              <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} maxLength={CHECKLIST_TITLE_MAX_LENGTH} className={inputClass} />
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={CHECKLIST_NOTE_MAX_LENGTH} rows={2} placeholder="توضیح (اختیاری)" className={`${inputClass} resize-none`} />
-              <div className="flex gap-2">
-                <button type="submit" className="flex-1 rounded-lg bg-accent text-on-accent py-1.5 text-xs">
-                  ذخیره
-                </button>
-                <button type="button" onClick={() => setEditing(false)} className="px-3 rounded-lg bg-canvas text-muted text-xs">
-                  انصراف
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button type="button" onClick={() => setMenu((v) => !v)} className="block w-full text-right">
-              <span className={`text-sm break-words ${item.checked ? "line-through text-muted" : "text-ink"}`}>{item.title}</span>
-              {hasChildren && (
-                <span className="text-[11px] text-muted mr-1.5">
-                  ({toPersianDigits(String(doneChildren))}/{toPersianDigits(String(children.length))})
-                </span>
-              )}
-              {item.note && <span className="block text-xs text-muted whitespace-pre-wrap break-words">{item.note}</span>}
-            </button>
+        <button type="button" onClick={() => ctx.openSettings(item.id)} className="flex-1 min-w-0 text-right">
+          <span className={`text-sm break-words ${item.checked ? "line-through text-muted" : "text-ink"}`}>{item.title}</span>
+          {hasChildren && (
+            <span className="text-[11px] text-muted mr-1.5">
+              ({toPersianDigits(String(doneChildren))}/{toPersianDigits(String(children.length))})
+            </span>
           )}
-        </div>
-        {!editing && (
-          <button type="button" aria-label="افزودن زیرمورد" onClick={() => setAdding((v) => !v)} className="p-1 text-muted hover:text-accent shrink-0">
-            <PlusIcon className="w-4 h-4" />
-          </button>
-        )}
+          {item.note && <span className="block text-xs text-muted whitespace-pre-wrap break-words">{item.note}</span>}
+          {(item.durationMin || rule || item.linkedType) && (
+            <span className="flex flex-wrap gap-1 mt-0.5">
+              {item.durationMin && !hasChildren ? <Badge>⏱ {formatDuration(item.durationMin)}</Badge> : null}
+              {rule && <Badge>{rule}</Badge>}
+              {item.linkedType && <Badge accent>✓ {LINK_LABELS[item.linkedType] ?? item.linkedType}</Badge>}
+            </span>
+          )}
+        </button>
+        <button type="button" aria-label="افزودن زیرمورد" onClick={() => setAdding((v) => !v)} className="p-1 text-muted hover:text-accent shrink-0">
+          <PlusIcon className="w-4 h-4" />
+        </button>
+        <button type="button" aria-label="ویرایش، حذف و زمان‌بندی" onClick={() => ctx.openSettings(item.id)} className="p-1 text-muted hover:text-ink shrink-0">
+          <EditIcon className="w-4 h-4" />
+        </button>
       </div>
-
-      {menu && !editing && (
-        <div className="flex flex-wrap gap-1.5 pb-2" style={{ paddingRight: depth * 20 + 70 }}>
-          <MenuChip
-            onClick={() => {
-              setMenu(false);
-              setTitle(item.title);
-              setNote(item.note ?? "");
-              setEditing(true);
-            }}
-          >
-            ویرایش
-          </MenuChip>
-          {!isFirst && <MenuChip onClick={() => void ctx.run(() => apiPatch(url, { move: "UP" }), "جابه‌جایی انجام نشد.")}>↑ بالاتر</MenuChip>}
-          {!isLast && <MenuChip onClick={() => void ctx.run(() => apiPatch(url, { move: "DOWN" }), "جابه‌جایی انجام نشد.")}>↓ پایین‌تر</MenuChip>}
-          {hasChildren && <MenuChip onClick={() => void ctx.run(() => apiPost(`${url}/reset`), "از نو کردن انجام نشد.")}>از نو</MenuChip>}
-          <MenuChip
-            danger
-            onClick={() => {
-              if (confirm(hasChildren ? `«${item.title}» با زیرموردهایش حذف شود؟` : `«${item.title}» حذف شود؟`)) void ctx.run(() => apiDelete(url), "حذف انجام نشد.");
-            }}
-          >
-            حذف
-          </MenuChip>
-        </div>
-      )}
 
       {adding && (
         <div className="pb-2" style={{ paddingRight: depth * 20 + 70 }}>
@@ -427,12 +429,8 @@ function ChecklistRow({ node, depth, ctx, isFirst, isLast, handle }: { node: Nod
   );
 }
 
-function MenuChip({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} className={`px-2.5 py-1 rounded-full text-xs border ${danger ? "border-waste/40 text-waste" : "border-line text-ink bg-surface"}`}>
-      {children}
-    </button>
-  );
+function Badge({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
+  return <span className={`inline-block px-1.5 py-0.5 rounded-md text-[10px] ${accent ? "bg-accent-soft text-accent" : "bg-canvas text-muted"}`}>{children}</span>;
 }
 
 /**

@@ -242,3 +242,75 @@ describe("ready-made lists, dragging and the timer's tasks", () => {
     expect(new Set(CHECKLIST_TEMPLATES.map((t) => t.id)).size).toBe(CHECKLIST_TEMPLATES.length);
   });
 });
+
+type Planned = Item & { durationMin: number | null; depType: string | null; depItemId: string | null; lagMin: number; linkedType: string | null; linkedAt: string | null };
+
+/** Durations, «بعد از / قبل از / هم‌زمان با» rules and links — the same on the web and the phone. */
+async function planningScenario(call: Call) {
+  const created = (
+    await call("POST", "/api/checklists", {
+      tree: {
+        title: "سمینار",
+        children: [
+          { title: "گرفتن سالن", children: [{ title: "تماس", durationMin: 30 }, { title: "قرارداد", durationMin: 60 }] },
+          { title: "هماهنگی موضوع", durationMin: 60, depType: "AFTER", depTitle: "گرفتن سالن", lagMin: 1440 },
+        ],
+      },
+    })
+  ).items as Planned[];
+  const byTitle = (t: string) => created.find((c) => c.title === t)!;
+  expect(byTitle("هماهنگی موضوع")).toMatchObject({ durationMin: 60, depType: "AFTER", depItemId: byTitle("گرفتن سالن").id, lagMin: 1440 });
+
+  // set and clear a rule, a duration and a link
+  const call1 = byTitle("تماس");
+  const updated = (await call("PATCH", `/api/checklists/${call1.id}`, { durationMin: 45, depType: "BEFORE", depItemId: byTitle("هماهنگی موضوع").id, lagMin: 60 })).item as Planned;
+  expect(updated).toMatchObject({ durationMin: 45, depType: "BEFORE", lagMin: 60 });
+  const linked = (await call("PATCH", `/api/checklists/${call1.id}`, { linkedType: "TASK", linkedId: "t-1" })).item as Planned;
+  expect(linked.linkedType).toBe("TASK");
+  expect(linked.linkedAt).toBeTruthy();
+  const cleared = (await call("PATCH", `/api/checklists/${call1.id}`, { depType: null, depItemId: null, durationMin: null, linkedType: null })).item as Planned;
+  expect(cleared).toMatchObject({ durationMin: null, depType: null, depItemId: null, linkedType: null, linkedAt: null });
+}
+
+async function planningRefusals(call: (m: string, u: string, b?: unknown) => Promise<{ status: number }>, setup: Call) {
+  const list = (await setup("POST", "/api/checklists", { tree: { title: "الف", children: [{ title: "گروه", children: [{ title: "قدم" }] }, { title: "دیگری" }] } })).items as Item[];
+  const other = (await setup("POST", "/api/checklists", { title: "فهرست دیگر" })).item as Item;
+  const step = list.find((i) => i.title === "قدم")!;
+  const group = list.find((i) => i.title === "گروه")!;
+  expect((await call("PATCH", `/api/checklists/${step.id}`, { depType: "AFTER", depItemId: step.id })).status).toBe(400);
+  expect((await call("PATCH", `/api/checklists/${step.id}`, { depType: "AFTER", depItemId: group.id })).status).toBe(400);
+  expect((await call("PATCH", `/api/checklists/${step.id}`, { depType: "AFTER", depItemId: other.id })).status).toBe(400);
+  expect((await call("PATCH", `/api/checklists/${step.id}`, { durationMin: 0 })).status).toBe(400);
+  expect((await call("PATCH", `/api/checklists/${step.id}`, { depType: "SOMETIME", depItemId: group.id })).status).toBe(400);
+  expect((await call("PATCH", `/api/checklists/${step.id}`, { depType: "WITH", depItemId: list.find((i) => i.title === "دیگری")!.id })).status).toBe(200);
+}
+
+describe("planning a checklist", () => {
+  it("works on the web", async () => {
+    await server.registerUser();
+    await planningScenario((m, u, b) => server.mustWeb(m, u, b));
+    await planningRefusals((m, u, b) => server.web(m, u, b), (m, u, b) => server.mustWeb(m, u, b));
+  });
+
+  it("works on the phone", async () => {
+    const phone = await createPhone();
+    phone.activate();
+    await planningScenario(async (m, u, b) => phone.must(m, u, b));
+    await planningRefusals(
+      async (m, u, b) => phone.request(m, u, b),
+      async (m, u, b) => phone.must(m, u, b)
+    );
+  });
+
+  it("travels to the phone", async () => {
+    const account = await server.registerUser();
+    const phone = await createPhone();
+    linkPhone(phone, account);
+    await server.mustWeb("POST", "/api/checklists", { tree: { title: "سفر", children: [{ title: "بلیت", durationMin: 30, depType: "BEFORE", depTitle: "حرکت" }, { title: "حرکت", durationMin: 120 }] } });
+    await syncUntilQuiet(phone);
+    phone.activate();
+    const items = phone.must("GET", "/api/checklists").items as Planned[];
+    const ticket = items.find((i) => i.title === "بلیت")!;
+    expect(ticket).toMatchObject({ durationMin: 30, depType: "BEFORE", depItemId: items.find((i) => i.title === "حرکت")!.id });
+  });
+});

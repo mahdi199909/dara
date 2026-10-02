@@ -17,6 +17,8 @@ import type { LocalDb } from "./db";
 import { createActivity } from "./repositories/activities";
 import { addManualTimeEntry } from "./activityService";
 import { toggleHabitCheckIn } from "./repositories/habits";
+import { createInboxItem } from "./repositories/inbox";
+import { INBOX_MAX_LENGTH } from "../lib/schemas/inbox";
 import { withLocalTransaction } from "./transaction";
 import { getLogger } from "../lib/observability";
 import { ApiError } from "../lib/apiErrorBase";
@@ -35,6 +37,9 @@ const QUEUE_KEY = "widget_pending_captures";
 // change to accommodate a second entry kind — see HabitsWidgetProvider.java's own read of this
 // same key for the native-side half of this contract.
 const HABIT_CHECKIN_QUEUE_KEY = "widget_pending_habit_checkins";
+// What the «صندوق ورودی» widget (InboxWidgetProvider / InboxCaptureActivity) wrote: plain text, kept
+// as it is — deciding what it becomes happens later, in the inbox.
+const INBOX_QUEUE_KEY = "widget_pending_inbox";
 
 // Purely informational provenance — no drain behavior branches on it today. Optional so every
 // entry queued by the native code before this field existed (structural detection, no
@@ -271,8 +276,52 @@ async function drainHabitCheckInQueue(db: LocalDb, userId: string): Promise<numb
   return applied;
 }
 
+interface PendingInboxItem {
+  v: 1;
+  text: string;
+  createdAt?: string;
+}
+
+function isPendingInboxItem(value: unknown): value is PendingInboxItem {
+  return !!value && typeof value === "object" && typeof (value as PendingInboxItem).text === "string";
+}
+
+/** Moves what the inbox widget wrote into the inbox. An entry that fails stays queued for the next drain. */
+async function drainInboxQueue(db: LocalDb, userId: string): Promise<number> {
+  const { value } = await Preferences.get({ key: INBOX_QUEUE_KEY });
+  if (!value) return 0;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    parsed = [];
+  }
+  const entries = Array.isArray(parsed) ? parsed.filter(isPendingInboxItem) : [];
+  const failed: PendingInboxItem[] = [];
+  let applied = 0;
+  for (const entry of entries) {
+    const content = entry.text.trim().slice(0, INBOX_MAX_LENGTH);
+    if (!content) continue;
+    try {
+      withLocalTransaction(db, () => createInboxItem(db, userId, { content }));
+      applied++;
+    } catch (err) {
+      log.error("WIDGET_QUEUE_FAILED", { error: err, errorCode: "WIDGET-001", layer: "local", queue: "inbox", willRetry: true });
+      failed.push(entry);
+    }
+  }
+  if (failed.length > 0) {
+    await Preferences.set({ key: INBOX_QUEUE_KEY, value: JSON.stringify(failed) });
+  } else {
+    await Preferences.remove({ key: INBOX_QUEUE_KEY });
+  }
+  if (entries.length > 0) log.debug("WIDGET_QUEUE_PROCESSED", { layer: "local", queue: "inbox", applied, failed: failed.length });
+  return applied;
+}
+
 export async function drainWidgetQueue(db: LocalDb, userId: string): Promise<number> {
   const capturesDrained = await drainCaptureQueue(db, userId);
   const checkInsDrained = await drainHabitCheckInQueue(db, userId);
-  return capturesDrained + checkInsDrained;
+  const inboxDrained = await drainInboxQueue(db, userId);
+  return capturesDrained + checkInsDrained + inboxDrained;
 }

@@ -21,6 +21,7 @@ final class WidgetRefresh {
         HabitsWidgetProvider.class,
         CapitalWidgetProvider.class,
         QuickCaptureWidgetProvider.class,
+        InboxWidgetProvider.class,
     };
 
     private WidgetRefresh() {}

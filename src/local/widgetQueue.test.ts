@@ -469,3 +469,33 @@ describe("drainWidgetQueue: lines understood by the widget", () => {
     expect(listActivities(db, USER_ID).map((a) => a.title)).toEqual(["قدیمی"]);
   });
 });
+
+describe("drainWidgetQueue — the inbox widget", () => {
+  it("moves what was written into the inbox, as it was written, and empties the queue", async () => {
+    const db = await freshDb();
+    store.set(
+      "widget_pending_inbox",
+      JSON.stringify([
+        { v: 1, text: "  خرید باتری ساعت  ", createdAt: new Date().toISOString() },
+        { v: 1, text: "فکر: مقاله دربارهٔ هزینه پنهان\nبا مثال", createdAt: new Date().toISOString() },
+        { v: 1, text: "   " },
+        { nonsense: true },
+      ])
+    );
+
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(2);
+    const { listInboxItems } = await import("./repositories/inbox");
+    expect(listInboxItems(db, USER_ID).map((i) => i.content)).toEqual(["خرید باتری ساعت", "فکر: مقاله دربارهٔ هزینه پنهان\nبا مثال"]);
+    expect(store.has("widget_pending_inbox")).toBe(false);
+    // nothing else was made from it
+    expect(db.all(`SELECT "id" FROM "Task"`)).toEqual([]);
+  });
+
+  it("does nothing without a queue, and survives a broken one", async () => {
+    const db = await freshDb();
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(0);
+    store.set("widget_pending_inbox", "{not json");
+    expect(await drainWidgetQueue(db, USER_ID)).toBe(0);
+    expect(store.has("widget_pending_inbox")).toBe(false);
+  });
+});
