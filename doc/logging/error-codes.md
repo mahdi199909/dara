@@ -51,6 +51,12 @@
 | `REPORT-002` | RANGE_INVALID | 400 | no | reserved | The requested report range is invalid. |
 | `RELEASE-001` | UPDATE_CHECK_FAILED | — | yes | yes | The app could not ask the server whether a newer version exists. |
 | `AUDIT-001` | WRITE_FAILED | — | no | yes | An audit entry could not be written (the operation itself is not affected). |
+| `CHECKUP-001` | LOCKED | 409 | no | yes | The answer sheet is completed or older than its edit window; the save was ignored. |
+| `CHECKUP-002` | RATE_LIMITED | 429 | yes | yes | Too many writes to the research form from one address. |
+| `CHECKUP-003` | DAILY_CAP | 429 | yes | yes | The daily ceiling of new answer sheets was reached. |
+| `CHECKUP-004` | ORIGIN_REFUSED | 403 | no | yes | The request did not come from one of the site's own origins. |
+| `CHECKUP-005` | TOO_LARGE | 413 | no | yes | The request body was larger than the form ever sends. |
+| `CHECKUP-006` | NOT_FOUND | 404 | no | yes | A report event named an answer sheet that does not exist or is too old. |
 | `SYS-001` | UNHANDLED_ERROR | 500 | no | yes | An exception nobody handled. |
 | `SYS-002` | DEPENDENCY_UNAVAILABLE | 503 | yes | reserved | A required dependency (database, platform API) was unavailable. |
 | `LOG-001` | SINK_FAILED | — | yes | yes | A log sink failed to write; logging continues without it. |

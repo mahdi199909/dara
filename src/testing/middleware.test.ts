@@ -31,6 +31,16 @@ describe("which API paths need a session", () => {
     }
   });
 
+  it("lets the public research form reach exactly its two routes, and nothing that merely starts like them", async () => {
+    expect(passesOn(await call("/api/checkup", { method: "POST" }))).toBe(true);
+    expect(passesOn(await call("/api/checkup/event", { method: "POST" }))).toBe(true);
+    for (const path of ["/api/checkup/other", "/api/checkup/event/x", "/api/checkups", "/api/checkup-admin", "/api/admin/checkup", "/api/admin/checkup/export"]) {
+      const res = await call(path);
+      expect(passesOn(res), path).toBe(false);
+      expect(res.status, path).toBe(401);
+    }
+  });
+
   it("lets anyone download the app, signed in or not", async () => {
     expect(passesOn(await call("/parvaapp.apk"))).toBe(true);
     expect(passesOn(await call("/api/app/apk"))).toBe(true);

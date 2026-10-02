@@ -926,3 +926,52 @@ model ServerSetting {
   updatedBy String?
   updatedAt DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// «حسابرسی ۵ دقیقه‌ای» — answers to the public research form on parvaapp.ir/checkup (server only)
+// ---------------------------------------------------------------------------
+
+// One row per person who started the form; written page by page by POST /api/checkup (src/lib/checkup.ts
+// recomputes every derived column from the raw answers — the browser's numbers are never trusted). Not tied
+// to any account, never synced to a phone (see the migration's @local:skip and src/lib/syncTables.ts).
+// The raw IP is never stored: ipHash is a keyed hash of the address (an IPv6 /64), only for spam checks.
+model CheckupResponse {
+  id                 String    @id
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  completedAt        DateTime?
+  lastPage           Int       @default(1)
+  source             String    @default("direct")
+  sourceGroup        String    @default("unknown")
+  durationSec        Int?
+  ipHash             String?
+  awakeMinutes       Int?
+  namedMinutes       Int?
+  hiddenMinutes      Int?
+  restOfDayForgot    Boolean   @default(false)
+  hourlyValue        Float?
+  hourlyNeverThought Boolean   @default(false)
+  monthSpendAnswer   String?
+  toolsUsed          String?
+  toolLastOpened     String?
+  paidBefore         String?
+  builtHoursKnown    String?
+  lastEmptyMonth     String?
+  incomeShape        String?
+  dependents         String?
+  age                Int?
+  city               String?
+  contactTelegram    String?
+  contactPhone       String?
+  contactEmail       String?
+  interviewOk        Boolean?
+  reportViewedAt     DateTime?
+  sharedAt           DateTime?
+  downloadedAt       DateTime?
+  inviteTelegramAt   DateTime?
+  inviteAppAt        DateTime?
+  answersJson        String    @default("{}")
+
+  @@index([createdAt])
+  @@index([sourceGroup])
+}

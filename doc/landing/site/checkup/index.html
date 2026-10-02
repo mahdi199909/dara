@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Product-blind until the answers are sent (doc/checkup/market-test-kit.md §1): no brand name, logo or
+     "app" in the title, the head or pages 1–5. Even the tab icon is neutral, so the browser does not fall
+     back to the site's /favicon.ico (the brand's logo). -->
+<title>حسابرسی ۵ دقیقه‌ای ماهی که گذشت</title>
+<meta name="description" content="چند سؤال کوتاه دربارهٔ دیروز و ماه گذشته‌ات. آخرش نتیجهٔ شخصی خودت را می‌بینی: چند ساعت از دیروزت جایی ثبت نشده و آن ساعت‌ها چقدر می‌ارزیدند.">
+<link rel="canonical" href="https://parvaapp.ir/checkup/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://parvaapp.ir/checkup/">
+<meta property="og:title" content="حسابرسی ۵ دقیقه‌ای ماهی که گذشت">
+<meta property="og:description" content="چند سؤال ساده دربارهٔ دیروزت. آخرش می‌بینی چند ساعت از روزت جایی ثبت نشده.">
+<meta property="og:image" content="https://parvaapp.ir/checkup/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#EFF2EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1412" media="(prefers-color-scheme: dark)">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- Even if a script injection were ever found, it could not send anything anywhere but the app server. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src https://my.parvaapp.ir http://localhost:3000; base-uri 'none'; form-action 'none'; object-src 'none'">
+<link rel="icon" href="data:,">
+<link rel="preload" href="../fonts/Vazirmatn-Variable.ttf" as="font" type="font/ttf" crossorigin>
+<script src="theme.js"></script>
+<style>
+@font-face { font-family: "VazirLocal"; src: url("../fonts/Vazirmatn-Variable.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+
+/* tokens: the landing page's (doc/landing/05-handoff-spec.md) */
+:root {
+  --canvas:#EFF2EE; --surface:#FBFCFA; --ink:#14181A; --muted:#5C6360; --line:#DCE3DE;
+  --accent:#0E5F54; --accent-2:#0A4F46; --accent-soft:#E3EEEB; --on-accent:#FFFFFF;
+  --waste:#A8473B; --waste-soft:#FBE1DE; --signal:#8A5F16; --signal-soft:#F7EEDA;
+  --paper:#F7F6EF; --rule:rgba(14,95,84,.08); --margin:rgba(14,95,84,.35);
+  --shadow:0 1px 2px rgba(10,31,27,.04), 0 4px 16px -4px rgba(10,31,27,.08);
+  --shadow-lift:0 2px 4px rgba(10,31,27,.06), 0 18px 40px -12px rgba(10,31,27,.18);
+  --r-sm:8px; --r-md:14px; --r-lg:20px;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px; --s8:64px;
+  --ease:cubic-bezier(.2,.7,.2,1);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas:#0E1412; --surface:#161D1B; --ink:#E7ECEA; --muted:#93A09B; --line:#253029;
+    --accent:#46B9A6; --accent-2:#88D3C9; --accent-soft:#16302B; --on-accent:#08110F;
+    --waste:#E09280; --waste-soft:#2A1A16; --signal:#D6A65A; --signal-soft:#2A2213;
+    --paper:#141B19; --rule:rgba(70,185,166,.07); --margin:rgba(70,185,166,.3);
+    --shadow:none; --shadow-lift:0 18px 40px -16px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --canvas:#0E1412; --surface:#161D1B; --ink:#E7ECEA; --muted:#93A09B; --line:#253029;
+  --accent:#46B9A6; --accent-2:#88D3C9; --accent-soft:#16302B; --on-accent:#08110F;
+  --waste:#E09280; --waste-soft:#2A1A16; --signal:#D6A65A; --signal-soft:#2A2213;
+  --paper:#141B19; --rule:rgba(70,185,166,.07); --margin:rgba(70,185,166,.3);
+  --shadow:none; --shadow-lift:0 18px 40px -16px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; color: var(--ink);
+  background: var(--canvas) repeating-linear-gradient(to bottom, transparent 0 35px, var(--rule) 35px 36px);
+  font-family: "VazirLocal", "Vazirmatn", Tahoma, Arial, sans-serif;
+  font-size: 16px; line-height: 1.85; overflow-x: hidden;
+}
+a { color: var(--accent); text-underline-offset: 4px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.num { font-variant-numeric: tabular-nums; }
+.sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+
+.wrap { width: 100%; max-width: 640px; margin-inline: auto; padding-inline: var(--s4); }
+
+/* header: neutral, no brand */
+.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--canvas) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: var(--s3); min-height: 56px; }
+.top .title { font-weight: 700; font-size: .95rem; flex: 1; }
+.top .step { font-size: .82rem; color: var(--muted); white-space: nowrap; }
+.bar { height: 3px; background: var(--line); }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .35s var(--ease); }
+.iconbtn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; color: var(--muted); }
+.iconbtn svg { width: 18px; height: 18px; }
+
+main { padding-block: var(--s6) var(--s8); }
+h1 { font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.4; margin: 0 0 var(--s4); }
+h2 { font-size: 1.25rem; line-height: 1.5; margin: 0 0 var(--s3); }
+h2:focus { outline: none; }
+.lead { color: var(--muted); font-size: 1.05rem; margin: 0 0 var(--s4); }
+.micro { font-size: .82rem; color: var(--muted); line-height: 1.7; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: var(--s5); }
+.intro-card { margin-bottom: var(--s5); background: var(--paper); }
+.q { margin: 0 0 var(--s5); padding: var(--s5); }
+.q > legend, .q > .qt { font-weight: 700; font-size: 1.02rem; line-height: 1.7; margin-bottom: var(--s3); padding: 0; }
+fieldset.q { border: 1px solid var(--line); min-width: 0; }
+fieldset.q > legend { float: right; width: 100%; } /* inside the card, not on its border */
+fieldset.q > legend + * { clear: both; }
+.q .n { color: var(--accent); font-variant-numeric: tabular-nums; margin-inline-end: 6px; }
+.q .hint { display: block; font-weight: 400; font-size: .82rem; color: var(--muted); }
+
+.choices { display: grid; gap: var(--s2); }
+.choice { display: flex; align-items: center; gap: var(--s3); min-height: 48px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--canvas); cursor: pointer; line-height: 1.6; }
+.choice:hover { border-color: var(--margin); }
+.choice input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; margin: 0; }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.choice.em { font-weight: 500; }
+
+.field { display: block; margin-top: var(--s3); }
+.field > span { display: block; font-size: .86rem; font-weight: 500; margin-bottom: 4px; }
+.in, select, textarea { width: 100%; min-height: 48px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--canvas); padding: 10px 14px; }
+textarea { min-height: 96px; resize: vertical; line-height: 1.8; }
+.in:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.in:disabled { opacity: .5; }
+.ltr { direction: ltr; text-align: right; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
+.task { display: grid; grid-template-columns: 1fr 96px; gap: var(--s2); margin-top: var(--s3); }
+.task .field { margin: 0; }
+.unit { position: relative; }
+.unit .in { padding-left: 64px; }
+.unit .u { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; pointer-events: none; }
+.sub { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px dashed var(--line); }
+.note { margin-top: var(--s3); padding: 10px 14px; border-radius: var(--r-md); background: var(--signal-soft); color: var(--signal); font-size: .88rem; line-height: 1.7; }
+.x { color: var(--accent); white-space: nowrap; }
+
+.disclose { background: var(--paper); border-inline-start: 3px solid var(--accent); }
+.disclose p { margin: 0; }
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+.nav { display: flex; gap: var(--s3); margin-top: var(--s5); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 24px; border-radius: var(--r-md); border: 0; background: var(--accent); color: var(--on-accent); font-weight: 700; text-decoration: none; cursor: pointer; transition: transform .15s var(--ease), background .15s; flex: 1; }
+.btn:hover { background: var(--accent-2); }
+.btn:active { transform: translateY(1px); }
+.btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); flex: 0 0 auto; }
+.btn.ghost:hover { background: var(--accent-soft); }
+.btn.light { background: var(--surface); color: var(--accent); border: 1px solid var(--line); }
+
+/* report */
+.act { margin-bottom: var(--s5); }
+.act .k { font-size: .8rem; color: var(--accent); font-weight: 500; margin-bottom: 4px; }
+.act p { margin: 0 0 var(--s2); font-size: 1.05rem; }
+.big { font-weight: 700; }
+.waste { color: var(--waste); }
+.receipt { position: relative; background: var(--surface); border: 1px solid var(--line); border-bottom: 0; border-radius: 18px 18px 0 0; padding: 22px 22px 18px; box-shadow: var(--shadow-lift); margin-bottom: var(--s6); }
+.receipt::after { content: ""; position: absolute; right: -1px; left: -1px; bottom: -11px; height: 12px; background: radial-gradient(circle at 7px 0, transparent 6px, var(--surface) 6.5px) repeat-x; background-size: 14px 12px; filter: drop-shadow(0 1px 0 var(--line)); }
+.rc-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.rc-row:last-child { border-bottom: 0; }
+.card-img { width: 100%; max-width: 360px; display: block; margin: var(--s4) auto; border-radius: var(--r-md); border: 1px solid var(--line); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.actions .btn { flex: 1 1 160px; }
+.invite { margin-top: var(--s5); }
+.invite h3 { margin: 0 0 var(--s2); font-size: 1.05rem; }
+.invite p { margin: 0 0 var(--s3); color: var(--muted); }
+.status { margin-top: var(--s5); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <span class="title">حسابرسی ۵ دقیقه‌ای</span>
+    <span class="step num" id="stepLabel" aria-live="polite"></span>
+    <button type="button" class="iconbtn" id="themeBtn" aria-label="تغییر تم">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+    </button>
+  </div>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+</header>
+
+<main class="wrap">
+<noscript><p class="card">این تمرین برای حساب کردن نتیجه‌ات به جاوااسکریپت نیاز دارد.</p></noscript>
+
+<form id="form" novalidate autocomplete="off">
+
+<!-- ============ start ============ -->
+<section data-step="0" aria-labelledby="h0">
+  <h1 id="h0" tabindex="-1">حسابرسی ۵ دقیقه‌ای ماهی که گذشت</h1>
+  <p class="lead">چند سؤال ساده دربارهٔ دیروزت و ماه گذشته‌ات. آخرش نتیجهٔ شخصی خودت را می‌بینی: چند ساعت از دیروزت جایی ثبت نشده و آن ساعت‌ها چقدر می‌ارزیدند.</p>
+  <p class="micro">حدود ۵ دقیقه، بدون ثبت‌نام. پاسخ‌هایت بی‌نام برای این پژوهش ذخیره می‌شوند و نتیجه‌ات همین‌جا ساخته می‌شود.</p>
+  <div class="nav"><button type="button" class="btn" id="startBtn">شروع</button></div>
+</section>
+
+<!-- ============ page 1 ============ -->
+<section data-step="1" aria-labelledby="h1" hidden>
+  <div class="card intro-card"><h2 id="h1" tabindex="-1">دیروز</h2><p class="micro" style="margin:0">برای اینکه نتیجه‌ات واقعی باشه، از دیروز شروع می‌کنیم — نه از یه روز معمولی فرضی. دیروز هرچی بوده، همون خوبه.</p></div>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱.</span>دیروز ساعت چند بیدار شدی و ساعت چند خوابیدی؟</legend>
+    <div class="grid2">
+      <label class="field"><span>ساعت بیداری</span><select id="wake" aria-label="ساعت بیداری"></select></label>
+      <label class="field"><span>ساعت خواب</span><select id="sleep" aria-label="ساعت خواب"></select></label>
+    </div>
+    <p class="note" id="sameTimeNote" hidden>ساعت بیداری و خواب یکی شد؛ یکی را عوض کن تا روزت حساب شود.</p>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۲.</span>از دیروز، سه کاری که بیشترین وقتت رو گرفت بنویس و کنارش تقریباً چند ساعت.</legend>
+    <div class="task"><label class="field"><span>کار ۱</span><input class="in" id="t1" maxlength="120" aria-label="کار ۱"></label><label class="field"><span>ساعت</span><input class="in ltr num" id="h1v" inputmode="decimal" maxlength="5" aria-label="ساعت کار ۱"></label></div>
+    <div class="task"><label class="field"><span>کار ۲</span><input class="in" id="t2" maxlength="120" aria-label="کار ۲"></label><label class="field"><span>ساعت</span><input class="in ltr num" id="h2v" inputmode="decimal" maxlength="5" aria-label="ساعت کار ۲"></label></div>
+    <div class="task"><label class="field"><span>کار ۳</span><input class="in" id="t3" maxlength="120" aria-label="کار ۳"></label><label class="field"><span>ساعت</span><input class="in ltr num" id="h3v" inputmode="decimal" maxlength="5" aria-label="ساعت کار ۳"></label></div>
+    <p class="note" id="overflowNote" hidden>جمع این سه از ساعت‌های بیداری‌ای که نوشتی بیشتر شد. اشکالی ندارد؛ همه‌اش تخمین است.</p>
+  </fieldset>
+
+  <fieldset class="card q" id="q3">
+    <legend><span class="n">۳.</span>جمع این سه تا حدود <span class="x num" id="xHours" aria-live="polite">۰ ساعت</span> شد. بقیهٔ ساعت‌های بیداری دیروزت صرف چی شد؟ <span class="hint">(چند گزینه قابل انتخاب)</span></legend>
+    <div class="choices" data-multi="rest"></div>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۴.</span>اگه بخوای یه عدد حدودی بدی، یک ساعت از وقت تو چقدر می‌ارزه؟</legend>
+    <label class="field"><span class="sr">ارزش یک ساعت به تومان</span><span class="unit"><input class="in ltr num" id="hourly" inputmode="numeric" maxlength="20" placeholder="مثلاً ۲۰۰٬۰۰۰"><span class="u">تومان</span></span></label>
+    <div class="choices" style="margin-top:var(--s3)"><label class="choice"><input type="checkbox" id="hourlyNever">تا حالا بهش فکر نکرده‌ام</label></div>
+  </fieldset>
+</section>
+
+<!-- ============ page 2 ============ -->
+<section data-step="2" aria-labelledby="h2" hidden>
+  <div class="card intro-card"><h2 id="h2" tabindex="-1">ماهی که گذشت</h2></div>
+
+  <fieldset class="card q">
+    <legend><span class="n">۵.</span>آخرین باری که یه خرید بالای ۵۰۰ هزار تومان کردی و بعدش حس کردی لازم نبود، چی بود؟</legend>
+    <label class="field"><span class="sr">متن پاسخ سؤال ۵</span><textarea id="regret" maxlength="1000"></textarea></label>
+    <div class="choices" style="margin-top:var(--s3)"><label class="choice"><input type="checkbox" id="regretNone">پیش نیومده</label></div>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۶.</span>الان اگه ازت بپرسم این ماه چقدر خرج کردی، چطوری جواب می‌دی؟</legend>
+    <div class="choices" data-single="monthSpend"></div>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۷.</span>الان از چه ابزاری برای ثبت کار / وقت / خرجت استفاده می‌کنی؟ <span class="hint">(چندگزینه‌ای)</span></legend>
+    <div class="choices" data-multi="tools"></div>
+    <label class="field" id="toolIranWrap" hidden><span>اسم اپ حسابداری شخصی ایرانی:</span><input class="in" id="toolIran" maxlength="120"></label>
+    <label class="field" id="toolForeignWrap" hidden><span>اسم اپ خارجی:</span><input class="in" id="toolForeign" maxlength="120"></label>
+  </fieldset>
+
+  <fieldset class="card q" id="q8" hidden>
+    <legend><span class="n">۸.</span>آخرین باری که همون ابزار رو باز کردی کِی بود؟</legend>
+    <div class="choices" data-single="toolLastOpened"></div>
+  </fieldset>
+
+  <fieldset class="card q" id="q9" hidden>
+    <legend><span class="n">۹.</span>چی شد که ولش کردی؟</legend>
+    <label class="field"><span class="sr">متن پاسخ سؤال ۹</span><textarea id="toolWhyLeft" maxlength="1000"></textarea></label>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۰.</span>تا حالا بابت ابزاری برای مدیریت کار / وقت / پول شخصیت پول دادی؟</legend>
+    <div class="choices" data-single="paid"></div>
+    <label class="field sub" id="paidWhatWrap" hidden><span>چی بود و حدوداً چقدر؟</span><textarea id="paidWhat" maxlength="1000"></textarea></label>
+  </fieldset>
+</section>
+
+<!-- ============ page 3 ============ -->
+<section data-step="3" aria-labelledby="h3" hidden>
+  <div class="card intro-card"><h2 id="h3" tabindex="-1">آنچه ساخته‌ای</h2></div>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۱.</span>در ۱۲ ماه گذشته چی یاد گرفتی یا ساختی که هیچ‌جا ثبت نشده؟</legend>
+    <label class="field"><span class="sr">متن پاسخ سؤال ۱۱</span><textarea id="built" maxlength="1000"></textarea></label>
+    <div class="choices" style="margin-top:var(--s3)"><label class="choice"><input type="checkbox" id="builtNone">چیزی به ذهنم نمی‌رسه</label></div>
+  </fieldset>
+
+  <fieldset class="card q" id="q12" hidden>
+    <legend><span class="n">۱۲.</span>اگه الان یکی بپرسه روی همون چیز چند ساعت گذاشتی، جواب داری؟</legend>
+    <div class="choices" data-single="builtHours"></div>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۳.</span>آخرین باری که حس کردی یه ماه یا یه فصل گذشت و چیزی ازش نموند، کِی بود؟</legend>
+    <div class="choices" data-single="lastEmpty"></div>
+  </fieldset>
+</section>
+
+<!-- ============ page 4 ============ -->
+<section data-step="4" aria-labelledby="h4" hidden>
+  <div class="card intro-card"><h2 id="h4" tabindex="-1">تو کی هستی</h2></div>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۴.</span>درآمدت چطور شکل می‌گیره؟</legend>
+    <div class="choices" data-single="income"></div>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۵.</span>غیر از خودت، چند نفر به نتیجهٔ کار تو وابسته‌اند؟</legend>
+    <div class="choices" data-single="dependents"></div>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۶.</span>سن و شهر:</legend>
+    <div class="grid2">
+      <label class="field"><span>سن</span><input class="in ltr num" id="age" inputmode="numeric" maxlength="3"></label>
+      <label class="field"><span>شهر</span><input class="in" id="city" maxlength="120"></label>
+    </div>
+  </fieldset>
+</section>
+
+<!-- ============ page 5 ============ -->
+<section data-step="5" aria-labelledby="h5" hidden>
+  <div class="card intro-card disclose"><h2 id="h5" tabindex="-1" class="sr">آخرین صفحه</h2>
+    <p>من خودم روی چیزی در همین حوزه کار می‌کنم و این پژوهش بخشی از آن است. اگر دوست داشتی نتیجهٔ شخصی‌ات را بفرستم، راه ارتباطی‌ات را بگذار.</p>
+  </div>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۷.</span>نتیجهٔ شخصی خودت رو برات بفرستم؟ <span class="hint">(اختیاری؛ یکی کافی است)</span></legend>
+    <label class="field"><span>آیدی تلگرام</span><input class="in ltr" id="contactTelegram" maxlength="64" placeholder="@username" autocomplete="off" spellcheck="false"></label>
+    <label class="field"><span>بله (شمارهٔ موبایل)</span><input class="in ltr num" id="contactBale" maxlength="32" inputmode="tel" placeholder="۰۹۱۲…" autocomplete="off"></label>
+    <label class="field"><span>ایمیل</span><input class="in ltr" id="contactEmail" maxlength="254" type="email" placeholder="name@example.com" autocomplete="off" spellcheck="false"></label>
+    <p class="micro" id="privacyNote" style="margin:var(--s3) 0 0">فقط برای فرستادن همین نتیجه به کار می‌رود و، اگر پایین «بله» زدی، برای هماهنگی یک گفت‌وگوی کوتاه. به کسی داده نمی‌شود، حداکثر ۱۲ ماه نگه داشته می‌شود و با یک پیام پاک می‌شود.</p>
+  </fieldset>
+
+  <fieldset class="card q">
+    <legend><span class="n">۱۸.</span>حاضری ۱۵ دقیقه دربارهٔ همین موضوع حرف بزنیم؟ چیزی نمی‌فروشم، فقط می‌شنوم.</legend>
+    <div class="choices" data-single="interview"></div>
+  </fieldset>
+
+  <div class="hp" aria-hidden="true"><label>وب‌سایت<input id="website" name="website" tabindex="-1" autocomplete="off"></label></div>
+</section>
+
+<div class="nav" id="nav" hidden>
+  <button type="button" class="btn ghost" id="backBtn">قبلی</button>
+  <button type="button" class="btn" id="nextBtn">بعدی</button>
+</div>
+</form>
+
+<!-- ============ report (the first place the brand appears) ============ -->
+<section id="report" aria-labelledby="hr" hidden>
+  <h1 id="hr" tabindex="-1">نتیجهٔ تو</h1>
+
+  <div class="receipt">
+    <div class="act" id="act1"><div class="k">پردهٔ ۱ — چه خرج کردی</div><div id="act1Body"></div></div>
+    <div class="act" id="act2" hidden><div class="k">پردهٔ ۲ — چه چیزی دیده نمی‌شد</div><div id="act2Body"></div></div>
+    <div class="act" id="act3"><div class="k">پردهٔ ۳ — چه ساختی</div><div id="act3Body"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>کارت نتیجه</h2>
+    <img class="card-img" id="cardImg" alt="کارت نتیجهٔ حسابرسی ۵ دقیقه‌ای" hidden>
+    <div class="actions">
+      <button type="button" class="btn" id="shareBtn" hidden>اشتراک‌گذاری</button>
+      <button type="button" class="btn light" id="downloadBtn">ذخیرهٔ تصویر</button>
+    </div>
+  </div>
+
+  <div class="card invite" id="inviteTelegram" hidden>
+    <h3>کانال تلگرام پروا</h3>
+    <p>یادداشت‌های کوتاه دربارهٔ وقت، پول و آنچه آدم در طول ماه می‌سازد.</p>
+    <a class="btn light" id="telegramLink" href="#" target="_blank" rel="noopener">رفتن به کانال</a>
+  </div>
+
+  <div class="card invite">
+    <h3>این حساب را هر روز، خودکار</h3>
+    <p>پروا همین حساب را هر روز برایت نگه می‌دارد: کارها، وقت و پول در یک دفتر فارسی و شمسی. از مرورگر، بدون نصب.</p>
+    <a class="btn" id="appLink" href="https://my.parvaapp.ir/register?src=checkup">این حساب را هر روز، خودکار</a>
+  </div>
+
+  <p class="micro status" id="saveStatus" aria-live="polite"></p>
+</section>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -18,7 +18,10 @@ const ADMIN_PAGE_PREFIXES = ["/dashboard", "/admin"];
 const ADMIN_API_PREFIX = "/api/admin";
 // /api/metrics has no session (a Prometheus scraper has none): the route guards itself with its own bearer token. Exactly
 // that path, not a prefix — nothing else may become public by starting with the same letters.
-const PUBLIC_API_PATHS = ["/api/metrics"];
+// /api/checkup and /api/checkup/event: the public research form on parvaapp.ir/checkup saves anonymous
+// answers there, from people who have no account. Write-only, Origin-checked and rate-limited by the routes
+// themselves (see src/app/api/checkup/route.ts). Exactly these two paths.
+const PUBLIC_API_PATHS = ["/api/metrics", "/api/checkup", "/api/checkup/event"];
 // The APK download link (rewritten to /api/app/apk): people download the app before they have an account.
 // robots.txt: crawlers must reach it (not a redirect to /login) to learn this host is not for indexing.
 const PUBLIC_FILE_PATHS = ["/parvaapp.apk", "/robots.txt"];

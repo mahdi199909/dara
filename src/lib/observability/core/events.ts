@@ -59,6 +59,7 @@ export const DOMAINS = [
   "LOG",
   "AUDIT",
   "UI",
+  "CHECKUP",
 ] as const;
 export type Domain = (typeof DOMAINS)[number];
 
@@ -106,6 +107,7 @@ export const MODULE_OF_DOMAIN: Readonly<Record<Domain, string>> = {
   RELEASE: "release",
   AUDIT: "audit",
   UI: "ui",
+  CHECKUP: "checkup",
 };
 
 export const OPERATION_RESULTS = ["STARTED", "SUCCESS", "FAILED"] as const;
@@ -277,6 +279,17 @@ const STANDALONE = {
   CATEGORY_DEFAULTS_FAILED: s("WARN", "Default categories could not be created or merged."),
   AUDIT_WRITE_FAILED: s("ERROR", "An audit entry could not be written; the operation itself was not affected.", { protected: true }),
   UI_RENDER_ERROR: s("ERROR", "A screen failed to render.", { protected: true }),
+
+  // --- The public research form on parvaapp.ir/checkup (no account; never any answer or contact in the record)
+  CHECKUP_SAVED: s("DEBUG", "A page of the public research form was stored."),
+  CHECKUP_COMPLETED: s("INFO", "An answer sheet of the public research form was completed."),
+  CHECKUP_LOCKED: s("DEBUG", "A save arrived for a completed or expired answer sheet and was ignored."),
+  CHECKUP_REFUSED: s("WARN", "A request to the public research form was refused (origin, size or shape)."),
+  CHECKUP_RATE_LIMITED: s("WARN", "Too many writes to the public research form from one address.", { security: true }),
+  CHECKUP_DAILY_CAP_REACHED: s("WARN", "The daily ceiling of new answer sheets was reached; new ones are not stored until it clears.", { protected: true }),
+  CHECKUP_HONEYPOT: s("INFO", "The hidden bot field was filled; the request was answered but nothing was stored."),
+  CHECKUP_EVENT_RECORDED: s("DEBUG", "A report event (viewed, shared, saved, invite) was stamped on an answer sheet."),
+  CHECKUP_SAVE_FAILED: s("ERROR", "An answer sheet of the public research form could not be stored.", { protected: true }),
 
   // --- The logging system reporting on itself
   LOG_QUEUE_OVERFLOW: s("WARN", "The log queue was full and records were dropped.", { protected: true }),

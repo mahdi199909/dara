@@ -22,6 +22,9 @@ Copy `.env.example` to `.env` and fill in real values:
 | `LOG_HASH_SECRET` | no | Key for the e-mail pseudonyms in login-failure log lines; defaults to `JWT_SECRET` |
 | `AUDIT_RETENTION_DAYS` | no | How long Settings → History entries are kept on the server: 730 days by default; `0`, `off` or `never` keeps everything. Old entries are pruned daily. See doc/logging/audit.md. |
 | `AUDIT_MONEY_MODE` | no | `values` (default), `redacted` or `flag`: whether audit entries keep real amounts, mask them, or only record that they changed |
+| `CHECKUP_ALLOWED_ORIGINS` | no | Origins the public research form (`parvaapp.ir/checkup`) may write from, comma-separated and exact. Default `https://parvaapp.ir,https://www.parvaapp.ir`; outside production any `http://localhost:<port>` is allowed too. See section 5g. |
+| `CHECKUP_IP_SECRET` | no | Key for the hashed addresses stored with research-form answers (spam checks only; the raw address is never stored). Defaults to `JWT_SECRET`; set it if you want the hashes to survive a `JWT_SECRET` rotation. |
+| `CHECKUP_DAILY_CAP` | no | Most new research-form answer sheets stored per rolling 24 hours, for the whole server (default 2000). Protects the disk the app runs on from a flood. |
 | `AI_PROVIDER`, `AI_API_KEY` | no | Leave empty — the app runs fully rule-based without them (see README §9/§10) |
 
 **Never commit `.env` to git.** `.gitignore` already excludes it.
@@ -162,6 +165,16 @@ an exact end date, lifetime, cancel), suspension, "sign out everywhere", server 
 and messaging. Only `m.gh.hut@gmail.com` gets in (fixed in `src/lib/adminIdentity.ts`; in production `ADMIN_EMAIL` is
 ignored). An account with that address created after 2026-09-28 must have verified it first. Everyone else gets a
 404; the old `/admin` redirects here.
+
+## 5g. The research form (حسابرسی ۵ دقیقه‌ای)
+
+The static page `parvaapp.ir/checkup/` (from `doc/landing/site/checkup/`, uploaded by hand like the rest of the site)
+saves anonymous answers to `POST /api/checkup` and `POST /api/checkup/event` on this server. Those two paths — exactly
+those — are public in `src/middleware.ts`; the routes check the Origin (`CHECKUP_ALLOWED_ORIGINS`), cap the body at
+16 KB, rate-limit per address (an IPv6 /64 counts as one) and stop storing new sheets at `CHECKUP_DAILY_CAP` a day.
+The owner reads them at `/dashboard/checkup` (CSV export there too). The table, `CheckupResponse`, is created by the
+normal `prisma db push` at container start: a new table with no unique index, so no manual step is needed. It is never
+synced to phones. Full notes: `doc/checkup/README.md`.
 
 ## 5b. Updating a running deployment
 

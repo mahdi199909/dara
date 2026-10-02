@@ -31,6 +31,14 @@ export const LIMITS = {
   codeVerifyPerIp: { max: 40, windowMs: 15 * MINUTE },
   codeVerifyPerTarget: { max: 15, windowMs: 15 * MINUTE },
   passwordChangePerAccount: { max: 10, windowMs: 60 * MINUTE },
+  /**
+   * The public research form (/api/checkup), per address — an IPv6 address counts by its /64 (see
+   * checkupServer.ts). Generous on purpose: Iranian mobile carriers put many people behind one address
+   * (CGNAT), and a refused save still shows the person their report; the form simply queues it.
+   * A new answer sheet: */
+  checkupNewPerIp: { max: 30, windowMs: 60 * MINUTE },
+  /** Any page save or report event (a full form is ~7 writes). */
+  checkupWritePerIp: { max: 300, windowMs: 60 * MINUTE },
 } satisfies Record<string, Limit>;
 
 const buckets = new Map<string, Bucket>();

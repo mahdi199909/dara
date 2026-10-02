@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-306 events in 42 domains.
+315 events in 43 domains.
 
 ## AUTH
 
@@ -596,4 +596,20 @@ Default module: `ui`
 | Event | Level | Flags | Emitted | Description |
 | --- | --- | --- | --- | --- |
 | `UI_RENDER_ERROR` | ERROR | protected | yes | A screen failed to render. |
+
+## CHECKUP
+
+Default module: `checkup`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `CHECKUP_COMPLETED` | INFO | — | yes | An answer sheet of the public research form was completed. |
+| `CHECKUP_DAILY_CAP_REACHED` | WARN | protected | yes | The daily ceiling of new answer sheets was reached; new ones are not stored until it clears. |
+| `CHECKUP_EVENT_RECORDED` | DEBUG | — | yes | A report event (viewed, shared, saved, invite) was stamped on an answer sheet. |
+| `CHECKUP_HONEYPOT` | INFO | — | yes | The hidden bot field was filled; the request was answered but nothing was stored. |
+| `CHECKUP_LOCKED` | DEBUG | — | yes | A save arrived for a completed or expired answer sheet and was ignored. |
+| `CHECKUP_RATE_LIMITED` | WARN | security | yes | Too many writes to the public research form from one address. |
+| `CHECKUP_REFUSED` | WARN | — | yes | A request to the public research form was refused (origin, size or shape). |
+| `CHECKUP_SAVED` | DEBUG | — | yes | A page of the public research form was stored. |
+| `CHECKUP_SAVE_FAILED` | ERROR | protected | yes | An answer sheet of the public research form could not be stored. |
 

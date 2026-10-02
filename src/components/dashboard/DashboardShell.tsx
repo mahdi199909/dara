@@ -5,11 +5,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { APP_DISPLAY_NAME } from "@/lib/appVersion";
-import { HomeIcon, BoxIcon, ChartIcon, GearIcon, BellIcon } from "@/components/icons";
+import { HomeIcon, BoxIcon, ChartIcon, GearIcon, BellIcon, CheckSquareIcon } from "@/components/icons";
 
 const NAV = [
   { href: "/dashboard", label: "نمای کلی", icon: HomeIcon },
   { href: "/dashboard/users", label: "کاربران و اشتراک‌ها", icon: BoxIcon },
+  { href: "/dashboard/checkup", label: "حسابرسی ۵ دقیقه‌ای", icon: CheckSquareIcon },
   { href: "/dashboard/system", label: "سلامت سرور و گزارش‌ها", icon: ChartIcon },
   { href: "/dashboard/release", label: "نسخه‌ی اپ اندروید", icon: GearIcon },
   { href: "/dashboard/messaging", label: "ایمیل و پیامک", icon: BellIcon },

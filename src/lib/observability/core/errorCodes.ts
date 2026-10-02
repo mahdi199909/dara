@@ -70,6 +70,14 @@ export const ERROR_CODES = {
   "RELEASE-001": { name: "UPDATE_CHECK_FAILED", description: "The app could not ask the server whether a newer version exists.", retryable: true },
   "AUDIT-001": { name: "WRITE_FAILED", description: "An audit entry could not be written (the operation itself is not affected).", retryable: false },
 
+  // --- The public research form (/api/checkup)
+  "CHECKUP-001": { name: "LOCKED", description: "The answer sheet is completed or older than its edit window; the save was ignored.", httpStatus: 409, retryable: false },
+  "CHECKUP-002": { name: "RATE_LIMITED", description: "Too many writes to the research form from one address.", httpStatus: 429, retryable: true },
+  "CHECKUP-003": { name: "DAILY_CAP", description: "The daily ceiling of new answer sheets was reached.", httpStatus: 429, retryable: true },
+  "CHECKUP-004": { name: "ORIGIN_REFUSED", description: "The request did not come from one of the site's own origins.", httpStatus: 403, retryable: false },
+  "CHECKUP-005": { name: "TOO_LARGE", description: "The request body was larger than the form ever sends.", httpStatus: 413, retryable: false },
+  "CHECKUP-006": { name: "NOT_FOUND", description: "A report event named an answer sheet that does not exist or is too old.", httpStatus: 404, retryable: false },
+
   // --- System and logging itself
   "SYS-001": { name: "UNHANDLED_ERROR", description: "An exception nobody handled.", httpStatus: 500, retryable: false },
   "SYS-002": { name: "DEPENDENCY_UNAVAILABLE", description: "A required dependency (database, platform API) was unavailable.", httpStatus: 503, retryable: true },
