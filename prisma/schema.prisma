@@ -67,6 +67,8 @@ model User {
   shownInsights       ShownInsight[]
   syncTombstones      SyncTombstone[]
   dailyNotes          DailyNote[]
+  checklistItems      ChecklistItem[]
+  inboxItems          InboxItem[]
   budgets             Budget[]
   savingsGoals        SavingsGoal[]
   verificationCodes   VerificationCode[]
@@ -823,6 +825,55 @@ model DailyNote {
   deletedAt DateTime?
 
   @@index([userId, day])
+}
+
+// ---------------------------------------------------------------------------
+// «چک‌لیست‌ها» — one tree of items: a top-level item (parentId null) is a list («سفر»، «سمینار»),
+// every item can hold its own sub-items, to any depth. parentId is a plain column, not a relation:
+// sync pulls a table's rows in one batch in no particular order, and a child arriving before its
+// parent would trip a self-referencing FK. Deleting an item soft-deletes its whole subtree.
+// ---------------------------------------------------------------------------
+
+model ChecklistItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId  String?
+  title     String
+  note      String?
+  checked   Boolean   @default(false)
+  checkedAt DateTime?
+  sortOrder Int       @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([parentId])
+}
+
+// ---------------------------------------------------------------------------
+// «صندوق ورودی» (GTD inbox) — anything written down to decide on later. Moving an item to a task,
+// event, transaction... (or discarding it) marks it processed; it is never shown again.
+// ---------------------------------------------------------------------------
+
+model InboxItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  content     String
+  priority    Int       @default(0) // 0 = عادی, 1 = مهم, 2 = فوری
+  processedAt DateTime?
+  processedTo String? // TASK | EVENT | TRANSACTION | INSTALLMENT | CHECKLIST | NOTE | HABIT | DISCARDED
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
 }
 
 // ---------------------------------------------------------------------------

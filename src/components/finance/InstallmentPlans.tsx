@@ -375,9 +375,10 @@ function defaultFirstDueDate(): Date {
   return generateInstallmentSchedule({ startDate: new Date(), numberOfInstallments: 1, installmentAmount: 0 })[0].dueDate;
 }
 
-export function NewInstallmentPlanForm({ onDone }: { onDone: () => void }) {
+/** `initialTitle` pre-fills the title (an inbox item being turned into an installment plan). */
+export function NewInstallmentPlanForm({ onDone, initialTitle }: { onDone: () => void; initialTitle?: string }) {
   const [mode, setMode] = useState<"PLAN" | "SIMPLE">("PLAN");
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle ?? "");
   const [totalAmount, setTotalAmount] = useState("");
   const [installmentAmount, setInstallmentAmount] = useState("");
   const [numberOfInstallments, setNumberOfInstallments] = useState("");

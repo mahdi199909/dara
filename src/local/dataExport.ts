@@ -76,6 +76,8 @@ export const DATA_EXPORT_TABLES = [
   "Transaction",
   "Reminder",
   "DailyNote",
+  "ChecklistItem",
+  "InboxItem",
   "CapitalSnapshot",
   "AuditLog",
   "Notification",

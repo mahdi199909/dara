@@ -225,3 +225,39 @@ export function MoreIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function ListChecksIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m3.5 6 1.5 1.5L8 4.5M3.5 12.5 5 14l3-3M3.5 19l1.5 1.5L8 17.5" />
+      <path d="M11 6h9.5M11 12.5h9.5M11 19h9.5" />
+    </svg>
+  );
+}
+
+export function InboxIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5" />
+      <path d="M5.5 5.5h13l2 8V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19v-5.5l2-8Z" />
+    </svg>
+  );
+}
+
+/** Points left — "onward" in a right-to-left layout. */
+export function ArrowForwardIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M19 12H5M11 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
+export function RotateIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.5" />
+      <path d="M4 4v4.5h4.5" />
+    </svg>
+  );
+}

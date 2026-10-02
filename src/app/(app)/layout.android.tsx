@@ -7,6 +7,8 @@ import AppTopBar from "@/components/nav/AppTopBar";
 import BottomNav from "@/components/nav/BottomNav";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
 import GlobalCaptureFab from "@/components/GlobalCaptureFab";
+import FocusTimerPill from "@/components/FocusTimerPill";
+import InboxReviewScheduler from "@/components/InboxReviewScheduler";
 import SWRProvider from "@/components/SWRProvider";
 import FirstRunGate from "@/components/native/FirstRunGate";
 import WidgetQueueDrainer from "@/components/native/WidgetQueueDrainer";
@@ -36,6 +38,8 @@ function AndroidChrome({ children }: { children: React.ReactNode }) {
       <NotificationOffBanner />
       <SavedToast />
       <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
+      <FocusTimerPill />
+      <InboxReviewScheduler />
       <GlobalCaptureFab />
       <BottomNav userName={userName} />
     </div>

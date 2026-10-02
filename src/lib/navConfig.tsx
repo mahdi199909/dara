@@ -9,6 +9,9 @@ import {
   GearIcon,
   FlameIcon,
   TrendUpIcon,
+  ClockIcon,
+  ListChecksIcon,
+  InboxIcon,
 } from "@/components/icons";
 
 export const NAV_ITEMS = [
@@ -21,6 +24,9 @@ export const NAV_ITEMS = [
   { href: "/capital", label: "سرمایه", icon: TrendUpIcon },
   { href: "/reports", label: "گزارش‌ها", icon: ChartIcon },
   { href: "/projects", label: "پروژه‌ها", icon: FolderIcon },
+  { href: "/timer", label: "زمان‌سنج", icon: ClockIcon },
+  { href: "/checklists", label: "چک‌لیست‌ها", icon: ListChecksIcon },
+  { href: "/inbox", label: "صندوق ورودی", icon: InboxIcon },
   { href: "/settings", label: "تنظیمات", icon: GearIcon },
 ] as const;
 

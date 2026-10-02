@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-315 events in 43 domains.
+339 events in 45 domains.
 
 ## AUTH
 
@@ -612,4 +612,42 @@ Default module: `checkup`
 | `CHECKUP_REFUSED` | WARN | — | yes | A request to the public research form was refused (origin, size or shape). |
 | `CHECKUP_SAVED` | DEBUG | — | yes | A page of the public research form was stored. |
 | `CHECKUP_SAVE_FAILED` | ERROR | protected | yes | An answer sheet of the public research form could not be stored. |
+
+## CHECKLIST
+
+Default module: `checklists`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `CHECKLIST_CREATE_FAILED` | ERROR | protected | yes | Checklist create failed. |
+| `CHECKLIST_CREATE_STARTED` | DEBUG | — | reserved | Checklist create started. |
+| `CHECKLIST_CREATE_SUCCESS` | INFO | — | yes | Checklist create success. |
+| `CHECKLIST_DELETE_FAILED` | ERROR | protected | yes | Checklist delete failed. |
+| `CHECKLIST_DELETE_STARTED` | DEBUG | — | reserved | Checklist delete started. |
+| `CHECKLIST_DELETE_SUCCESS` | INFO | — | yes | Checklist delete success. |
+| `CHECKLIST_RESET_FAILED` | ERROR | protected | yes | Checklist reset failed. |
+| `CHECKLIST_RESET_STARTED` | DEBUG | — | reserved | Checklist reset started. |
+| `CHECKLIST_RESET_SUCCESS` | INFO | — | yes | Checklist reset success. |
+| `CHECKLIST_UPDATE_FAILED` | ERROR | protected | yes | Checklist update failed. |
+| `CHECKLIST_UPDATE_STARTED` | DEBUG | — | reserved | Checklist update started. |
+| `CHECKLIST_UPDATE_SUCCESS` | INFO | — | yes | Checklist update success. |
+
+## INBOX
+
+Default module: `inbox`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `INBOX_CREATE_FAILED` | ERROR | protected | yes | Inbox create failed. |
+| `INBOX_CREATE_STARTED` | DEBUG | — | reserved | Inbox create started. |
+| `INBOX_CREATE_SUCCESS` | INFO | — | yes | Inbox create success. |
+| `INBOX_DELETE_FAILED` | ERROR | protected | yes | Inbox delete failed. |
+| `INBOX_DELETE_STARTED` | DEBUG | — | reserved | Inbox delete started. |
+| `INBOX_DELETE_SUCCESS` | INFO | — | yes | Inbox delete success. |
+| `INBOX_PROCESS_FAILED` | ERROR | protected | yes | Inbox process failed. |
+| `INBOX_PROCESS_STARTED` | DEBUG | — | reserved | Inbox process started. |
+| `INBOX_PROCESS_SUCCESS` | INFO | — | yes | Inbox process success. |
+| `INBOX_UPDATE_FAILED` | ERROR | protected | yes | Inbox update failed. |
+| `INBOX_UPDATE_STARTED` | DEBUG | — | reserved | Inbox update started. |
+| `INBOX_UPDATE_SUCCESS` | INFO | — | yes | Inbox update success. |
 

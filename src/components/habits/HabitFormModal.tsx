@@ -11,11 +11,14 @@ export default function HabitFormModal({
   onClose,
   onSaved,
   onDeleted,
+  initialTitle,
 }: {
   habit?: any;
   onClose: () => void;
   onSaved: () => void;
   onDeleted?: () => void;
+  /** Pre-fills a new habit's title (an inbox item being turned into a habit). */
+  initialTitle?: string;
 }) {
   const { categories: allCategories } = useCategories();
   const isEdit = !!habit;
@@ -29,7 +32,7 @@ export default function HabitFormModal({
     return true;
   });
 
-  const [title, setTitle] = useState(habit?.title ?? "");
+  const [title, setTitle] = useState(habit?.title ?? initialTitle ?? "");
   const [icon, setIcon] = useState(habit?.icon ?? "");
   const [categoryId, setCategoryId] = useState(habit?.categoryId ?? "");
   const [virtualAssetValue, setVirtualAssetValue] = useState(

@@ -34,6 +34,8 @@ export async function eraseUserData(userId: string, opts: { reseedCategories?: b
         ["CapitalSnapshot", () => tx.capitalSnapshot.deleteMany({ where })],
         ["ShownInsight", () => tx.shownInsight.deleteMany({ where })],
         ["DailyNote", () => tx.dailyNote.deleteMany({ where })],
+        ["ChecklistItem", () => tx.checklistItem.deleteMany({ where })],
+        ["InboxItem", () => tx.inboxItem.deleteMany({ where })],
         // Then what they pointed at (children cascade).
         ["Activity", () => tx.activity.deleteMany({ where })],
         ["Task", () => tx.task.deleteMany({ where })],

@@ -60,6 +60,8 @@ export const DOMAINS = [
   "AUDIT",
   "UI",
   "CHECKUP",
+  "CHECKLIST",
+  "INBOX",
 ] as const;
 export type Domain = (typeof DOMAINS)[number];
 
@@ -108,6 +110,8 @@ export const MODULE_OF_DOMAIN: Readonly<Record<Domain, string>> = {
   AUDIT: "audit",
   UI: "ui",
   CHECKUP: "checkup",
+  CHECKLIST: "checklists",
+  INBOX: "inbox",
 };
 
 export const OPERATION_RESULTS = ["STARTED", "SUCCESS", "FAILED"] as const;
@@ -122,6 +126,8 @@ export const OPERATIONS = {
   BUDGET: ["CREATE", "UPDATE", "DELETE"],
   SAVINGS_GOAL: ["CREATE", "UPDATE", "DELETE"],
   NOTE: ["CREATE", "UPDATE", "DELETE"],
+  CHECKLIST: ["CREATE", "UPDATE", "DELETE", "RESET"],
+  INBOX: ["CREATE", "UPDATE", "DELETE", "PROCESS"],
   EVENT: ["CREATE", "UPDATE", "DELETE", "COMPLETE"],
   HABIT: ["CREATE", "UPDATE", "DELETE", "CHECKIN", "UNDO"],
   ACCOUNT: ["CREATE", "UPDATE", "DELETE", "TRANSFER"],

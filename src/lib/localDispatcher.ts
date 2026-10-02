@@ -15,6 +15,8 @@ import * as projectsRepo from "@/local/repositories/projects";
 import * as budgetsRepo from "@/local/repositories/budgets";
 import * as savingsGoalsRepo from "@/local/repositories/savingsGoals";
 import * as notesRepo from "@/local/repositories/notes";
+import * as checklistsRepo from "@/local/repositories/checklists";
+import * as inboxRepo from "@/local/repositories/inbox";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
 import * as installmentsRepo from "@/local/repositories/installments";
@@ -59,6 +61,8 @@ import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects
 import { createBudgetSchema } from "@/lib/schemas/budgets";
 import { createSavingsGoalSchema, updateSavingsGoalSchema } from "@/lib/schemas/savingsGoals";
 import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
+import { createChecklistItemSchema, createChecklistItemsSchema, updateChecklistItemSchema } from "@/lib/schemas/checklists";
+import { createInboxItemSchema, updateInboxItemSchema, processInboxItemSchema } from "@/lib/schemas/inbox";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
 import { createInstallmentPlanSchema, updateInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
@@ -106,6 +110,14 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "POST /api/notes": { operation: "NOTE_CREATE", entityType: "DailyNote" },
   "PATCH /api/notes/:id": { operation: "NOTE_UPDATE", entityType: "DailyNote" },
   "DELETE /api/notes/:id": { operation: "NOTE_DELETE", entityType: "DailyNote" },
+  "POST /api/checklists": { operation: "CHECKLIST_CREATE", entityType: "ChecklistItem" },
+  "PATCH /api/checklists/:id": { operation: "CHECKLIST_UPDATE", entityType: "ChecklistItem" },
+  "DELETE /api/checklists/:id": { operation: "CHECKLIST_DELETE", entityType: "ChecklistItem" },
+  "POST /api/checklists/:id/reset": { operation: "CHECKLIST_RESET", entityType: "ChecklistItem" },
+  "POST /api/inbox": { operation: "INBOX_CREATE", entityType: "InboxItem" },
+  "PATCH /api/inbox/:id": { operation: "INBOX_UPDATE", entityType: "InboxItem" },
+  "DELETE /api/inbox/:id": { operation: "INBOX_DELETE", entityType: "InboxItem" },
+  "POST /api/inbox/:id/process": { operation: "INBOX_PROCESS", entityType: "InboxItem" },
   "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
   "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
@@ -213,6 +225,28 @@ register("GET", "/api/notes", ({ db, userId, query }) => ({
 register("POST", "/api/notes", ({ db, userId, body }) => ({ note: notesRepo.createNote(db, userId, createNoteSchema.parse(body)) }), 201);
 register("PATCH", "/api/notes/:id", ({ db, userId, params, body }) => ({ note: notesRepo.updateNote(db, userId, params.id, updateNoteSchema.parse(body)) }));
 register("DELETE", "/api/notes/:id", ({ db, userId, params }) => notesRepo.deleteNote(db, userId, params.id));
+
+// --- Checklists ----------------------------------------------------------------------------
+register("GET", "/api/checklists", ({ db, userId }) => ({ items: checklistsRepo.listChecklistItems(db, userId) }));
+register(
+  "POST",
+  "/api/checklists",
+  ({ db, userId, body }) =>
+    body && typeof body === "object" && "titles" in body
+      ? { items: checklistsRepo.createChecklistItems(db, userId, createChecklistItemsSchema.parse(body)) }
+      : { item: checklistsRepo.createChecklistItem(db, userId, createChecklistItemSchema.parse(body)) },
+  201
+);
+register("POST", "/api/checklists/:id/reset", ({ db, userId, params }) => checklistsRepo.resetChecklistItem(db, userId, params.id));
+register("PATCH", "/api/checklists/:id", ({ db, userId, params, body }) => ({ item: checklistsRepo.updateChecklistItem(db, userId, params.id, updateChecklistItemSchema.parse(body)) }));
+register("DELETE", "/api/checklists/:id", ({ db, userId, params }) => checklistsRepo.deleteChecklistItem(db, userId, params.id));
+
+// --- Inbox (GTD) ---------------------------------------------------------------------------
+register("GET", "/api/inbox", ({ db, userId }) => ({ items: inboxRepo.listInboxItems(db, userId) }));
+register("POST", "/api/inbox", ({ db, userId, body }) => ({ item: inboxRepo.createInboxItem(db, userId, createInboxItemSchema.parse(body)) }), 201);
+register("POST", "/api/inbox/:id/process", ({ db, userId, params, body }) => inboxRepo.processInboxItem(db, userId, params.id, processInboxItemSchema.parse(body).to));
+register("PATCH", "/api/inbox/:id", ({ db, userId, params, body }) => ({ item: inboxRepo.updateInboxItem(db, userId, params.id, updateInboxItemSchema.parse(body)) }));
+register("DELETE", "/api/inbox/:id", ({ db, userId, params }) => inboxRepo.deleteInboxItem(db, userId, params.id));
 
 // --- Projects ------------------------------------------------------------------------------
 register("GET", "/api/projects", ({ db, userId }) => ({ projects: projectsRepo.listProjects(db, userId) }));

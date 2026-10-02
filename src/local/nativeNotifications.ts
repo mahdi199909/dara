@@ -45,6 +45,15 @@ const PRIVATE_VISIBILITY = 0;
  */
 export const TEST_NOTIFICATION_ID = 2_147_483_001;
 
+/** The «زمان‌سنج» ringing when a countdown or a pomodoro block ends. */
+export const TIMER_NOTIFICATION_ID = 2_147_483_002;
+
+/** The «صندوق ورودی» review reminders: the next few occasions are armed at once, one id each. */
+export const INBOX_REVIEW_NOTIFICATION_IDS = [2_147_483_010, 2_147_483_011, 2_147_483_012, 2_147_483_013, 2_147_483_014, 2_147_483_015, 2_147_483_016] as const;
+
+/** Notifications with a fixed id belong to a feature of their own, not to a Reminder row — the reconcile below leaves them alone. */
+const FIXED_NOTIFICATION_IDS: ReadonlySet<number> = new Set([TEST_NOTIFICATION_ID, TIMER_NOTIFICATION_ID, ...INBOX_REVIEW_NOTIFICATION_IDS]);
+
 /**
  * Same algorithm as Java's String.hashCode() — deterministic, and the `| 0` keeps the result
  * within the signed 32-bit range the plugin's own `id` field requires. A Reminder's real id is a
@@ -282,7 +291,7 @@ export function syncScheduledReminderNotifications(wanted: ScheduledReminder[]):
       }
       const wantedIds = new Set(wanted.map((w) => reminderNotificationId(w.id)));
       const pending = await plugin.getPending();
-      const stale = pending.notifications.filter((n) => !wantedIds.has(n.id) && n.id !== TEST_NOTIFICATION_ID);
+      const stale = pending.notifications.filter((n) => !wantedIds.has(n.id) && !FIXED_NOTIFICATION_IDS.has(n.id));
       if (stale.length > 0) await plugin.cancel({ notifications: stale.map((n) => ({ id: n.id })) });
       if (wanted.length > 0) {
         const options = await armingOptions(plugin);
@@ -329,6 +338,48 @@ export function sendTestNotification(options: { title: string; body: string; del
     } catch (err) {
       log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "test" });
       throw err;
+    }
+  });
+}
+
+export interface FixedNotification {
+  id: number;
+  title: string;
+  body: string;
+  at: Date;
+}
+
+/**
+ * Makes the given fixed ids ring exactly `wanted`: every id in `ids` is cancelled first, then each
+ * wanted one (all of whose ids must be in `ids`) is armed — the timer and the inbox review each own
+ * their ids and replace their own set in one call. Quietly does nothing while notifications are not
+ * allowed (same reason as the reconcile above: never pop the permission dialog behind someone's back).
+ */
+export function replaceFixedNotifications(ids: readonly number[], wanted: FixedNotification[]): void {
+  void enqueue(async () => {
+    try {
+      const { plugin } = await loadPlugin();
+      const permission = await plugin.checkPermissions();
+      if (permission?.display !== "granted") return;
+      if (ids.length > 0) await plugin.cancel({ notifications: ids.map((id) => ({ id })) });
+      const future = wanted.filter((w) => w.at.getTime() > Date.now());
+      if (future.length === 0) return;
+      const arming = await armingOptions(plugin);
+      await plugin.schedule({
+        notifications: future.map((w) => ({
+          id: w.id,
+          smallIcon: NOTIFICATION_SMALL_ICON,
+          iconColor: NOTIFICATION_ICON_COLOR,
+          title: w.title,
+          body: w.body,
+          schedule: { at: w.at, allowWhileIdle: true },
+          channelId: arming.channelId,
+          isExactNotification: arming.exact,
+        })),
+      });
+      log.debug("LOCAL_NOTIFICATION_SCHEDULED", { layer: "local", entityType: "fixed", count: future.length, exact: arming.exact });
+    } catch (err) {
+      log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "fixed" });
     }
   });
 }
