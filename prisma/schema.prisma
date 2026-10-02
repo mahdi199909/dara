@@ -263,6 +263,8 @@ model Task {
   incomeAmount Float     @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
   startAt      DateTime?
   endAt        DateTime?
+  // What made the task when it was not typed in by hand: TIMER = a stretch timed by «زمان‌سنج».
+  source       String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

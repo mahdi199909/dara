@@ -2,7 +2,7 @@
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
 import { tomanInt } from "@/lib/schemas/money";
-import { TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
+import { TASK_SOURCES, TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
 
 export const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
@@ -21,6 +21,8 @@ export const createTaskSchema = z.object({
   allowOverlap: z.boolean().optional(),
   // The account this entry's expense or income is booked to; the person's default account when left out.
   accountId: z.string().optional(),
+  // TIMER = saved by «زمان‌سنج» (its history and totals list these).
+  source: z.enum(TASK_SOURCES).optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 

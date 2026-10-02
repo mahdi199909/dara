@@ -8,6 +8,7 @@
 // A finished stretch is queued first and then saved, so being offline or a failed request never loses it.
 import { useSyncExternalStore } from "react";
 import { apiPost, isNativePlatform } from "@/lib/apiClient";
+import { mutate } from "swr";
 import { refreshAllCaches } from "@/lib/refreshCaches";
 import {
   advanceTimer,
@@ -28,6 +29,9 @@ const PENDING_KEY = "parva.focusTimer.pending.v1";
 const PREFS_KEY = "parva.focusTimer.prefs.v1";
 
 export const DEFAULT_SESSION_TITLE = "تمرکز";
+
+/** Every task the timer saved — its history and totals on the timer screen. */
+export const TIMER_HISTORY_KEY = "/api/tasks?source=TIMER";
 
 export interface TimerPrefs {
   mode: TimerMode;
@@ -143,6 +147,7 @@ async function flushPending() {
         await apiPost("/api/tasks", {
           title: next.title || DEFAULT_SESSION_TITLE,
           categoryId: next.categoryId ?? undefined,
+          source: "TIMER",
           status: "DONE",
           startAt: next.startAt,
           endAt: next.endAt,
@@ -155,6 +160,7 @@ async function flushPending() {
       }
       set({ pending: snapshot.pending.slice(1), lastSaved: { title: next.title || DEFAULT_SESSION_TITLE, durationMs: next.durationMs, endAt: next.endAt }, saveError: null });
       refreshAllCaches();
+      void mutate(TIMER_HISTORY_KEY);
     }
   } finally {
     flushing = false;

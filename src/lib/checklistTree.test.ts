@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorIds, buildTree, computeCheckChange, computeMove, computeRecheck, descendantIds, nextSortOrder, progressOf, rootIdOf, type TreeRow } from "./checklistTree";
+import { ancestorIds, buildTree, computeCheckChange, computeMove, computeMoveTo, computeRecheck, descendantIds, nextSortOrder, progressOf, rootIdOf, type TreeRow } from "./checklistTree";
 
 // سمینار
 // ├─ سالن
@@ -78,6 +78,20 @@ describe("checklist tree", () => {
       { id: "z", sortOrder: 1 },
       { id: "y", sortOrder: 2 },
     ]);
+  });
+
+  it("drags an item to any place among its siblings", () => {
+    const rows = [row("a", null, 0), row("b", null, 1), row("c", null, 2), row("d", null, 3)];
+    const order = (changes: { id: string; sortOrder: number }[]) => {
+      const next = rows.map((r) => ({ ...r, sortOrder: changes.find((c) => c.id === r.id)?.sortOrder ?? r.sortOrder }));
+      return buildTree(next).map((n) => n.item.id).join("");
+    };
+    expect(order(computeMoveTo(rows, "d", 0))).toBe("dabc");
+    expect(order(computeMoveTo(rows, "a", 2))).toBe("bcad");
+    expect(order(computeMoveTo(rows, "b", 99))).toBe("acdb");
+    expect(computeMoveTo(rows, "c", 2)).toEqual([]);
+    // only siblings move: a child keeps its own group
+    expect(computeMoveTo([...rows, row("a1", "a", 0), row("a2", "a", 1)], "a2", 0).map((c) => c.id).sort()).toEqual(["a1", "a2"]);
   });
 
   it("puts a new item after the last of its siblings", () => {

@@ -9,8 +9,8 @@ export const INBOX_PRIORITIES = [0, 1, 2] as const;
 export type InboxPriority = (typeof INBOX_PRIORITIES)[number];
 export const INBOX_PRIORITY_LABELS: Record<InboxPriority, string> = { 0: "عادی", 1: "مهم", 2: "فوری" };
 
-/** Where an item went when it was decided on. */
-export const INBOX_DESTINATIONS = ["TASK", "EVENT", "TRANSACTION", "INSTALLMENT", "CHECKLIST", "NOTE", "HABIT"] as const;
+/** Where an item went when it was decided on. AUTO = read by smart capture (src/lib/captureIntent.ts), which decided what the line was. */
+export const INBOX_DESTINATIONS = ["AUTO", "TASK", "EVENT", "TRANSACTION", "INSTALLMENT", "CHECKLIST", "NOTE", "HABIT"] as const;
 export type InboxDestination = (typeof INBOX_DESTINATIONS)[number];
 
 const contentSchema = z.string().trim().min(1, "متن خالی است.").max(INBOX_MAX_LENGTH, `متن حداکثر ${INBOX_MAX_LENGTH} نویسه می‌تواند باشد.`);

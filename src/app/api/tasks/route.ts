@@ -16,6 +16,7 @@ async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const projectId = searchParams.get("projectId");
+    const source = searchParams.get("source");
 
     const tasks = await prisma.task.findMany({
       where: {
@@ -23,6 +24,7 @@ async function GET(req: NextRequest) {
         deletedAt: null,
         ...(status ? { status } : {}),
         ...(projectId ? { projectId } : {}),
+        ...(source ? { source } : {}),
       },
       include: { category: true, project: true },
       orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
@@ -58,6 +60,7 @@ async function POST(req: NextRequest) {
             dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
             startAt: body.startAt ? new Date(body.startAt) : undefined,
             endAt: body.endAt ? new Date(body.endAt) : undefined,
+            source: body.source,
           },
         });
 

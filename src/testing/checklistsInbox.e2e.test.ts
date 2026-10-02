@@ -21,6 +21,7 @@ vi.mock("@/lib/versionGate", () => ({ cacheVersionGate: async () => {}, checkVer
 
 import { createPhone, createServerHarness, type ServerHarness } from "@/testing/syncHarness";
 import { linkPhone, syncUntilQuiet } from "@/testing/syncScenarios";
+import { CHECKLIST_TEMPLATES, templateLeafCount } from "@/lib/checklistTemplates";
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -177,5 +178,67 @@ describe("inbox", () => {
     await syncUntilQuiet(phone);
     phone.activate();
     expect((phone.must("GET", "/api/inbox").items as { content: string }[]).map((i) => i.content)).toEqual(["از وب"]);
+  });
+});
+
+/** Ready-made lists, dragging and the timer's tasks — once on the web, once on the phone. */
+async function extrasScenario(call: Call) {
+  const seminar = CHECKLIST_TEMPLATES.find((t) => t.id === "seminar")!;
+  const created = (await call("POST", "/api/checklists", { tree: seminar.tree })).items as Item[];
+  expect(created[0]).toMatchObject({ title: "سمینار", parentId: null });
+  const all = (await call("GET", "/api/checklists")).items as Item[];
+  const leaves = all.filter((i) => !all.some((c) => c.parentId === i.id));
+  expect(leaves).toHaveLength(templateLeafCount(seminar.tree));
+  const firstGroups = all.filter((i) => i.parentId === created[0].id).map((i) => i.title);
+  expect(firstGroups[0]).toBe("گرفتن سالن");
+
+  // a tree added under a ticked list unticks it
+  const done = (await call("POST", "/api/checklists", { title: "کوتاه" })).item;
+  await call("POST", "/api/checklists", { parentId: done.id, title: "تنها مورد" });
+  const only = ((await call("GET", "/api/checklists")).items as Item[]).find((i) => i.title === "تنها مورد")!;
+  await call("PATCH", `/api/checklists/${only.id}`, { checked: true });
+  await call("POST", "/api/checklists", { parentId: done.id, tree: { title: "بخش تازه", children: [{ title: "الف" }] } });
+  expect(((await call("GET", "/api/checklists")).items as Item[]).find((i) => i.id === done.id)!.checked).toBe(false);
+
+  // dragging: the last group to the top
+  const groups = all.filter((i) => i.parentId === created[0].id);
+  await call("PATCH", `/api/checklists/${groups[groups.length - 1].id}`, { position: 0 });
+  const after = ((await call("GET", "/api/checklists")).items as Item[]).filter((i) => i.parentId === created[0].id).map((i) => i.id);
+  expect(after[0]).toBe(groups[groups.length - 1].id);
+  expect(after.slice(1)).toEqual(groups.slice(0, -1).map((g) => g.id));
+
+  // a timer's task is told apart from a typed one
+  await call("POST", "/api/tasks", { title: "تمرکز", status: "DONE", startAt: "2026-10-02T06:00:00.000Z", endAt: "2026-10-02T06:25:00.000Z", source: "TIMER", allowOverlap: true });
+  await call("POST", "/api/tasks", { title: "دستی", status: "DONE" });
+  const timed = (await call("GET", "/api/tasks?source=TIMER")).tasks as { title: string }[];
+  expect(timed.map((t) => t.title)).toEqual(["تمرکز"]);
+}
+
+describe("ready-made lists, dragging and the timer's tasks", () => {
+  it("work on the web", async () => {
+    await server.registerUser();
+    await extrasScenario((m, u, b) => server.mustWeb(m, u, b));
+  });
+
+  it("work on the phone", async () => {
+    const phone = await createPhone();
+    phone.activate();
+    await extrasScenario(async (m, u, b) => phone.must(m, u, b));
+  });
+
+  it("refuse a tree that is too big or too deep, and a made-up task source", async () => {
+    await server.registerUser();
+    const wide = { title: "x", children: Array.from({ length: 301 }, (_, i) => ({ title: `مورد ${i}` })) };
+    expect((await server.web("POST", "/api/checklists", { tree: wide })).status).toBe(400);
+    let deep: { title: string; children?: unknown[] } = { title: "ته" };
+    for (let i = 0; i < 7; i++) deep = { title: `سطح ${i}`, children: [deep] };
+    expect((await server.web("POST", "/api/checklists", { tree: deep })).status).toBe(400);
+    expect((await server.web("POST", "/api/tasks", { title: "x", source: "ROBOT" })).status).toBe(400);
+  });
+
+  it("every ready-made list is valid", async () => {
+    const { createChecklistTreeSchema } = await import("@/lib/schemas/checklists");
+    for (const t of CHECKLIST_TEMPLATES) expect(createChecklistTreeSchema.safeParse({ tree: t.tree }).success, t.id).toBe(true);
+    expect(new Set(CHECKLIST_TEMPLATES.map((t) => t.id)).size).toBe(CHECKLIST_TEMPLATES.length);
   });
 });

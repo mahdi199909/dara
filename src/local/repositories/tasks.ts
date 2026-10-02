@@ -62,7 +62,7 @@ function getTaskById(db: LocalDb, userId: string, id: string) {
   return row ? attachRelations(db, [row])[0] : null;
 }
 
-export function listTasks(db: LocalDb, userId: string, filters: { status?: string; projectId?: string } = {}) {
+export function listTasks(db: LocalDb, userId: string, filters: { status?: string; projectId?: string; source?: string } = {}) {
   const where = [`"userId" = ?`, `"deletedAt" IS NULL`];
   const params: unknown[] = [userId];
   if (filters.status) {
@@ -72,6 +72,10 @@ export function listTasks(db: LocalDb, userId: string, filters: { status?: strin
   if (filters.projectId) {
     where.push(`"projectId" = ?`);
     params.push(filters.projectId);
+  }
+  if (filters.source) {
+    where.push(`"source" = ?`);
+    params.push(filters.source);
   }
 
   const rows = db.all<TaskRow>(
@@ -88,8 +92,8 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
 
   db.run(
     `INSERT INTO "Task"
-       ("id","userId","title","description","status","dueDate","categoryId","projectId","estimatedCost","valueType","directCost","incomeAmount","startAt","endAt","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ("id","userId","title","description","status","dueDate","categoryId","projectId","estimatedCost","valueType","directCost","incomeAmount","startAt","endAt","source","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       userId,
@@ -105,6 +109,7 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
       input.incomeAmount ?? 0,
       input.startAt ?? null,
       input.endAt ?? null,
+      input.source ?? null,
       now,
       now,
     ]

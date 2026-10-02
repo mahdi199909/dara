@@ -1,15 +1,16 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher, apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { buildTree, progressOf, type TreeNode } from "@/lib/checklistTree";
-import { CHECKLIST_NOTE_MAX_LENGTH, CHECKLIST_TITLE_MAX_LENGTH, type ChecklistItemDto } from "@/lib/schemas/checklists";
+import { CHECKLIST_NOTE_MAX_LENGTH, CHECKLIST_TITLE_MAX_LENGTH, type ChecklistItemDto, type ChecklistTreeNode } from "@/lib/schemas/checklists";
+import { CHECKLIST_TEMPLATES, templateLeafCount, type ChecklistTemplate } from "@/lib/checklistTemplates";
 import { toPersianDigits } from "@/lib/money";
 import { Card, EmptyState } from "@/components/ui/Card";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EditIcon, PlusIcon, RotateIcon, TrashIcon } from "@/components/icons";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, EditIcon, PlusIcon, RotateIcon, TrashIcon, XIcon } from "@/components/icons";
 
 type Node = TreeNode<ChecklistItemDto>;
 const KEY = "/api/checklists";
@@ -54,7 +55,9 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
 }
 
 function ChecklistIndex() {
+  const router = useRouter();
   const { items, tree, loading, mutate } = useChecklists();
+  const [showTemplates, setShowTemplates] = useState(false);
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,11 +94,25 @@ function ChecklistIndex() {
       </form>
       {error && <p className="text-xs text-waste">{error}</p>}
 
+      <button type="button" onClick={() => setShowTemplates(true)} className="w-full rounded-xl border border-dashed border-accent text-accent py-2.5 text-sm">
+        ✨ چک‌لیست‌های آماده — سفر، سمینار، مرور هفتگی…
+      </button>
+      {showTemplates && (
+        <TemplateGallery
+          onClose={() => setShowTemplates(false)}
+          onAdded={async (id) => {
+            setShowTemplates(false);
+            await mutate();
+            router.push(`/checklists?id=${id}`);
+          }}
+        />
+      )}
+
       {loading ? (
         <p className="text-sm text-muted text-center py-8">در حال بارگذاری...</p>
       ) : tree.length === 0 ? (
         <Card>
-          <EmptyState message="هنوز چک‌لیستی نساخته‌ای." />
+          <EmptyState message="هنوز چک‌لیستی نساخته‌ای — یکی بساز یا از چک‌لیست‌های آماده شروع کن." />
         </Card>
       ) : (
         <div className="space-y-2">
@@ -184,11 +201,7 @@ function ChecklistView({ id }: { id: string }) {
         {list.children.length === 0 ? (
           <p className="text-sm text-muted text-center py-6">هنوز موردی نیست — اولین را پایین اضافه کن.</p>
         ) : (
-          <ul>
-            {list.children.map((child, i) => (
-              <ChecklistRow key={child.item.id} node={child} depth={0} ctx={ctx} isFirst={i === 0} isLast={i === list.children.length - 1} />
-            ))}
-          </ul>
+          <SiblingList nodes={list.children} depth={0} ctx={ctx} />
         )}
         <div className="px-1 pt-2">
           <AddItems parentId={id} ctx={ctx} placeholder="مورد تازه (هر خط یک مورد)" />
@@ -303,7 +316,7 @@ function AddItems({ parentId, ctx, placeholder, autoFocus, onDone }: { parentId:
   );
 }
 
-function ChecklistRow({ node, depth, ctx, isFirst, isLast }: { node: Node; depth: number; ctx: RowContext; isFirst: boolean; isLast: boolean }) {
+function ChecklistRow({ node, depth, ctx, isFirst, isLast, handle }: { node: Node; depth: number; ctx: RowContext; isFirst: boolean; isLast: boolean; handle: React.ReactNode }) {
   const { item, children } = node;
   const [open, setOpen] = useState(true);
   const [menu, setMenu] = useState(false);
@@ -317,8 +330,9 @@ function ChecklistRow({ node, depth, ctx, isFirst, isLast }: { node: Node; depth
   const url = `${KEY}/${item.id}`;
 
   return (
-    <li>
+    <div>
       <div className="flex items-start gap-1.5 py-1.5 rounded-lg hover:bg-canvas/60" style={{ paddingRight: depth * 20 }}>
+        {handle}
         <button
           type="button"
           aria-label={hasChildren ? (open ? "بستن" : "باز کردن") : undefined}
@@ -377,7 +391,7 @@ function ChecklistRow({ node, depth, ctx, isFirst, isLast }: { node: Node; depth
       </div>
 
       {menu && !editing && (
-        <div className="flex flex-wrap gap-1.5 pb-2" style={{ paddingRight: depth * 20 + 48 }}>
+        <div className="flex flex-wrap gap-1.5 pb-2" style={{ paddingRight: depth * 20 + 70 }}>
           <MenuChip
             onClick={() => {
               setMenu(false);
@@ -403,19 +417,13 @@ function ChecklistRow({ node, depth, ctx, isFirst, isLast }: { node: Node; depth
       )}
 
       {adding && (
-        <div className="pb-2" style={{ paddingRight: depth * 20 + 48 }}>
+        <div className="pb-2" style={{ paddingRight: depth * 20 + 70 }}>
           <AddItems parentId={item.id} ctx={ctx} autoFocus placeholder={`زیرمورد «${item.title}»`} onDone={() => setOpen(true)} />
         </div>
       )}
 
-      {hasChildren && open && (
-        <ul>
-          {children.map((child, i) => (
-            <ChecklistRow key={child.item.id} node={child} depth={depth + 1} ctx={ctx} isFirst={i === 0} isLast={i === children.length - 1} />
-          ))}
-        </ul>
-      )}
-    </li>
+      {hasChildren && open && <SiblingList nodes={children} depth={depth + 1} ctx={ctx} />}
+    </div>
   );
 }
 
@@ -424,5 +432,163 @@ function MenuChip({ children, onClick, danger }: { children: React.ReactNode; on
     <button type="button" onClick={onClick} className={`px-2.5 py-1 rounded-full text-xs border ${danger ? "border-waste/40 text-waste" : "border-line text-ink bg-surface"}`}>
       {children}
     </button>
+  );
+}
+
+/**
+ * The items of one level, in order, each draggable by its handle within that level: hold the ⋮⋮ handle,
+ * drag up or down, a line shows where it will land, release to save. Moving between levels is done by
+ * deleting and re-adding (kept simple on purpose — a drop "inside" an item is easy to hit by accident on a phone).
+ */
+function SiblingList({ nodes, depth, ctx }: { nodes: Node[]; depth: number; ctx: RowContext }) {
+  const listRef = useRef<HTMLUListElement>(null);
+  const [drag, setDrag] = useState<{ id: string; from: number; to: number; dy: number } | null>(null);
+  const start = useRef<{ y: number; centers: number[] } | null>(null);
+
+  function targetIndex(pointerY: number, from: number): number {
+    const centers = start.current?.centers ?? [];
+    let to = 0;
+    centers.forEach((c, i) => {
+      if (i !== from && pointerY > c) to++;
+    });
+    return to;
+  }
+
+  function onPointerDown(e: React.PointerEvent, id: string, index: number) {
+    if (ctx.busy) return;
+    const rows = Array.from(listRef.current?.children ?? []) as HTMLElement[];
+    start.current = { y: e.clientY, centers: rows.map((r) => r.getBoundingClientRect().top + r.getBoundingClientRect().height / 2) };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setDrag({ id, from: index, to: index, dy: 0 });
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!drag || !start.current) return;
+    setDrag({ ...drag, dy: e.clientY - start.current.y, to: targetIndex(e.clientY, drag.from) });
+  }
+
+  function onPointerUp() {
+    if (!drag) return;
+    const { id, from, to } = drag;
+    setDrag(null);
+    start.current = null;
+    if (to !== from) void ctx.run(() => apiPatch(`${KEY}/${id}`, { position: to }), "جابه‌جایی انجام نشد.");
+  }
+
+  // Where the insertion line goes: above the item now at `to` (counting without the dragged one).
+  const others = drag ? nodes.filter((n) => n.item.id !== drag.id) : [];
+  const lineBefore = drag && drag.to !== drag.from ? (others[drag.to]?.item.id ?? "END") : null;
+
+  return (
+    <ul ref={listRef}>
+      {nodes.map((child, i) => {
+        const dragging = drag?.id === child.item.id;
+        return (
+          <li
+            key={child.item.id}
+            className={`${dragging ? "relative z-10 bg-surface shadow-lg rounded-lg opacity-90" : ""} ${lineBefore === child.item.id ? "border-t-2 border-accent" : ""}`}
+            style={dragging ? { transform: `translateY(${drag!.dy}px)` } : undefined}
+          >
+            <ChecklistRow
+              node={child}
+              depth={depth}
+              ctx={ctx}
+              isFirst={i === 0}
+              isLast={i === nodes.length - 1}
+              handle={
+                nodes.length > 1 ? (
+                  <span
+                    role="button"
+                    aria-label="جابه‌جایی با کشیدن"
+                    onPointerDown={(e) => onPointerDown(e, child.item.id, i)}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerUp}
+                    className="w-4 h-6 shrink-0 flex items-center justify-center text-muted cursor-grab select-none"
+                    style={{ touchAction: "none" }}
+                  >
+                    ⋮⋮
+                  </span>
+                ) : (
+                  <span className="w-4 shrink-0" />
+                )
+              }
+            />
+          </li>
+        );
+      })}
+      {lineBefore === "END" && <li aria-hidden className="border-t-2 border-accent" />}
+    </ul>
+  );
+}
+
+function TemplatePreview({ node, depth = 0 }: { node: ChecklistTreeNode; depth?: number }) {
+  return (
+    <ul className="space-y-0.5">
+      {(node.children ?? []).map((child, i) => (
+        <li key={i} style={{ paddingRight: depth * 14 }}>
+          <span className={`text-xs ${child.children?.length ? "text-ink font-medium" : "text-muted"}`}>{child.children?.length ? child.title : `☐ ${child.title}`}</span>
+          {child.children?.length ? <TemplatePreview node={child} depth={depth + 1} /> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The ready-made lists: look inside one, add it — it becomes an ordinary list of your own to change at will. */
+function TemplateGallery({ onClose, onAdded }: { onClose: () => void; onAdded: (id: string) => void }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function add(template: ChecklistTemplate) {
+    setSaving(template.id);
+    setError(null);
+    try {
+      const res = await apiPost<{ items: ChecklistItemDto[] }>(KEY, { tree: template.tree });
+      onAdded(res.items[0].id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "افزودن انجام نشد.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-md mx-auto bg-surface rounded-t-2xl shadow-xl max-h-[85vh] overflow-y-auto scrollbar-thin" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-1">
+          <h2 className="font-bold text-ink">چک‌لیست‌های آماده</h2>
+          <button onClick={onClose} className="text-muted hover:text-ink p-1" aria-label="بستن">
+            <XIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="px-5 text-xs text-muted">بعد از افزودن، مال خودت است: هر مورد را عوض کن، حذف کن یا اضافه کن.</p>
+        {error && <p className="px-5 pt-2 text-xs text-waste">{error}</p>}
+        <div className="p-4 space-y-2">
+          {CHECKLIST_TEMPLATES.map((t) => (
+            <div key={t.id} className="rounded-xl border border-line">
+              <div className="flex items-center gap-3 p-3">
+                <span className="text-2xl shrink-0">{t.icon}</span>
+                <button type="button" onClick={() => setOpen(open === t.id ? null : t.id)} className="flex-1 min-w-0 text-right">
+                  <p className="text-sm font-medium text-ink">{t.title}</p>
+                  <p className="text-[11px] text-muted">
+                    {t.description} · {toPersianDigits(String(templateLeafCount(t.tree)))} مورد · {open === t.id ? "بستن" : "دیدن"}
+                  </p>
+                </button>
+                <button type="button" disabled={saving !== null} onClick={() => void add(t)} className="shrink-0 rounded-lg bg-accent text-on-accent px-3 py-1.5 text-xs disabled:opacity-40">
+                  {saving === t.id ? "..." : "افزودن"}
+                </button>
+              </div>
+              {open === t.id && (
+                <div className="px-4 pb-3">
+                  <TemplatePreview node={t.tree} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

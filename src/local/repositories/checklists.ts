@@ -2,8 +2,8 @@
 // validation (shared schemas from @/lib/schemas/checklists), the same tree rules
 // (src/lib/checklistTree.ts), the same 404 message and response shapes.
 import { ApiError } from "@/lib/apiErrorBase";
-import { computeCheckChange, computeMove, computeRecheck, descendantIds, nextSortOrder, type TreeRow } from "@/lib/checklistTree";
-import type { ChecklistItemDto, CreateChecklistItemInput, CreateChecklistItemsInput, UpdateChecklistItemInput } from "@/lib/schemas/checklists";
+import { computeCheckChange, computeMove, computeMoveTo, computeRecheck, descendantIds, nextSortOrder, type TreeRow } from "@/lib/checklistTree";
+import type { ChecklistItemDto, ChecklistTreeNode, CreateChecklistItemInput, CreateChecklistItemsInput, CreateChecklistTreeInput, UpdateChecklistItemInput } from "@/lib/schemas/checklists";
 import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 
@@ -109,6 +109,25 @@ export function createChecklistItems(db: LocalDb, userId: string, input: CreateC
   });
 }
 
+/** A whole nested list in one go (a ready-made checklist). Returns every created item, the top one first. */
+export function createChecklistTree(db: LocalDb, userId: string, input: CreateChecklistTreeInput): ChecklistItemDto[] {
+  const parentId = input.parentId ?? null;
+  if (parentId) getOwnedRow(db, userId, parentId);
+  const ids: string[] = [];
+  const add = (node: ChecklistTreeNode, parent: string | null, sortOrder: number) => {
+    const id = insert(db, userId, parent, node.title, node.note || null, sortOrder);
+    ids.push(id);
+    (node.children ?? []).forEach((child, i) => add(child, id, i));
+  };
+  add(input.tree, parentId, nextSortOrder(treeRows(db, userId), parentId));
+  if (parentId) applyChange(db, computeRecheck(treeRows(db, userId), parentId));
+  return ids.map((id) => {
+    const row = getOwnedRow(db, userId, id);
+    writeLocalAuditLog(db, { userId, action: "CREATE", entityType: "ChecklistItem", entityId: id, newValue: row });
+    return toDto(row);
+  });
+}
+
 export function updateChecklistItem(db: LocalDb, userId: string, id: string, input: UpdateChecklistItemInput): ChecklistItemDto {
   const existing = getOwnedRow(db, userId, id);
   const sets: string[] = [];
@@ -127,9 +146,11 @@ export function updateChecklistItem(db: LocalDb, userId: string, id: string, inp
     db.run(`UPDATE "ChecklistItem" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, id]);
   }
   if (input.checked !== undefined) applyChange(db, computeCheckChange(treeRows(db, userId), id, input.checked));
-  if (input.move) {
+  if (input.move || input.position !== undefined) {
     const ts = now();
-    for (const change of computeMove(treeRows(db, userId), id, input.move)) {
+    const rows = treeRows(db, userId);
+    const changes = input.position !== undefined ? computeMoveTo(rows, id, input.position) : computeMove(rows, id, input.move!);
+    for (const change of changes) {
       db.run(`UPDATE "ChecklistItem" SET "sortOrder" = ?, "updatedAt" = ? WHERE "id" = ?`, [change.sortOrder, ts, change.id]);
     }
   }

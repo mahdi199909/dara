@@ -61,7 +61,7 @@ import { createProjectSchema, updateProjectSchema } from "@/lib/schemas/projects
 import { createBudgetSchema } from "@/lib/schemas/budgets";
 import { createSavingsGoalSchema, updateSavingsGoalSchema } from "@/lib/schemas/savingsGoals";
 import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
-import { createChecklistItemSchema, createChecklistItemsSchema, updateChecklistItemSchema } from "@/lib/schemas/checklists";
+import { createChecklistItemSchema, createChecklistItemsSchema, createChecklistTreeSchema, updateChecklistItemSchema } from "@/lib/schemas/checklists";
 import { createInboxItemSchema, updateInboxItemSchema, processInboxItemSchema } from "@/lib/schemas/inbox";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
@@ -193,6 +193,7 @@ register("GET", "/api/tasks", ({ db, userId, query }) => ({
   tasks: tasksRepo.listTasks(db, userId, {
     status: query.get("status") ?? undefined,
     projectId: query.get("projectId") ?? undefined,
+    source: query.get("source") ?? undefined,
   }),
 }));
 register("POST", "/api/tasks", ({ db, userId, body }) => ({ task: tasksRepo.createTask(db, userId, createTaskSchema.parse(body)) }), 201);
@@ -232,9 +233,11 @@ register(
   "POST",
   "/api/checklists",
   ({ db, userId, body }) =>
-    body && typeof body === "object" && "titles" in body
-      ? { items: checklistsRepo.createChecklistItems(db, userId, createChecklistItemsSchema.parse(body)) }
-      : { item: checklistsRepo.createChecklistItem(db, userId, createChecklistItemSchema.parse(body)) },
+    body && typeof body === "object" && "tree" in body
+      ? { items: checklistsRepo.createChecklistTree(db, userId, createChecklistTreeSchema.parse(body)) }
+      : body && typeof body === "object" && "titles" in body
+        ? { items: checklistsRepo.createChecklistItems(db, userId, createChecklistItemsSchema.parse(body)) }
+        : { item: checklistsRepo.createChecklistItem(db, userId, createChecklistItemSchema.parse(body)) },
   201
 );
 register("POST", "/api/checklists/:id/reset", ({ db, userId, params }) => checklistsRepo.resetChecklistItem(db, userId, params.id));

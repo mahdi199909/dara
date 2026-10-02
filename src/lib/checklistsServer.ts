@@ -2,8 +2,8 @@
 // src/local/repositories/checklists.ts; both follow the rules in src/lib/checklistTree.ts.
 import { prisma } from "@/lib/db";
 import { ApiError } from "@/lib/apiError";
-import { computeCheckChange, computeMove, computeRecheck, descendantIds, nextSortOrder, type TreeRow } from "@/lib/checklistTree";
-import type { ChecklistItemDto, CreateChecklistItemInput, CreateChecklistItemsInput, UpdateChecklistItemInput } from "@/lib/schemas/checklists";
+import { computeCheckChange, computeMove, computeMoveTo, computeRecheck, descendantIds, nextSortOrder, type TreeRow } from "@/lib/checklistTree";
+import type { ChecklistItemDto, ChecklistTreeNode, CreateChecklistItemInput, CreateChecklistItemsInput, CreateChecklistTreeInput, UpdateChecklistItemInput } from "@/lib/schemas/checklists";
 
 const SELECT = { id: true, parentId: true, title: true, note: true, checked: true, checkedAt: true, sortOrder: true, createdAt: true, updatedAt: true } as const;
 
@@ -48,6 +48,23 @@ export async function createChecklistItems(userId: string, input: CreateChecklis
   return created;
 }
 
+/** A whole nested list in one go (a ready-made checklist). Returns every created item, the top one first. */
+export async function createChecklistTree(userId: string, input: CreateChecklistTreeInput): Promise<ChecklistItemDto[]> {
+  const parentId = input.parentId ?? null;
+  if (parentId) await getOwnedChecklistItem(userId, parentId);
+  const rows = await treeRows(userId);
+  const created: ChecklistItemDto[] = [];
+  const insert = async (node: ChecklistTreeNode, parent: string | null, sortOrder: number) => {
+    const item = await prisma.checklistItem.create({ data: { userId, parentId: parent, title: node.title, note: node.note || null, sortOrder }, select: SELECT });
+    created.push(item);
+    let order = 0;
+    for (const child of node.children ?? []) await insert(child, item.id, order++);
+  };
+  await insert(input.tree, parentId, nextSortOrder(rows, parentId));
+  if (parentId) await applyChange(computeRecheck(await treeRows(userId), parentId));
+  return created;
+}
+
 async function applyChange({ check, uncheck }: { check: string[]; uncheck: string[] }) {
   const at = new Date();
   if (check.length > 0) await prisma.checklistItem.updateMany({ where: { id: { in: check } }, data: { checked: true, checkedAt: at, updatedAt: at } });
@@ -63,9 +80,11 @@ export async function updateChecklistItem(userId: string, id: string, input: Upd
     });
   }
   if (input.checked !== undefined) await applyChange(computeCheckChange(await treeRows(userId), id, input.checked));
-  if (input.move) {
+  if (input.move || input.position !== undefined) {
     const at = new Date();
-    for (const change of computeMove(await treeRows(userId), id, input.move)) {
+    const rows = await treeRows(userId);
+    const changes = input.position !== undefined ? computeMoveTo(rows, id, input.position) : computeMove(rows, id, input.move!);
+    for (const change of changes) {
       await prisma.checklistItem.update({ where: { id: change.id }, data: { sortOrder: change.sortOrder, updatedAt: at } });
     }
   }

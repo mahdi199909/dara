@@ -23,6 +23,36 @@ export const createChecklistItemsSchema = z.object({
 });
 export type CreateChecklistItemsInput = z.infer<typeof createChecklistItemsSchema>;
 
+/** A whole list at once, nested — what a ready-made checklist adds (src/lib/checklistTemplates.ts). */
+export interface ChecklistTreeNode {
+  title: string;
+  note?: string | null;
+  children?: ChecklistTreeNode[];
+}
+export const CHECKLIST_TREE_MAX_ITEMS = 300;
+export const CHECKLIST_TREE_MAX_DEPTH = 6;
+
+const treeNodeSchema: z.ZodType<ChecklistTreeNode> = z.lazy(() =>
+  z.object({ title: titleSchema, note: noteSchema.nullish(), children: z.array(treeNodeSchema).max(CHECKLIST_TREE_MAX_ITEMS).optional() })
+);
+
+function measure(node: ChecklistTreeNode, depth = 1): { count: number; depth: number } {
+  return (node.children ?? []).reduce(
+    (acc, child) => {
+      const m = measure(child, depth + 1);
+      return { count: acc.count + m.count, depth: Math.max(acc.depth, m.depth) };
+    },
+    { count: 1, depth }
+  );
+}
+
+/** No parentId = the tree becomes a new list; with one, it is added under that item. */
+export const createChecklistTreeSchema = z
+  .object({ parentId: z.string().min(1).nullish(), tree: treeNodeSchema })
+  .refine((v) => measure(v.tree).count <= CHECKLIST_TREE_MAX_ITEMS, { message: `حداکثر ${CHECKLIST_TREE_MAX_ITEMS} مورد در یک بار.` })
+  .refine((v) => measure(v.tree).depth <= CHECKLIST_TREE_MAX_DEPTH, { message: `حداکثر ${CHECKLIST_TREE_MAX_DEPTH} سطح زیرمورد.` });
+export type CreateChecklistTreeInput = z.infer<typeof createChecklistTreeSchema>;
+
 export const updateChecklistItemSchema = z.object({
   title: titleSchema.optional(),
   note: noteSchema.nullish(),
@@ -30,6 +60,8 @@ export const updateChecklistItemSchema = z.object({
   checked: z.boolean().optional(),
   /** Moves the item one place up or down among its siblings. */
   move: z.enum(["UP", "DOWN"]).optional(),
+  /** Dragging: the item's new place among its siblings, 0 = first. */
+  position: z.number().int().min(0).max(10_000).optional(),
 });
 export type UpdateChecklistItemInput = z.infer<typeof updateChecklistItemSchema>;
 

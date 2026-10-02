@@ -7,6 +7,10 @@ import { useAccounts, useCategories } from "@/lib/hooks";
 import { Card } from "@/components/ui/Card";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import CaptureFormModal from "@/components/CaptureFormModal";
+import SmartCaptureConfirm from "@/components/SmartCaptureConfirm";
+import CaptureIntentConfirm from "@/components/CaptureIntentConfirm";
+import { parseCaptureIntent, type CaptureIntent } from "@/lib/captureIntent";
+import type { CapturePrefill } from "@/lib/smartCapture";
 import HabitFormModal from "@/components/habits/HabitFormModal";
 import NewTransactionForm from "@/components/finance/NewTransactionForm";
 import { NewInstallmentPlanForm } from "@/components/finance/InstallmentPlans";
@@ -34,6 +38,7 @@ const DRAFT_KEY = "parva.inbox.draft.v1";
 const inputClass = "bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-brand-400";
 
 const DESTINATIONS: { to: InboxDestination; label: string; hint: string }[] = [
+  { to: "AUTO", label: "✨ تشخیص خودکار", hint: "پروا از متن بفهمد چیست" },
   { to: "TASK", label: "کار", hint: "کاری برای انجام" },
   { to: "EVENT", label: "رویداد", hint: "قرار با ساعت و روز" },
   { to: "TRANSACTION", label: "تراکنش", hint: "هزینه، درآمد، انتقال" },
@@ -331,6 +336,8 @@ function DestinationForm({ item, to, onDone, onClose }: { item: InboxItemDto; to
   const { accounts } = useAccounts();
 
   switch (to) {
+    case "AUTO":
+      return <SmartDestination text={item.content} onDone={onDone} onClose={onClose} />;
     case "TASK":
     case "EVENT":
       return <CaptureFormModal open onClose={onClose} onDone={onDone} initialTitle={titleOf(item.content)} initialEntityType={to} />;
@@ -353,6 +360,51 @@ function DestinationForm({ item, to, onDone, onClose }: { item: InboxItemDto; to
     case "NOTE":
       return <NoteDestination item={item} onDone={onDone} onClose={onClose} />;
   }
+}
+
+/**
+ * «تشخیص خودکار»: the same reading Home's «ثبت...» field does — a line like «قسط وام ۲ میلیون ۱۵ هر ماه»
+ * becomes an installment plan, «ناهار ۳۰۰ تومان» an expense — with the same one-glance confirm card
+ * and the same ways out (fix it in the full form, or "just a plain entry").
+ */
+function SmartDestination({ text, onDone, onClose }: { text: string; onDone: () => void; onClose: () => void }) {
+  const [stage, setStage] = useState<{ kind: "ENTRY"; prefill: CapturePrefill } | { kind: "INTENT"; intent: CaptureIntent } | { kind: "FORM"; prefill: CapturePrefill }>(() => {
+    const parsed = parseCaptureIntent(text);
+    return parsed.kind === "ENTRY" ? { kind: "ENTRY", prefill: parsed.prefill } : { kind: "INTENT", intent: parsed };
+  });
+
+  if (stage.kind === "INTENT") {
+    return (
+      <CaptureIntentConfirm
+        intent={stage.intent}
+        onDone={onDone}
+        onCancel={onClose}
+        onAsEntry={() => {
+          const entry = parseCaptureIntent(text, new Date(), { forceEntry: true });
+          if (entry.kind === "ENTRY") setStage({ kind: "ENTRY", prefill: entry.prefill });
+        }}
+      />
+    );
+  }
+  if (stage.kind === "ENTRY") {
+    return <SmartCaptureConfirm prefill={stage.prefill} onConfirmed={onDone} onEdit={() => setStage({ kind: "FORM", prefill: stage.prefill })} onCancel={onClose} />;
+  }
+  const p = stage.prefill;
+  return (
+    <CaptureFormModal
+      open
+      onClose={onClose}
+      onDone={onDone}
+      initialStart={p.start ?? undefined}
+      initialEnd={p.end ?? undefined}
+      initialTitle={p.title}
+      initialDay={p.day}
+      initialEntityType={p.entityType}
+      initialFlowType={p.flowType}
+      initialAmount={p.amount}
+      initialCategoryHint={p.categoryHint}
+    />
+  );
 }
 
 function ChecklistDestination({ item, onDone, onClose }: { item: InboxItemDto; onDone: () => void; onClose: () => void }) {

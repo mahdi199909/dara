@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
+import { fetcher } from "@/lib/apiClient";
+import { formatTime, weekdayNameFa } from "@/lib/jalali";
+import { summarizeTimerSessions, type TimerSessionRow } from "@/lib/timerStats";
 import { useCategories } from "@/lib/hooks";
 import { Card } from "@/components/ui/Card";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
@@ -19,7 +23,7 @@ import {
   type TimerMode,
   type TimerState,
 } from "@/lib/focusTimer";
-import { DEFAULT_SESSION_TITLE, focusTimer, readPrefs, useFocusTimer, useNow } from "@/lib/focusTimerStore";
+import { DEFAULT_SESSION_TITLE, TIMER_HISTORY_KEY, focusTimer, readPrefs, useFocusTimer, useNow } from "@/lib/focusTimerStore";
 
 const MODES: { value: TimerMode; label: string }[] = [
   { value: "POMODORO", label: "پومودورو" },
@@ -46,6 +50,8 @@ export default function TimerPage() {
       <Notices />
 
       {timer.state ? <RunningTimer state={timer.state} /> : mounted ? <TimerSetup /> : null}
+
+      <TimerHistory />
     </div>
   );
 }
@@ -335,6 +341,63 @@ function RunningTimer({ state }: { state: TimerState }) {
           </button>
         </div>
       )}
+    </Card>
+  );
+}
+
+/** What the timer saved: today, the last seven days as bars, and the latest sessions. */
+function TimerHistory() {
+  const { data } = useSWR<{ tasks: TimerSessionRow[] }>(TIMER_HISTORY_KEY, fetcher);
+  if (!data) return null;
+  const stats = summarizeTimerSessions(data.tasks, new Date());
+  if (stats.recent.length === 0) return null;
+  const max = Math.max(1, ...stats.days.map((d) => d.minutes));
+
+  return (
+    <Card className="p-4 space-y-4">
+      <h2 className="text-sm font-bold text-ink">سابقهٔ زمان‌سنج</h2>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-xl bg-canvas py-2">
+          <p className="text-[11px] text-muted">امروز</p>
+          <p className="text-sm font-bold text-ink">{formatDuration(stats.todayMin)}</p>
+        </div>
+        <div className="rounded-xl bg-canvas py-2">
+          <p className="text-[11px] text-muted">جلسه‌های امروز</p>
+          <p className="text-sm font-bold text-ink">{toPersianDigits(String(stats.todaySessions))}</p>
+        </div>
+        <div className="rounded-xl bg-canvas py-2">
+          <p className="text-[11px] text-muted">۷ روز اخیر</p>
+          <p className="text-sm font-bold text-ink">{formatDuration(stats.weekMin)}</p>
+        </div>
+      </div>
+
+      <div className="flex items-end gap-1.5 h-24" aria-label="زمان هر روز در هفتهٔ اخیر">
+        {stats.days.map((d) => (
+          <div key={d.day} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+            <div
+              title={formatDuration(d.minutes)}
+              className={`w-full rounded-t-md ${d.isToday ? "bg-accent" : "bg-accent/40"}`}
+              style={{ height: `${Math.max(d.minutes > 0 ? 6 : 2, (d.minutes / max) * 100)}%` }}
+            />
+            <span className="text-[10px] text-muted">{weekdayNameFa(new Date(`${d.day}T12:00:00`)).slice(0, 1)}</span>
+          </div>
+        ))}
+      </div>
+
+      <ul className="divide-y divide-line">
+        {stats.recent.map((r) => (
+          <li key={r.id} className="flex items-center justify-between gap-2 py-2">
+            <div className="min-w-0">
+              <p className="text-sm text-ink truncate">{r.title}</p>
+              <p className="text-[11px] text-muted">
+                {weekdayNameFa(r.endAt)} {formatTime(r.endAt)}
+                {r.category ? ` · ${r.category}` : ""}
+              </p>
+            </div>
+            <span className="text-xs text-muted shrink-0">{formatDuration(r.minutes)}</span>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

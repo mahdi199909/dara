@@ -27,6 +27,9 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 // the only status control in the UI (the task row checkbox) just toggles TODO <-> DONE, so it
 // was an unreachable, confusing status with a filter tab but no way for a user to ever enter it.
 export const TASK_STATUSES = ["TODO", "DONE", "CANCELLED"] as const;
+
+/** What created a task other than the person typing it in: TIMER = «زمان‌سنج». */
+export const TASK_SOURCES = ["TIMER"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const RECURRENCE_FREQS = ["NONE", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"] as const;

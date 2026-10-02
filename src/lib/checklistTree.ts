@@ -153,15 +153,30 @@ export function progressOf(rows: TreeRow[], id: string): { done: number; total: 
  * renumbered 0..n-1 so items created with the same order (two devices) get distinct places.
  */
 export function computeMove(rows: TreeRow[], id: string, direction: "UP" | "DOWN"): Array<{ id: string; sortOrder: number }> {
+  const index = siblingsOf(rows, id).findIndex((s) => s.id === id);
+  return index < 0 ? [] : computeMoveTo(rows, id, direction === "UP" ? index - 1 : index + 1);
+}
+
+function siblingsOf(rows: TreeRow[], id: string): TreeRow[] {
   const row = rows.find((r) => r.id === id);
   if (!row) return [];
   const ids = new Set(rows.map((r) => r.id));
   const parentOf = (r: TreeRow) => (r.parentId && ids.has(r.parentId) ? r.parentId : null);
-  const siblings = rows.filter((r) => parentOf(r) === parentOf(row)).sort(compareSiblings);
+  return rows.filter((r) => parentOf(r) === parentOf(row)).sort(compareSiblings);
+}
+
+/**
+ * Dragging: the item takes place `position` (0 = first) among its siblings; the whole group is
+ * renumbered 0..n-1. Out-of-range positions are clamped; the same place changes nothing.
+ */
+export function computeMoveTo(rows: TreeRow[], id: string, position: number): Array<{ id: string; sortOrder: number }> {
+  const siblings = siblingsOf(rows, id);
   const index = siblings.findIndex((s) => s.id === id);
-  const target = direction === "UP" ? index - 1 : index + 1;
-  if (target < 0 || target >= siblings.length) return [];
-  [siblings[index], siblings[target]] = [siblings[target], siblings[index]];
+  if (index < 0) return [];
+  const target = Math.max(0, Math.min(siblings.length - 1, Math.round(position)));
+  if (target === index) return [];
+  const [moved] = siblings.splice(index, 1);
+  siblings.splice(target, 0, moved);
   return siblings.map((s, i) => ({ id: s.id, sortOrder: i })).filter((s) => rows.find((r) => r.id === s.id)!.sortOrder !== s.sortOrder);
 }
 

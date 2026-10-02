@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
-import { createChecklistItemSchema, createChecklistItemsSchema } from "@/lib/schemas/checklists";
-import { createChecklistItem, createChecklistItems, listChecklistItems } from "@/lib/checklistsServer";
+import { createChecklistItemSchema, createChecklistItemsSchema, createChecklistTreeSchema } from "@/lib/schemas/checklists";
+import { createChecklistItem, createChecklistItems, createChecklistTree, listChecklistItems } from "@/lib/checklistsServer";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
 
@@ -17,12 +17,19 @@ async function GET() {
   }
 }
 
-/** One item ({ parentId?, title }) — or several under one parent ({ parentId, titles }). */
+/** One item ({ parentId?, title }), several under one parent ({ parentId, titles }), or a nested list ({ parentId?, tree }). */
 async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
     const raw = await req.json();
     const { ipAddress, userAgent } = requestMeta(req);
+
+    if (raw && typeof raw === "object" && "tree" in raw) {
+      const body = createChecklistTreeSchema.parse(raw);
+      const items = await withTransaction(async () => createChecklistTree(userId, body), { operation: "CHECKLIST_CREATE", entityType: "ChecklistItem" });
+      for (const item of items) await writeAuditLog({ userId, action: "CREATE", entityType: "ChecklistItem", entityId: item.id, newValue: item, ipAddress, userAgent });
+      return NextResponse.json({ items }, { status: 201 });
+    }
 
     if (raw && typeof raw === "object" && "titles" in raw) {
       const body = createChecklistItemsSchema.parse(raw);
