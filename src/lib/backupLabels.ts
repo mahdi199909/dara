@@ -24,6 +24,8 @@ export const TABLE_LABELS_FA: Record<string, string> = {
   DailyNote: "نوت روزانه",
   ChecklistItem: "چک‌لیست",
   InboxItem: "صندوق ورودی",
+  VisionItem: "ویژن‌برد",
+  VisionEntry: "ثبت پیشرفت ویژن‌برد",
   CapitalSnapshot: "تاریخچه سرمایه",
   AuditLog: "سابقه فعالیت",
   Notification: "اعلان",

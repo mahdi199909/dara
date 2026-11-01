@@ -40,6 +40,9 @@ export interface SaveCaptureInput {
   allowOverlap?: boolean;
   /** The account the amount moved through, when the person picked one; their default account otherwise. */
   accountId?: string | null;
+  /** A goal on the vision board this task counts toward, and by how much (a Task only). */
+  visionItemId?: string | null;
+  visionValue?: number;
 }
 
 function dayIso(d: Date) {
@@ -79,7 +82,10 @@ export function planSaveCapture(input: SaveCaptureInput, options: PlanSaveOption
     // Only when a time was actually entered — a bare day with no time isn't a strong enough
     // signal either way, and would wrongly mark every same-day task "done" once midnight passes.
     const referenceTime = endAt ?? startAt;
-    const status = referenceTime ? (referenceTime < now ? "DONE" : "TODO") : undefined;
+    let status = referenceTime ? (referenceTime < now ? "DONE" : "TODO") : undefined;
+    // Counting toward a goal is a statement that it happened: with no time given, a task for today or an earlier
+    // day is logged as done (a later day is a plan, and counts once it is ticked).
+    if (input.visionItemId && status === undefined) status = dueDate.getTime() <= now.getTime() ? "DONE" : "TODO";
 
     return [
       (previous) => ({
@@ -98,6 +104,8 @@ export function planSaveCapture(input: SaveCaptureInput, options: PlanSaveOption
           endAt: endAt?.toISOString(),
           allowOverlap: input.allowOverlap || undefined,
           accountId,
+          visionItemId: input.visionItemId || undefined,
+          visionValue: input.visionItemId ? input.visionValue : undefined,
         },
       }),
     ];

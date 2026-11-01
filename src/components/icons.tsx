@@ -261,3 +261,14 @@ export function RotateIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** A target: the vision board's mark. */
+export function TargetIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.2" />
+    </svg>
+  );
+}

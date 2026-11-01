@@ -17,6 +17,7 @@ import * as savingsGoalsRepo from "@/local/repositories/savingsGoals";
 import * as notesRepo from "@/local/repositories/notes";
 import * as checklistsRepo from "@/local/repositories/checklists";
 import * as inboxRepo from "@/local/repositories/inbox";
+import * as visionRepo from "@/local/repositories/vision";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
 import * as installmentsRepo from "@/local/repositories/installments";
@@ -63,6 +64,7 @@ import { createSavingsGoalSchema, updateSavingsGoalSchema } from "@/lib/schemas/
 import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
 import { createChecklistItemSchema, createChecklistItemsSchema, createChecklistTreeSchema, updateChecklistItemSchema } from "@/lib/schemas/checklists";
 import { createInboxItemSchema, updateInboxItemSchema, processInboxItemSchema } from "@/lib/schemas/inbox";
+import { createVisionItemSchema, updateVisionItemSchema, createVisionEntrySchema, linkVisionProjectSchema } from "@/lib/schemas/vision";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
 import { createInstallmentPlanSchema, updateInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
@@ -118,6 +120,13 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "PATCH /api/inbox/:id": { operation: "INBOX_UPDATE", entityType: "InboxItem" },
   "DELETE /api/inbox/:id": { operation: "INBOX_DELETE", entityType: "InboxItem" },
   "POST /api/inbox/:id/process": { operation: "INBOX_PROCESS", entityType: "InboxItem" },
+  "POST /api/vision": { operation: "VISION_CREATE", entityType: "VisionItem" },
+  "PATCH /api/vision/:id": { operation: "VISION_UPDATE", entityType: "VisionItem" },
+  "DELETE /api/vision/:id": { operation: "VISION_DELETE", entityType: "VisionItem" },
+  "POST /api/vision/:id/entries": { operation: "VISION_ENTRY_CREATE", entityType: "VisionEntry" },
+  "DELETE /api/vision/:id/entries/:entryId": { operation: "VISION_ENTRY_DELETE", entityType: "VisionEntry" },
+  "POST /api/vision/:id/projects": { operation: "PROJECT_UPDATE", entityType: "Project" },
+  "DELETE /api/vision/:id/projects/:projectId": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
   "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
@@ -250,6 +259,17 @@ register("POST", "/api/inbox", ({ db, userId, body }) => ({ item: inboxRepo.crea
 register("POST", "/api/inbox/:id/process", ({ db, userId, params, body }) => inboxRepo.processInboxItem(db, userId, params.id, processInboxItemSchema.parse(body).to));
 register("PATCH", "/api/inbox/:id", ({ db, userId, params, body }) => ({ item: inboxRepo.updateInboxItem(db, userId, params.id, updateInboxItemSchema.parse(body)) }));
 register("DELETE", "/api/inbox/:id", ({ db, userId, params }) => inboxRepo.deleteInboxItem(db, userId, params.id));
+
+// --- Vision board ---------------------------------------------------------------------------
+register("GET", "/api/vision", ({ db, userId }) => ({ items: visionRepo.listVision(db, userId) }));
+register("POST", "/api/vision", ({ db, userId, body }) => ({ item: visionRepo.createVisionItem(db, userId, createVisionItemSchema.parse(body)) }), 201);
+register("GET", "/api/vision/:id", ({ db, userId, params }) => visionRepo.getVisionDetail(db, userId, params.id));
+register("PATCH", "/api/vision/:id", ({ db, userId, params, body }) => ({ item: visionRepo.updateVisionItem(db, userId, params.id, updateVisionItemSchema.parse(body)) }));
+register("DELETE", "/api/vision/:id", ({ db, userId, params }) => visionRepo.deleteVisionItem(db, userId, params.id));
+register("POST", "/api/vision/:id/entries", ({ db, userId, params, body }) => ({ entry: visionRepo.addVisionEntry(db, userId, params.id, createVisionEntrySchema.parse(body)) }), 201);
+register("DELETE", "/api/vision/:id/entries/:entryId", ({ db, userId, params }) => visionRepo.deleteVisionEntry(db, userId, params.id, params.entryId));
+register("POST", "/api/vision/:id/projects", ({ db, userId, params, body }) => visionRepo.linkVisionProject(db, userId, params.id, linkVisionProjectSchema.parse(body).projectId));
+register("DELETE", "/api/vision/:id/projects/:projectId", ({ db, userId, params }) => visionRepo.unlinkVisionProject(db, userId, params.id, params.projectId));
 
 // --- Projects ------------------------------------------------------------------------------
 register("GET", "/api/projects", ({ db, userId }) => ({ projects: projectsRepo.listProjects(db, userId) }));

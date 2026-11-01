@@ -2,6 +2,7 @@
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
 import { tomanInt } from "@/lib/schemas/money";
+import { visionAmount } from "@/lib/schemas/vision";
 import { TASK_SOURCES, TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
 
 export const createTaskSchema = z.object({
@@ -23,6 +24,9 @@ export const createTaskSchema = z.object({
   accountId: z.string().optional(),
   // TIMER = saved by «زمان‌سنج» (its history and totals list these).
   source: z.enum(TASK_SOURCES).optional(),
+  // A goal on the vision board this task counts toward (while it is DONE), and by how much. 1 when left out.
+  visionItemId: z.string().min(1).optional(),
+  visionValue: visionAmount.optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
@@ -41,5 +45,8 @@ export const updateTaskSchema = z.object({
   endAt: z.string().datetime().nullable().optional(),
   // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
   allowOverlap: z.boolean().optional(),
+  // null takes the task off its goal.
+  visionItemId: z.string().min(1).nullable().optional(),
+  visionValue: visionAmount.nullable().optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

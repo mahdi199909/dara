@@ -18,6 +18,7 @@ import type { LocalDb } from "../db";
 import { writeLocalAuditLog } from "../audit";
 import { fetchByIds } from "../relations";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "../directCostSync";
+import { assertVisionItemOwned } from "./vision";
 
 interface TaskRow {
   id: string;
@@ -35,6 +36,8 @@ interface TaskRow {
   incomeAmount: number;
   startAt: string | null;
   endAt: string | null;
+  visionItemId: string | null;
+  visionValue: number | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -87,13 +90,14 @@ export function listTasks(db: LocalDb, userId: string, filters: { status?: strin
 
 export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) {
   assertNoOverlap(db, userId, occupiedRange(input.startAt, input.endAt), { allowOverlap: input.allowOverlap });
+  if (input.visionItemId) assertVisionItemOwned(db, userId, input.visionItemId);
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
   db.run(
     `INSERT INTO "Task"
-       ("id","userId","title","description","status","dueDate","categoryId","projectId","estimatedCost","valueType","directCost","incomeAmount","startAt","endAt","source","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ("id","userId","title","description","status","dueDate","categoryId","projectId","estimatedCost","valueType","directCost","incomeAmount","startAt","endAt","source","visionItemId","visionValue","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       userId,
@@ -110,6 +114,8 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
       input.startAt ?? null,
       input.endAt ?? null,
       input.source ?? null,
+      input.visionItemId ?? null,
+      input.visionItemId ? (input.visionValue ?? 1) : null,
       now,
       now,
     ]
@@ -132,6 +138,7 @@ export function updateTask(db: LocalDb, userId: string, id: string, input: Updat
     const endAt = input.endAt !== undefined ? input.endAt : existing.endAt;
     assertNoOverlap(db, userId, occupiedRange(startAt, endAt), { allowOverlap: input.allowOverlap, self: { kind: "TASK", id } });
   }
+  if (input.visionItemId) assertVisionItemOwned(db, userId, input.visionItemId);
   const wasDone = existing.status === "DONE";
   const willBeDone = input.status === "DONE";
 
@@ -154,6 +161,11 @@ export function updateTask(db: LocalDb, userId: string, id: string, input: Updat
   if (input.incomeAmount !== undefined) set("incomeAmount", input.incomeAmount);
   if (input.startAt !== undefined) set("startAt", input.startAt);
   if (input.endAt !== undefined) set("endAt", input.endAt);
+  // The link to a goal: taking the task off its goal takes its amount with it; putting it on one counts 1 unless an amount is given.
+  if (input.visionItemId !== undefined) set("visionItemId", input.visionItemId);
+  if (input.visionItemId === null) set("visionValue", null);
+  else if (input.visionItemId) set("visionValue", input.visionValue ?? existing.visionValue ?? 1);
+  else if (input.visionValue !== undefined) set("visionValue", input.visionValue);
   // Matches the web route's exact (slightly surprising) rule: completedAt is only left
   // untouched when this PATCH flips DONE->not-done is false AND wasn't already not-done —
   // see the route's ternary. Kept identical here on purpose for local/web output parity.

@@ -72,6 +72,8 @@ model User {
   dailyNotes          DailyNote[]
   checklistItems      ChecklistItem[]
   inboxItems          InboxItem[]
+  visionItems         VisionItem[]
+  visionEntries       VisionEntry[]
   budgets             Budget[]
   savingsGoals        SavingsGoal[]
   verificationCodes   VerificationCode[]
@@ -187,6 +189,8 @@ model Project {
   status      String    @default("ACTIVE") // ACTIVE | COMPLETED | ARCHIVED
   color       String    @default("#3a8d80")
   completedAt DateTime?
+  // The goal on the vision board this project belongs to (plain column, no FK).
+  visionItemId String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -259,6 +263,10 @@ model Task {
   endAt        DateTime?
   // What made the task when it was not typed in by hand: TIMER = a stretch timed by «زمان‌سنج».
   source       String?
+  // The goal on the vision board this task counts toward, and by how much (2 = two grams of gold). Plain
+  // columns, no FK, so sync can apply rows in any order. The task counts only while it is DONE.
+  visionItemId String?
+  visionValue  Float?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -881,6 +889,61 @@ model InboxItem {
   deletedAt DateTime?
 
   @@index([userId])
+}
+
+// The vision board. A vision is a top-level item (parentId null) and the goals sit under it. Every item can
+// carry the person's own yardstick — a unit, a starting value, a target — all optional, so a vision can be
+// plain words. parentId is a plain column with no self-FK, on purpose: sync can then apply rows in any order
+// (same reason as ChecklistItem.parentId).
+model VisionItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId    String?
+  title       String
+  description String?
+  icon        String?
+  color       String  @default("#3a8d80")
+  status      String  @default("ACTIVE") // ACTIVE | ACHIEVED | ARCHIVED
+  sortOrder   Int     @default(0)
+
+  unit        String? // the yardstick's label, e.g. "گرم طلا", "صفحه", "میلیون تومان"
+  startValue  Float   @default(0)
+  targetValue Float?
+  mode        String  @default("ADD") // ADD = every entry is added up; SET = the latest entry is the current value
+  targetDate  DateTime?
+  achievedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  entries VisionEntry[]
+
+  @@index([userId])
+}
+
+// A progress entry typed in by hand. What «ثبت کار» tasks add is not stored here: it comes from the tasks
+// themselves (Task.visionItemId / visionValue), so a task and its contribution can never disagree.
+model VisionEntry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   VisionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  value Float
+  date  DateTime
+  note  String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([itemId])
 }
 
 // ---------------------------------------------------------------------------

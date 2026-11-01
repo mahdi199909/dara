@@ -6,6 +6,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { createTaskSchema } from "@/lib/schemas/tasks";
 import { assertNoOverlap } from "@/lib/timeOverlapServer";
+import { assertVisionItemOwned } from "@/lib/visionServer";
 import { occupiedRange } from "@/lib/timeOverlap";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
@@ -40,6 +41,7 @@ async function POST(req: NextRequest) {
     const userId = await requireUserId();
     const body = createTaskSchema.parse(await req.json());
     await assertNoOverlap(userId, occupiedRange(body.startAt, body.endAt), { allowOverlap: body.allowOverlap });
+    if (body.visionItemId) await assertVisionItemOwned(userId, body.visionItemId);
 
     // The task and what follows from it (its expense and income transactions, its virtual asset) are
     // written together or not at all; the history entry below is only reached once they have committed.
@@ -61,6 +63,8 @@ async function POST(req: NextRequest) {
             startAt: body.startAt ? new Date(body.startAt) : undefined,
             endAt: body.endAt ? new Date(body.endAt) : undefined,
             source: body.source,
+            visionItemId: body.visionItemId,
+            visionValue: body.visionItemId ? (body.visionValue ?? 1) : undefined,
           },
         });
 

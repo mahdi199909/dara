@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-339 events in 45 domains.
+354 events in 47 domains.
 
 ## AUTH
 
@@ -650,4 +650,33 @@ Default module: `inbox`
 | `INBOX_UPDATE_FAILED` | ERROR | protected | yes | Inbox update failed. |
 | `INBOX_UPDATE_STARTED` | DEBUG | — | reserved | Inbox update started. |
 | `INBOX_UPDATE_SUCCESS` | INFO | — | yes | Inbox update success. |
+
+## VISION
+
+Default module: `vision`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `VISION_CREATE_FAILED` | ERROR | protected | yes | Vision create failed. |
+| `VISION_CREATE_STARTED` | DEBUG | — | reserved | Vision create started. |
+| `VISION_CREATE_SUCCESS` | INFO | — | yes | Vision create success. |
+| `VISION_DELETE_FAILED` | ERROR | protected | yes | Vision delete failed. |
+| `VISION_DELETE_STARTED` | DEBUG | — | reserved | Vision delete started. |
+| `VISION_DELETE_SUCCESS` | INFO | — | yes | Vision delete success. |
+| `VISION_UPDATE_FAILED` | ERROR | protected | yes | Vision update failed. |
+| `VISION_UPDATE_STARTED` | DEBUG | — | reserved | Vision update started. |
+| `VISION_UPDATE_SUCCESS` | INFO | — | yes | Vision update success. |
+
+## VISION_ENTRY
+
+Default module: `vision`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `VISION_ENTRY_CREATE_FAILED` | ERROR | protected | yes | Vision entry create failed. |
+| `VISION_ENTRY_CREATE_STARTED` | DEBUG | — | reserved | Vision entry create started. |
+| `VISION_ENTRY_CREATE_SUCCESS` | INFO | — | yes | Vision entry create success. |
+| `VISION_ENTRY_DELETE_FAILED` | ERROR | protected | yes | Vision entry delete failed. |
+| `VISION_ENTRY_DELETE_STARTED` | DEBUG | — | reserved | Vision entry delete started. |
+| `VISION_ENTRY_DELETE_SUCCESS` | INFO | — | yes | Vision entry delete success. |
 

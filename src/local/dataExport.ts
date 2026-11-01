@@ -78,6 +78,8 @@ export const DATA_EXPORT_TABLES = [
   "DailyNote",
   "ChecklistItem",
   "InboxItem",
+  "VisionItem",
+  "VisionEntry",
   "CapitalSnapshot",
   "AuditLog",
   "Notification",

@@ -67,6 +67,9 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   { table: "DailyNote", model: "dailyNote", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "ChecklistItem", model: "checklistItem", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "InboxItem", model: "inboxItem", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
+  // A goal sits under a vision by a plain parentId (no FK), so the two can arrive in any order; an entry needs its item first.
+  { table: "VisionItem", model: "visionItem", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
+  { table: "VisionEntry", model: "visionEntry", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   // No updatedAt column — recordDailyCapitalSnapshot upserts *today's* row in place
   // (ON CONFLICT("userId","date") DO UPDATE) as more time gets logged through the day, so a
   // same-day edit after this row's first sync won't be picked up again until a fresh row is
