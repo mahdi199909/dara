@@ -5,18 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { fetcher } from "@/lib/apiClient";
 import { Card, StatItem, EmptyState } from "@/components/ui/Card";
-import { formatDuration, truncateLabel, toPersianDigits, compactDuration } from "@/lib/money";
-import { formatJalali, formatJalaliMonthYear, toJalali, formatTime } from "@/lib/jalali";
-import { getJalaliMonthGrid, addJalaliMonths, dayKeyIso, parseDayKey } from "@/lib/calendarGrid";
+import { formatDuration, truncateLabel, toPersianDigits } from "@/lib/money";
+import { formatJalali } from "@/lib/jalali";
+import { dayKeyIso, parseDayKey } from "@/lib/calendarGrid";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
-import { ChevronRightIcon, ChevronLeftIcon } from "@/components/icons";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import DeltaChip, { type DeltaPolarity } from "@/components/DeltaChip";
 import { phraseDeltaPride, phraseSamePeriodTasksCompleted, phraseSamePeriodVirtualAsset } from "@/lib/phrasing";
 import { simulateSpendReduction } from "@/lib/whatIfSimulator";
 import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
+import CategoryCalendarTab from "@/components/reports/CategoryCalendarTab";
 import { customRangeQuery, validateCustomRange } from "@/lib/reportRange";
 
 // The only comparison this product ever shows (its own past period — see comparePeriods). Each
@@ -769,156 +769,6 @@ function HiddenCostTab({ hiddenCost }: { hiddenCost: any }) {
           </ul>
         )}
       </Card>
-    </div>
-  );
-}
-
-const WEEKDAY_HEADERS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
-
-function CategoryCalendarTab({ initialCategoryId, initialDay }: { initialCategoryId?: string | null; initialDay?: string | null }) {
-  // Opened from a search result: that category preselected, on the month of the last day something was done in it.
-  const [cursor, setCursor] = useState(() => (initialDay ? parseDayKey(initialDay) : null) ?? new Date());
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(initialCategoryId ?? null);
-  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(initialDay && initialCategoryId ? initialDay : null);
-  const { jy, jm } = toJalali(cursor);
-  const { data } = useSWR<{ categories: any[]; jy: number; jm: number }>(
-    `/api/reports/category-calendar?jy=${jy}&jm=${jm}`,
-    fetcher
-  );
-
-  function navigate(delta: number) {
-    const { jy: ny, jm: nm } = addJalaliMonths(jy, jm, delta);
-    setCursor(getJalaliMonthGrid(ny, nm)[8]); // a day safely inside the new month
-    setSelectedDayKey(null);
-  }
-
-  const selected = data?.categories.find((c: any) => c.categoryId === selectedCategoryId) ?? null;
-  const maxDayMinutes = selected ? Math.max(1, ...(Object.values(selected.days) as number[])) : 1;
-  const selectedDayItems: any[] = (selectedDayKey && selected?.dayItems?.[selectedDayKey]) || [];
-
-  const ITEM_TYPE_LABELS: Record<string, string> = { TIME_ENTRY: "فعالیت", TASK: "کار", EVENT: "رویداد", HABIT: "عادت" };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-center gap-1">
-        <button onClick={() => navigate(1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted">
-          <ChevronRightIcon className="w-4 h-4" />
-        </button>
-        <span className="text-sm text-ink min-w-[7rem] text-center">{formatJalaliMonthYear(cursor)}</span>
-        <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-canvas text-muted">
-          <ChevronLeftIcon className="w-4 h-4" />
-        </button>
-      </div>
-
-      <Card className="p-4">
-        <p className="text-xs text-muted mb-2">دسته‌بندی</p>
-        {!data ? (
-          <p className="text-sm text-muted">در حال بارگذاری...</p>
-        ) : data.categories.length === 0 ? (
-          <EmptyState message="هنوز دسته‌بندی‌ای نساخته‌اید." />
-        ) : (
-          <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-            {data.categories.map((c: any) => (
-              <button
-                key={c.categoryId}
-                onClick={() => {
-                  setSelectedCategoryId(selectedCategoryId === c.categoryId ? null : c.categoryId);
-                  setSelectedDayKey(null);
-                }}
-                className={`shrink-0 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition ${
-                  selectedCategoryId === c.categoryId
-                    ? "bg-accent text-on-accent border-accent"
-                    : c.totalDays > 0
-                      ? "bg-surface text-ink border-line"
-                      : "bg-surface text-muted border-line"
-                }`}
-              >
-                <span>{c.icon}</span>
-                {c.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {!selected ? (
-        <Card>
-          <EmptyState message="یک دسته‌بندی را انتخاب کنید تا تقویم فعالیتش را ببینید." />
-        </Card>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            <Card className="p-4">
-              <StatItem label="روزهای فعال این ماه" value={`${toPersianDigits(selected.totalDays)} روز`} />
-            </Card>
-            <Card className="p-4">
-              <StatItem label="مجموع زمان این ماه" value={formatDuration(selected.totalMinutes)} tone="positive" />
-            </Card>
-          </div>
-
-          <Card className="p-3">
-            <div className="grid grid-cols-7 text-center text-xs text-muted mb-2">
-              {WEEKDAY_HEADERS.map((w) => (
-                <div key={w}>{w}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {getJalaliMonthGrid(jy, jm).map((day) => {
-                const { jm: dJm, jd } = toJalali(day);
-                const inMonth = dJm === jm;
-                const dayKey = dayKeyIso(day);
-                const minutes = inMonth ? selected.days[dayKey] ?? 0 : 0;
-                const intensity = minutes > 0 ? Math.min(1, minutes / maxDayMinutes) : 0;
-                const isSelectedDay = selectedDayKey === dayKey;
-                return (
-                  <button
-                    key={day.toISOString()}
-                    type="button"
-                    disabled={minutes === 0}
-                    onClick={() => setSelectedDayKey(isSelectedDay ? null : dayKey)}
-                    className={`aspect-square rounded-xl border p-1.5 flex flex-col items-center justify-center gap-0.5 ${
-                      !inMonth
-                        ? "bg-canvas border-transparent text-muted"
-                        : minutes > 0
-                          ? isSelectedDay
-                            ? "border-accent ring-2 ring-accent"
-                            : "border-accent-soft"
-                          : "bg-surface border-line"
-                    }`}
-                    style={minutes > 0 ? { backgroundColor: `rgb(var(--accent) / ${0.12 + intensity * 0.55})` } : undefined}
-                  >
-                    <span className={`text-xs ${inMonth ? (minutes > 0 ? "text-accent font-bold" : "text-ink") : "text-muted"}`}>
-                      {toPersianDigits(jd)}
-                    </span>
-                    {minutes > 0 && <span className="text-[9px] text-accent">{compactDuration(minutes)}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-
-          {selectedDayKey && selectedDayItems.length > 0 && (
-            <Card className="p-0 overflow-hidden">
-              <div className="px-4 py-3 border-b border-line">
-                <p className="text-sm font-bold text-ink">{formatJalali(new Date(selectedDayKey))}</p>
-              </div>
-              <ul className="divide-y divide-line">
-                {selectedDayItems.map((item, i) => (
-                  <li key={i} className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm">
-                    <div className="min-w-0">
-                      <p className="text-ink truncate">{item.title}</p>
-                      <p className="text-xs text-muted mt-0.5">
-                        {ITEM_TYPE_LABELS[item.type] ?? item.type} · {item.timeOfDay ? formatTime(new Date(item.timeOfDay)) : "بدون زمان مشخص"}
-                      </p>
-                    </div>
-                    <span className="text-accent font-medium shrink-0">{formatDuration(item.minutes)}</span>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </>
-      )}
     </div>
   );
 }
