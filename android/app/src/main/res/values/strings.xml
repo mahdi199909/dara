@@ -8,9 +8,9 @@
     <string name="widget_inbox_title">صندوق ورودی</string>
     <string name="widget_inbox_description">هرچه در ذهنت است بنویس؛ می‌رود به صندوق ورودی parva تا بعداً درباره‌اش تصمیم بگیری</string>
     <string name="widget_description">ثبت سریع یک کار، بدون باز کردن اپ parva</string>
-    <string name="widget_today_events_title">رویدادهای امروز</string>
-    <string name="widget_today_events_empty">رویدادی برای امروز ثبت نشده</string>
-    <string name="widget_today_events_description">نمایش لیست رویدادهای امروز</string>
+    <string name="widget_today_events_title">برنامهٔ سه روز آینده</string>
+    <string name="widget_today_events_empty">برنامه‌ای برای سه روز آینده ثبت نشده</string>
+    <string name="widget_today_events_description">نمایش رویدادها، کارها و اقساط سه روز آینده، بدون باز کردن اپ parva</string>
     <string name="widget_habits_title">عادت‌های امروز</string>
     <string name="widget_habits_empty">عادتی برای امروز ثبت نشده</string>
     <string name="widget_habits_description">نمایش و ثبت عادت‌های امروز، بدون باز کردن اپ parva</string>

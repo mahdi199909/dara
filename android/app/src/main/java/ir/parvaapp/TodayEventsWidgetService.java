@@ -22,12 +22,15 @@ import java.util.TimeZone;
 // class doc comment for why a collection widget (not a plain ScrollView) is what this needs.
 // Read-only, unlike HabitsWidgetService — no write-side queue to account for.
 //
-// Where the rows come from: the app computes the next week of events itself (recurring events
-// expanded, completed occurrences marked — the same code the calendar screen uses) and stores them
-// under "widget_today_events" (src/local/widgetEvents.ts), so the widget shows exactly what the app
-// would. Only when that has not been written yet (the app has not been opened since it was
-// installed/updated, or not for a week) does it fall back to reading the SQLite file directly, which
-// can only see events whose own start falls today.
+// Where the rows come from: the app computes the next week itself — events (recurring ones
+// expanded, completed occurrences marked, the same code the calendar screen uses), the tasks for each
+// day and the installments that fall due, never habits — and stores it under "widget_today_events"
+// (src/local/widgetEvents.ts), so the widget shows exactly what the app would. Each item arrives as a
+// finished line with its own marker, and each day with its heading text (this class has no Jalali
+// calendar). The widget draws the first AGENDA_DAYS days of it: today, tomorrow, the day after, each day
+// that has something under its own heading. Only when nothing has been written yet (the app has not been
+// opened since it was installed/updated, or not for a week) does it fall back to reading the SQLite file
+// directly, which can only see events whose own start falls today.
 public class TodayEventsWidgetService extends RemoteViewsService {
     @Override
     public RemoteViewsFactory onGetViewFactory(Intent intent) {
@@ -37,10 +40,17 @@ public class TodayEventsWidgetService extends RemoteViewsService {
     private static class EventRow {
         final String timeLabel;
         final String title;
+        /** A day heading ("امروز · دوشنبه ۱۱ آبان") rather than one thing of the agenda. */
+        final boolean heading;
 
         EventRow(String timeLabel, String title) {
+            this(timeLabel, title, false);
+        }
+
+        EventRow(String timeLabel, String title, boolean heading) {
             this.timeLabel = timeLabel;
             this.title = title;
+            this.heading = heading;
         }
     }
 
@@ -49,12 +59,17 @@ public class TodayEventsWidgetService extends RemoteViewsService {
         // Same SharedPreferences file @capacitor/preferences reads/writes as "CapacitorStorage".
         private static final String PREFS_GROUP = "CapacitorStorage";
         private static final String PUBLISHED_EVENTS_KEY = "widget_today_events";
+        // How many days the widget draws, and what each is called; the app publishes a whole week so these
+        // stay right after midnight while it has not been opened.
+        private static final int AGENDA_DAYS = 3;
+        private static final String[] DAY_NAMES = { "امروز", "فردا", "پس‌فردا" };
 
         private final Context context;
         private final List<EventRow> rows = new ArrayList<>();
 
         // Re-read with the data (onDataSetChanged), so a theme change shows up on the next refresh.
         private int textColor = 0xFF111111;
+        private int headingColor = 0xB3111111;
 
         TodayEventsRemoteViewsFactory(Context context) {
             this.context = context;
@@ -73,6 +88,7 @@ public class TodayEventsWidgetService extends RemoteViewsService {
         public void onDataSetChanged() {
             rows.clear();
             textColor = WidgetTheme.getTextColor(context, TodayEventsWidgetProvider.DEFAULT_BACKGROUND_ARGB);
+            headingColor = WidgetTheme.getSecondaryTextColor(context, TodayEventsWidgetProvider.DEFAULT_BACKGROUND_ARGB);
             List<EventRow> published = readPublishedEvents();
             rows.addAll(published != null ? published : readTodayEvents());
         }
@@ -85,6 +101,14 @@ public class TodayEventsWidgetService extends RemoteViewsService {
         @Override
         public RemoteViews getViewAt(int position) {
             EventRow row = rows.get(position);
+            if (row.heading) {
+                RemoteViews heading = new RemoteViews(context.getPackageName(), R.layout.widget_today_events_heading);
+                heading.setTextViewText(R.id.event_day_heading, row.title);
+                heading.setTextColor(R.id.event_day_heading, headingColor);
+                // Same as an item: an empty fill-in so a tap still reaches the list's PendingIntentTemplate.
+                heading.setOnClickFillInIntent(R.id.event_day_root, new Intent());
+                return heading;
+            }
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_today_events_item);
             views.setTextViewText(R.id.event_time, row.timeLabel);
             views.setTextViewText(R.id.event_title, row.title);
@@ -104,7 +128,8 @@ public class TodayEventsWidgetService extends RemoteViewsService {
 
         @Override
         public int getViewTypeCount() {
-            return 1;
+            // A day heading and a line of the agenda are two different layouts.
+            return 2;
         }
 
         @Override
@@ -117,38 +142,57 @@ public class TodayEventsWidgetService extends RemoteViewsService {
             return false;
         }
 
-        /** Today's rows from what the app published, or null when there is nothing usable for
-          * today (never published, malformed, or today is beyond the published week). */
+        /** The agenda rows from what the app published — a heading and then the lines of each of
+          * the next AGENDA_DAYS days that has anything — or null when there is nothing usable (never
+          * published, malformed, or all of those days are beyond the published week). */
         private List<EventRow> readPublishedEvents() {
             SharedPreferences prefs = context.getSharedPreferences(PREFS_GROUP, Context.MODE_PRIVATE);
             String raw = prefs.getString(PUBLISHED_EVENTS_KEY, null);
             if (raw == null) return null;
             try {
-                JSONObject days = new JSONObject(raw).optJSONObject("days");
+                JSONObject payload = new JSONObject(raw);
+                JSONObject days = payload.optJSONObject("days");
                 if (days == null) return null;
-                JSONArray list = days.optJSONArray(todayKey());
-                if (list == null) return null;
+                // Older builds published no labels; a heading then is just the day's name.
+                JSONObject labels = payload.optJSONObject("labels");
 
                 List<EventRow> result = new ArrayList<>();
-                for (int i = 0; i < list.length(); i++) {
-                    JSONObject item = list.optJSONObject(i);
-                    if (item == null) continue;
-                    String title = item.optString("title", "");
-                    boolean done = item.optBoolean("done", false);
-                    // org.json turns a JSON null into the text "null" through optString, so ask isNull first.
-                    String time = item.isNull("t") ? "" : item.optString("t", "");
-                    String timeLabel = time.length() == 0 ? "همه‌روز" : toPersianDigits(time);
-                    result.add(new EventRow(timeLabel, (done ? "✓ " : "") + title));
+                boolean anyDayPublished = false;
+                for (int offset = 0; offset < AGENDA_DAYS; offset++) {
+                    String key = dayKey(offset);
+                    JSONArray list = days.optJSONArray(key);
+                    if (list == null) continue; // beyond the published week
+                    anyDayPublished = true;
+
+                    List<EventRow> lines = new ArrayList<>();
+                    for (int i = 0; i < list.length(); i++) {
+                        JSONObject item = list.optJSONObject(i);
+                        if (item == null) continue;
+                        String title = item.optString("title", "");
+                        boolean done = item.optBoolean("done", false);
+                        // org.json turns a JSON null into the text "null" through optString, so ask isNull first.
+                        String time = item.isNull("t") ? "" : item.optString("t", "");
+                        String timeLabel = time.length() == 0 ? "همه‌روز" : toPersianDigits(time);
+                        lines.add(new EventRow(timeLabel, (done ? "✓ " : "") + title));
+                    }
+                    if (lines.isEmpty()) continue; // a day with nothing gets no heading
+
+                    String label = labels == null ? "" : labels.optString(key, "");
+                    String heading = label.length() == 0 ? DAY_NAMES[offset] : DAY_NAMES[offset] + " · " + label;
+                    result.add(new EventRow("", heading, true));
+                    result.addAll(lines);
                 }
-                return result;
+                return anyDayPublished ? result : null;
             } catch (Exception e) {
                 return null;
             }
         }
 
-        /** The device-local date, "yyyy-MM-dd" — the key the app files each day of the week under. */
-        private static String todayKey() {
-            return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().getTime());
+        /** The device-local date "yyyy-MM-dd", offset days from today — the key the app files each day of the week under. */
+        private static String dayKey(int offset) {
+            Calendar day = Calendar.getInstance();
+            day.add(Calendar.DAY_OF_MONTH, offset);
+            return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(day.getTime());
         }
 
         /** [time label, title] pairs for today's events, earliest first. No row cap — that's what
