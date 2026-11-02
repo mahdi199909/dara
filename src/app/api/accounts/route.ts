@@ -1,18 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { tomanInt } from "@/lib/schemas/money";
+import { createAccountSchema } from "@/lib/schemas/accounts";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
-import { ACCOUNT_TYPES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
-
-const createSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.enum(ACCOUNT_TYPES).optional(),
-  initialBalance: tomanInt().optional(),
-});
 
 async function withBalance(account: { id: string; initialBalance: number }) {
   const [incomeSum, expenseSum, transferOutSum, transferInSum] = await Promise.all([
@@ -61,7 +53,7 @@ async function GET() {
 async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
-    const body = createSchema.parse(await req.json());
+    const body = createAccountSchema.parse(await req.json());
     const account = await prisma.financeAccount.create({ data: { ...body, userId } });
 
     const { ipAddress, userAgent } = requestMeta(req);

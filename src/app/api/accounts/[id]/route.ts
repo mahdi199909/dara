@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { updateAccountSchema } from "@/lib/schemas/accounts";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
-import { ACCOUNT_TYPES } from "@/lib/types";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
-
-const updateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  type: z.enum(ACCOUNT_TYPES).optional(),
-  isActive: z.boolean().optional(),
-  // true makes this the account new expenses and income go to, and takes the mark off the others.
-  isDefault: z.boolean().optional(),
-});
 
 async function getOwned(userId: string, id: string) {
   const account = await prisma.financeAccount.findFirst({ where: { id, userId, deletedAt: null } });
@@ -26,7 +17,7 @@ async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> 
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
-    const body = updateSchema.parse(await req.json());
+    const body = updateAccountSchema.parse(await req.json());
 
     // One default at most: marking this account takes the mark off the person's other accounts, in the
     // same transaction (each of those rows gets a fresh updatedAt, so the change reaches their phone too).

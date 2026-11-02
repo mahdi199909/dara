@@ -4,7 +4,11 @@ import { useState } from "react";
 import { apiPost } from "@/lib/apiClient";
 import { Card } from "@/components/ui/Card";
 import MoneyInput from "@/components/ui/MoneyInput";
+import AddAccountForm from "@/components/AddAccountForm";
 import { notifySaved } from "@/lib/savedToast";
+
+/** The value of the account list's last choice, «+ افزودن حساب…» — it is not an account. */
+const ADD_ACCOUNT = "__add_account__";
 
 /** The finance page's "new transaction" form — also opened by the inbox's «انتقال به تراکنش». */
 export default function NewTransactionForm({
@@ -26,6 +30,10 @@ export default function NewTransactionForm({
   const [transferToAccountId, setTransferToAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [loading, setLoading] = useState(false);
+  // An account made from this form shows in the list at once, before the page's own list has been re-read.
+  const [madeHere, setMadeHere] = useState<{ id: string; name: string }[]>([]);
+  const [adding, setAdding] = useState(false);
+  const choices = [...accounts, ...madeHere.filter((made) => !accounts.some((a) => a.id === made.id))];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,16 +80,22 @@ export default function NewTransactionForm({
           />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
+          <select
+            required
+            value={accountId}
+            onChange={(e) => (e.target.value === ADD_ACCOUNT ? setAdding(true) : setAccountId(e.target.value))}
+            className="bg-surface rounded-xl border border-line px-2 py-2 text-sm"
+          >
             <option value="">{type === "TRANSFER" ? "از حساب" : "حساب"}</option>
-            {accounts.map((a) => (
+            {choices.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
+            <option value={ADD_ACCOUNT}>+ افزودن حساب…</option>
           </select>
           {type === "TRANSFER" ? (
             <select required value={transferToAccountId} onChange={(e) => setTransferToAccountId(e.target.value)} className="bg-surface rounded-xl border border-line px-2 py-2 text-sm">
               <option value="">به حساب</option>
-              {accounts.filter((a) => a.id !== accountId).map((a) => (
+              {choices.filter((a) => a.id !== accountId).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
@@ -94,6 +108,16 @@ export default function NewTransactionForm({
             </select>
           )}
         </div>
+        {adding && (
+          <AddAccountForm
+            onCancel={() => setAdding(false)}
+            onCreated={(account) => {
+              setMadeHere((list) => [...list, account]);
+              setAccountId(account.id);
+              setAdding(false);
+            }}
+          />
+        )}
         <button type="submit" disabled={loading} className="w-full rounded-xl bg-accent text-on-accent py-2 text-sm font-medium hover:opacity-90 disabled:opacity-40">
           ثبت تراکنش
         </button>
