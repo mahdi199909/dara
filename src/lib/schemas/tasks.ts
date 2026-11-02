@@ -18,6 +18,8 @@ export const createTaskSchema = z.object({
   incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
+  // The time box given to the task, in minutes: how long it may take, not when it happens (time boxing, «برنامه‌ریزی روز»).
+  boxMinutes: z.number().int().min(1).max(1440).optional(),
   // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
   allowOverlap: z.boolean().optional(),
   // The account this entry's expense or income is booked to; the person's default account when left out.
@@ -43,6 +45,8 @@ export const updateTaskSchema = z.object({
   incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
+  // null takes the time box away.
+  boxMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
   allowOverlap: z.boolean().optional(),
   // null takes the task off its goal.

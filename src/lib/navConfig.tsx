@@ -19,6 +19,7 @@ import {
   MoonIcon,
   MealIcon,
   CycleIcon,
+  PlanIcon,
 } from "@/components/icons";
 
 export interface NavItem {
@@ -46,6 +47,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/inbox", label: "صندوق ورودی", icon: InboxIcon },
   { href: "/review", label: "پایان روز", icon: MoonIcon },
   { href: "/meals", label: "کالری‌شمار", icon: MealIcon, requires: ["athlete"] },
+  { href: "/plan", label: "برنامه‌ریزی روز", icon: PlanIcon, requires: ["timeBlocking", "timeBoxing"] },
   { href: "/cycle", label: "چرخهٔ ماهانه", icon: CycleIcon, requires: ["cycle"] },
   { href: "/settings", label: "تنظیمات", icon: GearIcon },
 ];

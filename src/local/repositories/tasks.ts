@@ -36,6 +36,7 @@ interface TaskRow {
   incomeAmount: number;
   startAt: string | null;
   endAt: string | null;
+  boxMinutes: number | null;
   visionItemId: string | null;
   visionValue: number | null;
   createdAt: string;
@@ -96,8 +97,8 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
 
   db.run(
     `INSERT INTO "Task"
-       ("id","userId","title","description","status","dueDate","categoryId","projectId","estimatedCost","valueType","directCost","incomeAmount","startAt","endAt","source","visionItemId","visionValue","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ("id","userId","title","description","status","dueDate","categoryId","projectId","estimatedCost","valueType","directCost","incomeAmount","startAt","endAt","boxMinutes","source","visionItemId","visionValue","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       userId,
@@ -113,6 +114,7 @@ export function createTask(db: LocalDb, userId: string, input: CreateTaskInput) 
       input.incomeAmount ?? 0,
       input.startAt ?? null,
       input.endAt ?? null,
+      input.boxMinutes ?? null,
       input.source ?? null,
       input.visionItemId ?? null,
       input.visionItemId ? (input.visionValue ?? 1) : null,
@@ -161,6 +163,7 @@ export function updateTask(db: LocalDb, userId: string, id: string, input: Updat
   if (input.incomeAmount !== undefined) set("incomeAmount", input.incomeAmount);
   if (input.startAt !== undefined) set("startAt", input.startAt);
   if (input.endAt !== undefined) set("endAt", input.endAt);
+  if (input.boxMinutes !== undefined) set("boxMinutes", input.boxMinutes);
   // The link to a goal: taking the task off its goal takes its amount with it; putting it on one counts 1 unless an amount is given.
   if (input.visionItemId !== undefined) set("visionItemId", input.visionItemId);
   if (input.visionItemId === null) set("visionValue", null);

@@ -99,6 +99,13 @@ describe("the «بیشتر» menu entries that belong to a mode", () => {
     expect(shown({ ...NO_MODES, gender: null, cycleOn: true, modes: ["athlete", "timeBlocking", "timeBoxing"] })).not.toContain("/cycle");
   });
 
+  it("bring in the planner for either way of planning a day, and for neither otherwise", () => {
+    expect(shown(NO_MODES)).not.toContain("/plan");
+    expect(shown({ ...NO_MODES, modes: ["athlete"] })).not.toContain("/plan");
+    expect(shown({ ...NO_MODES, modes: ["timeBlocking"] })).toContain("/plan");
+    expect(shown({ ...NO_MODES, modes: ["timeBoxing"] })).toContain("/plan");
+  });
+
   it("leave every other entry as it was", () => {
     expect(shown(NO_MODES)).toEqual(expect.arrayContaining(["/habits", "/basket", "/settings", "/review"]));
   });

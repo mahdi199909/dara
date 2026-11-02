@@ -62,6 +62,7 @@ async function POST(req: NextRequest) {
             dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
             startAt: body.startAt ? new Date(body.startAt) : undefined,
             endAt: body.endAt ? new Date(body.endAt) : undefined,
+            boxMinutes: body.boxMinutes,
             source: body.source,
             visionItemId: body.visionItemId,
             visionValue: body.visionItemId ? (body.visionValue ?? 1) : undefined,

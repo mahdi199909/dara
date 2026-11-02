@@ -292,6 +292,17 @@ export function MealIcon(props: IconProps) {
   );
 }
 
+/** Three blocks on a timeline: planning a day. */
+export function PlanIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="4" y="4" width="16" height="4" rx="1" />
+      <rect x="4" y="10" width="10" height="4" rx="1" />
+      <rect x="4" y="16" width="13" height="4" rx="1" />
+    </svg>
+  );
+}
+
 /** A circle holding a drop: the monthly cycle. */
 export function CycleIcon(props: IconProps) {
   return (
