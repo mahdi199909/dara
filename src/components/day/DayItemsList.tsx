@@ -8,6 +8,9 @@ import DayItemRow from "@/components/day/DayItemRow";
 import TaskEditModal from "@/components/day/TaskEditModal";
 import EventFormModal from "@/components/calendar/EventFormModal";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
+import MoveItemSheet from "@/components/day/MoveItemSheet";
+import { canMove, movableFromEvent, movableFromTask, type Movable } from "@/lib/moveItem";
+import { notifySaved } from "@/lib/savedToast";
 
 /**
  * A day's items with everything a person does to them: tick a task or event done, edit it, delete it.
@@ -30,6 +33,7 @@ export default function DayItemsList({
   highlightId?: string | null;
 }) {
   const [editing, setEditing] = useState<DayItem | null>(null);
+  const [moving, setMoving] = useState<Movable | null>(null);
   // The day's own midnight — the check-in routes bucket by day, and this is the instant they expect for it.
   const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate());
 
@@ -77,6 +81,12 @@ export default function DayItemsList({
     }
   }
 
+  // A task, or an event that is not a series, can go to another day or time; one occurrence of a series cannot.
+  const movable = (item: DayItem): Movable | null => {
+    const candidate = item.kind === "TASK" ? movableFromTask(item.source) : item.kind === "EVENT" ? movableFromEvent(item.source.event) : null;
+    return candidate && canMove(candidate) ? candidate : null;
+  };
+
   // Time entries have no route to edit or delete them, so their rows carry no menu.
   const editable = (item: DayItem) => item.kind === "EVENT" || item.kind === "TASK" || (item.kind === "HABIT" && !!item.source.habitId);
   // An installment is paid or changed on the installments tab (its row links there), not from a day's list.
@@ -92,11 +102,23 @@ export default function DayItemsList({
             highlighted={!!highlightId && item.id === highlightId}
             onToggleDone={() => void toggleDone(item)}
             onEdit={editable(item) ? () => setEditing(item) : undefined}
+            onMove={movable(item) ? () => setMoving(movable(item)) : undefined}
             onDelete={deletable(item) ? () => void remove(item) : undefined}
           />
         ))}
       </ul>
 
+      {moving && (
+        <MoveItemSheet
+          item={moving}
+          onClose={() => setMoving(null)}
+          onMoved={() => {
+            setMoving(null);
+            changed();
+            notifySaved("جابه‌جا شد");
+          }}
+        />
+      )}
       {editing?.kind === "EVENT" && (
         <EventFormModal
           defaultDate={new Date(editing.source.startAt)}

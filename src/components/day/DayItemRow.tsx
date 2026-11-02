@@ -6,7 +6,7 @@ import { formatTime } from "@/lib/jalali";
 import { formatDuration, shortDuration, signed } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import type { DayItem } from "@/lib/dayItems";
-import { CheckSquareIcon, EditIcon, TrashIcon, XIcon } from "@/components/icons";
+import { ArrowForwardIcon, CheckSquareIcon, EditIcon, TrashIcon, XIcon } from "@/components/icons";
 
 const KIND_LABEL: Record<DayItem["kind"], string> = { EVENT: "رویداد", TASK: "کار", HABIT: "عادت", TRANSACTION: "تراکنش", TIME_ENTRY: "فعالیت", INSTALLMENT: "قسط" };
 
@@ -36,17 +36,20 @@ export default function DayItemRow({
   highlighted,
   onToggleDone,
   onEdit,
+  onMove,
   onDelete,
 }: {
   item: DayItem;
   highlighted?: boolean;
   onToggleDone?: () => void;
   onEdit?: () => void;
+  /** Send it to another day or time (a task or an event that is not one of a series). */
+  onMove?: () => void;
   onDelete?: () => void;
 }) {
   const { format } = useCurrencyUnit();
   const [menuOpen, setMenuOpen] = useState(false);
-  const hasMenu = Boolean(onEdit || onDelete);
+  const hasMenu = Boolean(onEdit || onMove || onDelete);
   const showsBox = item.kind === "EVENT" || item.kind === "TASK";
   const category = item.category?.name ? `${item.category.icon ?? ""} ${item.category.name}`.trim() : item.category?.icon ?? null;
 
@@ -142,6 +145,19 @@ export default function DayItemRow({
               >
                 <EditIcon className="w-4 h-4 text-muted" />
                 ویرایش
+              </button>
+            )}
+            {onMove && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onMove();
+                }}
+                className="w-full flex items-center gap-2 rounded-xl bg-canvas px-3 py-3 text-sm text-ink"
+              >
+                <ArrowForwardIcon className="w-4 h-4 text-muted" />
+                انتقال به روز یا ساعت دیگر
               </button>
             )}
             {onDelete && (

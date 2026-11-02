@@ -273,6 +273,15 @@ export function TargetIcon(props: IconProps) {
   );
 }
 
+/** A crescent moon: the end-of-day review's mark. */
+export function MoonIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
 /** Two coins: the asset basket's mark. */
 export function CoinsIcon(props: IconProps) {
   return (
