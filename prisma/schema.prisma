@@ -71,6 +71,8 @@ model User {
   inboxItems          InboxItem[]
   visionItems         VisionItem[]
   visionEntries       VisionEntry[]
+  basketHoldings      BasketHolding[]
+  basketSnapshots     BasketSnapshot[]
   budgets             Budget[]
   savingsGoals        SavingsGoal[]
   verificationCodes   VerificationCode[]
@@ -951,6 +953,44 @@ model VisionEntry {
 
   @@index([userId])
   @@index([itemId])
+}
+
+// The asset basket: what the person holds of the main currencies and metals. `assetKey` is an id from
+// src/lib/basketCatalog.ts — plain text rather than a table, because the catalog ships with the app. One quantity per
+// asset; two devices that each add the same asset before they sync leave two rows, and the basket sums them
+// (src/lib/basket.ts).
+model BasketHolding {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  assetKey String
+  quantity Float
+  note     String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+}
+
+// The basket's total value on one Jalali day, written when the page has live prices — it is what the value chart draws.
+// `date` is a Jalali day key ("1405-08-11") for the same reason as CapitalSnapshot.date. Unlike CapitalSnapshot it has
+// an updatedAt (the value changes during the day, and a sync must carry the change) and NO unique (userId, date): two
+// devices may each record the same day before they sync, and the newest row wins when the chart is read.
+model BasketSnapshot {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date       String
+  totalValue Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
 }
 
 // ---------------------------------------------------------------------------

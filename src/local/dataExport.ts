@@ -80,6 +80,8 @@ export const DATA_EXPORT_TABLES = [
   "InboxItem",
   "VisionItem",
   "VisionEntry",
+  "BasketHolding",
+  "BasketSnapshot",
   "CapitalSnapshot",
   "AuditLog",
   "Notification",

@@ -26,6 +26,8 @@ export const TABLE_LABELS_FA: Record<string, string> = {
   InboxItem: "صندوق ورودی",
   VisionItem: "ویژن‌برد",
   VisionEntry: "ثبت پیشرفت ویژن‌برد",
+  BasketHolding: "سبد دارایی",
+  BasketSnapshot: "تاریخچه ارزش سبد دارایی",
   CapitalSnapshot: "تاریخچه سرمایه",
   AuditLog: "سابقه فعالیت",
   Notification: "اعلان",

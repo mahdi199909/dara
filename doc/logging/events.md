@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-354 events in 47 domains.
+366 events in 49 domains.
 
 ## AUTH
 
@@ -679,4 +679,30 @@ Default module: `vision`
 | `VISION_ENTRY_DELETE_FAILED` | ERROR | protected | yes | Vision entry delete failed. |
 | `VISION_ENTRY_DELETE_STARTED` | DEBUG | — | reserved | Vision entry delete started. |
 | `VISION_ENTRY_DELETE_SUCCESS` | INFO | — | yes | Vision entry delete success. |
+
+## BASKET
+
+Default module: `basket`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `BASKET_CREATE_FAILED` | ERROR | protected | yes | Basket create failed. |
+| `BASKET_CREATE_STARTED` | DEBUG | — | reserved | Basket create started. |
+| `BASKET_CREATE_SUCCESS` | INFO | — | yes | Basket create success. |
+| `BASKET_DELETE_FAILED` | ERROR | protected | yes | Basket delete failed. |
+| `BASKET_DELETE_STARTED` | DEBUG | — | reserved | Basket delete started. |
+| `BASKET_DELETE_SUCCESS` | INFO | — | yes | Basket delete success. |
+| `BASKET_UPDATE_FAILED` | ERROR | protected | yes | Basket update failed. |
+| `BASKET_UPDATE_STARTED` | DEBUG | — | reserved | Basket update started. |
+| `BASKET_UPDATE_SUCCESS` | INFO | — | yes | Basket update success. |
+
+## PRICE
+
+Default module: `prices`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `PRICE_FEED_FAILED` | WARN | protected | yes | One address of the price feed could not be read or had nothing usable; the next address is tried. |
+| `PRICE_FEED_REFRESHED` | DEBUG | — | yes | The market prices were read from the feed (how many assets were priced and which had no usable row are in the fields). |
+| `PRICE_RATE_LIMITED` | WARN | protected | yes | Too many price requests from one address. |
 

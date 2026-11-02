@@ -70,6 +70,10 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   // A goal sits under a vision by a plain parentId (no FK), so the two can arrive in any order; an entry needs its item first.
   { table: "VisionItem", model: "visionItem", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "VisionEntry", model: "visionEntry", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
+  // The asset basket. A holding only names its asset by a catalog id (plain text), so neither table needs the other first.
+  // A snapshot is never deleted by itself (the chart is history); it has an updatedAt because a day's value is rewritten as prices move.
+  { table: "BasketHolding", model: "basketHolding", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
+  { table: "BasketSnapshot", model: "basketSnapshot", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
   // No updatedAt column — recordDailyCapitalSnapshot upserts *today's* row in place
   // (ON CONFLICT("userId","date") DO UPDATE) as more time gets logged through the day, so a
   // same-day edit after this row's first sync won't be picked up again until a fresh row is

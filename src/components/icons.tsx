@@ -272,3 +272,14 @@ export function TargetIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** Two coins: the asset basket's mark. */
+export function CoinsIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="6" />
+      <path d="M15.2 10.2A6 6 0 1 1 10.2 15.2" />
+      <path d="M9 6.6v4.8M7.4 8.2h3.2" />
+    </svg>
+  );
+}

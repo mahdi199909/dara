@@ -13,6 +13,7 @@ import {
   ListChecksIcon,
   InboxIcon,
   TargetIcon,
+  CoinsIcon,
 } from "@/components/icons";
 
 export const NAV_ITEMS = [
@@ -22,6 +23,7 @@ export const NAV_ITEMS = [
   { href: "/habits", label: "عادت‌ها", icon: FlameIcon },
   { href: "/finance", label: "مالی", icon: WalletIcon },
   { href: "/assets", label: "دارایی‌ها", icon: BoxIcon },
+  { href: "/basket", label: "سبد دارایی", icon: CoinsIcon },
   { href: "/capital", label: "سرمایه", icon: TrendUpIcon },
   { href: "/reports", label: "گزارش‌ها", icon: ChartIcon },
   { href: "/projects", label: "پروژه‌ها", icon: FolderIcon },

@@ -462,6 +462,7 @@ describe("the route table", () => {
       "DELETE /api/virtual-assets/:id",
       "POST /api/notifications/:id/read",
       "POST /api/quick-capture",
+      "POST /api/basket/snapshot",
       "POST /api/local/license-cache",
       "POST /api/local/logout",
     ]);
