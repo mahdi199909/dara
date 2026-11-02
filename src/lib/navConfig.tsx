@@ -1,3 +1,5 @@
+import type { ReactElement, SVGProps } from "react";
+import type { NavMode } from "@/lib/modes";
 import {
   HomeIcon,
   CalendarIcon,
@@ -15,9 +17,19 @@ import {
   TargetIcon,
   CoinsIcon,
   MoonIcon,
+  MealIcon,
+  CycleIcon,
 } from "@/components/icons";
 
-export const NAV_ITEMS = [
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: (props: SVGProps<SVGSVGElement>) => ReactElement;
+  /** The mode(s) that bring this entry in; none = always shown (see src/lib/modes.ts). */
+  requires?: readonly NavMode[];
+}
+
+export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "خانه", icon: HomeIcon },
   { href: "/calendar", label: "تقویم", icon: CalendarIcon },
   { href: "/tasks", label: "کارها", icon: CheckSquareIcon },
@@ -33,8 +45,10 @@ export const NAV_ITEMS = [
   { href: "/checklists", label: "چک‌لیست‌ها", icon: ListChecksIcon },
   { href: "/inbox", label: "صندوق ورودی", icon: InboxIcon },
   { href: "/review", label: "پایان روز", icon: MoonIcon },
+  { href: "/meals", label: "کالری‌شمار", icon: MealIcon, requires: ["athlete"] },
+  { href: "/cycle", label: "چرخهٔ ماهانه", icon: CycleIcon, requires: ["cycle"] },
   { href: "/settings", label: "تنظیمات", icon: GearIcon },
-] as const;
+];
 
 // The four always-visible bottom tabs — everything else in NAV_ITEMS lives behind the fifth
 // "بیشتر" tab (see BottomNav.tsx). Picked as the most frequently used sections; not just the

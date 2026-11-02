@@ -282,6 +282,26 @@ export function MoonIcon(props: IconProps) {
   );
 }
 
+/** A bowl with steam: the athlete's calorie meter. */
+export function MealIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z" />
+      <path d="M9 7.5c0-1.3 1-1.3 1-2.6M14 7.5c0-1.3 1-1.3 1-2.6" />
+    </svg>
+  );
+}
+
+/** A circle holding a drop: the monthly cycle. */
+export function CycleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5c2 2.4 3 3.9 3 5.3a3 3 0 0 1-6 0c0-1.4 1-2.9 3-5.3Z" />
+    </svg>
+  );
+}
+
 /** Two coins: the asset basket's mark. */
 export function CoinsIcon(props: IconProps) {
   return (

@@ -24,6 +24,7 @@ import WebBackupTab from "@/components/settings/WebBackupTab";
 import DiagnosticReportCard from "@/components/settings/DiagnosticReportCard";
 import NotificationsCard from "@/components/settings/NotificationsCard";
 import AccountSecurityTab from "@/components/settings/AccountSecurityTab";
+import ModesTab from "@/components/settings/ModesTab";
 import { pickWidgetTextTone, widgetTextColor } from "@/lib/widgetContrast";
 import { requestWidgetRefresh } from "@/local/widgetRefresh";
 import { setThemeMode, isThemeMode, type ThemeMode } from "@/lib/theme";
@@ -40,6 +41,7 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
 // account's server-side data (WebBackupTab). Both read and write the same file format.
 const TABS = [
   { key: "personal", label: "شخصی" },
+  { key: "modes", label: "حالت‌ها" },
   { key: "security", label: "حساب و امنیت" },
   { key: "financial", label: "مالی" },
   { key: "categories", label: "دسته‌بندی‌ها" },
@@ -113,6 +115,7 @@ export default function SettingsPage() {
       </div>
 
       {tab === "personal" && <PersonalTab />}
+      {tab === "modes" && <ModesTab />}
       {tab === "security" && <AccountSecurityTab />}
       {tab === "financial" && <FinancialTab />}
       {tab === "categories" && <CategoriesTab />}

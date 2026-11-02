@@ -29,6 +29,8 @@ interface SettingsRow {
   theme: string;
   calendarFeaturedType: string | null;
   calendarFeaturedId: string | null;
+  gender: string | null;
+  modes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -102,6 +104,8 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.theme !== undefined) set("theme", settingsBody.theme);
     if (settingsBody.calendarFeaturedType !== undefined) set("calendarFeaturedType", settingsBody.calendarFeaturedType);
     if (settingsBody.calendarFeaturedId !== undefined) set("calendarFeaturedId", settingsBody.calendarFeaturedId);
+    if (settingsBody.gender !== undefined) set("gender", settingsBody.gender);
+    if (settingsBody.modes !== undefined) set("modes", settingsBody.modes);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 

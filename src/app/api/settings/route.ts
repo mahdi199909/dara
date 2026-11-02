@@ -1,34 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { tomanInt } from "@/lib/schemas/money";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { computeHourlyValue } from "@/lib/hourlyValue";
-import { CURRENCY_UNITS } from "@/lib/types";
+import { updateSettingsSchema } from "@/lib/schemas/settings";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
-
-const updateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  timezone: z.string().max(50).optional(),
-  currency: z.string().max(10).optional(),
-  currencyDisplayUnit: z.enum(CURRENCY_UNITS).optional(),
-  calendarType: z.enum(["jalali", "gregorian"]).optional(),
-  monthlyIncome: tomanInt().min(0).nullable().optional(),
-  workingHoursMonth: z.number().int().min(1).max(744).nullable().optional(),
-  hourlyValueOverride: tomanInt().min(0).nullable().optional(),
-  dashboardCardPrefs: z.record(z.boolean()).optional(),
-  dailyMomentEnabled: z.boolean().optional(),
-  wakeHour: z.number().int().min(0).max(23).optional(),
-  sleepHour: z.number().int().min(0).max(23).optional(),
-  dailyProductiveTargetMin: z.number().int().min(30).max(900).optional(),
-  companionEnabled: z.boolean().optional(),
-  theme: z.enum(["light", "dark", "system"]).optional(),
-  calendarFeaturedType: z.enum(["category", "habit"]).nullable().optional(),
-  calendarFeaturedId: z.string().nullable().optional(),
-});
 
 async function GET() {
   try {
@@ -55,7 +33,7 @@ async function GET() {
 async function PATCH(req: NextRequest) {
   try {
     const userId = await requireUserId();
-    const body = updateSchema.parse(await req.json());
+    const body = updateSettingsSchema.parse(await req.json());
     const { name, dashboardCardPrefs, ...settingsBody } = body;
 
     const existing = await prisma.settings.findUnique({ where: { userId } });
