@@ -119,7 +119,7 @@ export default function HomePage() {
     `/api/day-activity?from=${from.toISOString()}&to=${to.toISOString()}`,
     fetcher
   );
-  const { habits, series, currentStreak, mutate: mutateHabits } = useHabits();
+  const { habits, series, mutate: mutateHabits } = useHabits();
 
   // Everything logged or scheduled for today, from every source the app has — events and tasks
   // come from /api/events (already recurrence-expanded; see that route's own comment), the rest
@@ -261,7 +261,7 @@ export default function HomePage() {
               ))}
             </ul>
           )}
-          {activeHabits.length > 0 && <HabitAdherenceChart series={series} currentStreak={currentStreak} />}
+          {activeHabits.length > 0 && <HabitAdherenceChart series={series} />}
         </div>
       </div>
 

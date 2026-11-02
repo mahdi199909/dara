@@ -18,6 +18,7 @@ import { ringArcPath, RING_START_DEG, RING_SWEEP_DEG } from "@/lib/ringArc";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import CategoryCalendarTab from "@/components/reports/CategoryCalendarTab";
 import { customRangeQuery, validateCustomRange } from "@/lib/reportRange";
+import { habitContinuityLine } from "@/lib/continuity";
 
 // The only comparison this product ever shows (its own past period — see comparePeriods). Each
 // entry's polarity says which direction is "good"; totalMinutes carries no polarity — logging
@@ -696,7 +697,7 @@ function HabitsTab({ habitsReport }: { habitsReport: any }) {
       </Card>
 
       <Card className="p-5">
-        <HabitAdherenceChart series={habitsReport.series} currentStreak={habitsReport.currentStreak} defaultOpen />
+        <HabitAdherenceChart series={habitsReport.series} continuity={habitsReport.continuity} defaultOpen />
       </Card>
 
       <Card>
@@ -708,7 +709,7 @@ function HabitsTab({ habitsReport }: { habitsReport: any }) {
                 <div className="min-w-0">
                   <p className={`text-sm truncate ${h.isActive ? "text-ink" : "text-muted"}`}>{h.title}</p>
                   <p className="text-xs text-muted mt-0.5">
-                    {h.currentStreak > 0 ? `${toPersianDigits(h.currentStreak)} روز پشت‌سرهم` : `${toPersianDigits(h.daysSinceLastCheckIn)} روز از آخرین تیک`}
+                    {habitContinuityLine(h)}
                   </p>
                 </div>
               </div>

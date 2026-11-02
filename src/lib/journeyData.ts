@@ -11,7 +11,7 @@
 import { prisma } from "@/lib/db";
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { expandOccurrences } from "@/lib/recurrence";
-import { streakByDay } from "@/lib/journeyStreaks";
+import { missedDaysBefore, streakByDay } from "@/lib/journeyStreaks";
 import type { JourneyEventRow, JourneyHabitRow, JourneyMilestoneRow, JourneyNoteRow, JourneyRows, JourneyTaskRow, JourneyWorkRow } from "@/lib/journeyTypes";
 
 const minutesBetween = (a: Date, b: Date) => Math.max(0, Math.round((b.getTime() - a.getTime()) / 60000));
@@ -126,7 +126,11 @@ export async function loadJourneyRows(userId: string, from: Date, to: Date): Pro
   const daysByHabit = new Map<string, string[]>();
   for (const h of history) daysByHabit.set(h.habitId, [...(daysByHabit.get(h.habitId) ?? []), dayKeyIso(h.date)]);
   const streaks = new Map<string, Map<string, number>>();
-  for (const [habitId, days] of daysByHabit) streaks.set(habitId, streakByDay(days));
+  const gaps = new Map<string, Map<string, number>>();
+  for (const [habitId, days] of daysByHabit) {
+    streaks.set(habitId, streakByDay(days));
+    gaps.set(habitId, missedDaysBefore(days));
+  }
 
   const habitRows: JourneyHabitRow[] = checkIns.map((c) => ({
     id: c.id,
@@ -136,6 +140,7 @@ export async function loadJourneyRows(userId: string, from: Date, to: Date): Pro
     at: c.createdAt.toISOString(),
     minutes: c.durationMin,
     streak: streaks.get(c.habitId)?.get(dayKeyIso(c.date)) ?? 1,
+    returnedAfter: gaps.get(c.habitId)?.get(dayKeyIso(c.date)),
   }));
 
   const noteRows: JourneyNoteRow[] = notes.map((n) => ({ id: n.id, day: n.day, text: n.content, createdAt: n.createdAt.toISOString() }));

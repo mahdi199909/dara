@@ -1,7 +1,7 @@
 // On-device port of src/lib/journeyData.ts: the same rows for «مسیر», read from the phone's SQLite. The two must return
 // exactly the same shape and decide the same way what "happened on a day" means — see the list at the top of that file.
 import { dayKeyIso } from "@/lib/calendarGrid";
-import { streakByDay } from "@/lib/journeyStreaks";
+import { missedDaysBefore, streakByDay } from "@/lib/journeyStreaks";
 import { expandOccurrences } from "@/lib/recurrence";
 import type { JourneyEventRow, JourneyHabitRow, JourneyMilestoneRow, JourneyNoteRow, JourneyRows, JourneyTaskRow, JourneyWorkRow } from "@/lib/journeyTypes";
 import type { LocalDb } from "./db";
@@ -120,7 +120,11 @@ export function loadJourneyRows(db: LocalDb, userId: string, from: string, to: s
   const daysByHabit = new Map<string, string[]>();
   for (const h of history) daysByHabit.set(h.habitId, [...(daysByHabit.get(h.habitId) ?? []), dayKeyIso(new Date(h.date))]);
   const streaks = new Map<string, Map<string, number>>();
-  for (const [habitId, days] of daysByHabit) streaks.set(habitId, streakByDay(days));
+  const gaps = new Map<string, Map<string, number>>();
+  for (const [habitId, days] of daysByHabit) {
+    streaks.set(habitId, streakByDay(days));
+    gaps.set(habitId, missedDaysBefore(days));
+  }
   const habitRows: JourneyHabitRow[] = checkIns.map((c) => ({
     id: c.id,
     habitId: c.habitId,
@@ -129,6 +133,7 @@ export function loadJourneyRows(db: LocalDb, userId: string, from: string, to: s
     at: c.createdAt,
     minutes: c.durationMin,
     streak: streaks.get(c.habitId)?.get(dayKeyIso(new Date(c.date))) ?? 1,
+    returnedAfter: gaps.get(c.habitId)?.get(dayKeyIso(new Date(c.date))),
   }));
 
   const notes = db.all<{ id: string; day: string; content: string; createdAt: string }>(

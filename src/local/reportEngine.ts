@@ -7,6 +7,7 @@
 import { computeHourlyValue } from "@/lib/hourlyValue";
 import { computeTimeCost } from "@/lib/timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence, type HabitLike, type HabitCheckInLike } from "@/lib/habitStreak";
+import { computeContinuity, type Continuity } from "@/lib/continuity";
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "@/lib/jalali";
 import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "@/lib/dayBattery";
@@ -339,6 +340,7 @@ export interface HabitsReport {
   habits: HabitStat[];
   series: DayAdherence[];
   currentStreak: number;
+  continuity: Continuity;
   digitalAssetTotal: number;
 }
 
@@ -382,6 +384,7 @@ export function computeHabitsReport(db: LocalDb, userId: string, from: Date, to:
   const series = computeAdherenceSeries(habits, rangeCheckIns, rangeFrom, rangeTo);
   const streakSeries = computeAdherenceSeries(habits, streakCheckIns, streakFrom, today);
   const currentStreak = computeCurrentStreak(streakSeries, today);
+  const continuity = computeContinuity(streakSeries, today);
 
   const lastCheckInByHabit = new Map<string, Date>();
   const checkedDaysByHabit = new Map<string, Set<number>>();
@@ -422,6 +425,7 @@ export function computeHabitsReport(db: LocalDb, userId: string, from: Date, to:
     habits: habitStats,
     series,
     currentStreak,
+    continuity,
     digitalAssetTotal: vaRows.reduce((s, e) => s + e.totalValue, 0),
   };
 }

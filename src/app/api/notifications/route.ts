@@ -64,8 +64,8 @@ async function GET() {
       await prisma.notification.create({
         data: {
           userId,
-          title: `عادت «${habit.title}» رو فراموش نکن`,
-          body: `چند روزیه سراغ «${habit.title}» نرفتی. می‌خوای بازنگری‌اش کنی و یه پله کوچیک‌ترش کنی تا ادامه‌ دادنش راحت‌تر بشه؟`,
+          title: `هر وقت خواستی، به «${habit.title}» برگرد`,
+          body: `چند روزیه سراغ «${habit.title}» نرفتی. برگشتن همیشه ممکنه؛ اگه سخت شده، یه پله کوچیک‌ترش کن تا برگشتنش راحت‌تر بشه.`,
           type: "system",
           relatedType: "HABIT",
           relatedId: habit.id,

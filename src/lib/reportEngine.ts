@@ -2,6 +2,7 @@ import { prisma } from "./db";
 import { computeHourlyValue } from "./hourlyValue";
 import { computeTimeCost } from "./timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence } from "./habitStreak";
+import { computeContinuity, type Continuity } from "./continuity";
 import { dayKeyIso } from "./calendarGrid";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "./jalali";
 import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "./dayBattery";
@@ -380,6 +381,8 @@ export interface HabitsReport {
   habits: HabitStat[];
   series: DayAdherence[]; // within [from, to]
   currentStreak: number; // always as-of-today, independent of the report's [from, to]
+  /** The same lookback, read as continuity — how often the person showed up and came back (src/lib/continuity.ts). */
+  continuity: Continuity;
   digitalAssetTotal: number; // within [from, to]
 }
 
@@ -419,6 +422,7 @@ export async function computeHabitsReport(userId: string, from: Date, to: Date):
   const series = computeAdherenceSeries(habits, rangeCheckIns, rangeFrom, rangeTo);
   const streakSeries = computeAdherenceSeries(habits, streakCheckIns, streakFrom, today);
   const currentStreak = computeCurrentStreak(streakSeries, today);
+  const continuity = computeContinuity(streakSeries, today);
 
   const lastCheckInByHabit = new Map<string, Date>();
   const checkedDaysByHabit = new Map<string, Set<number>>();
@@ -465,6 +469,7 @@ export async function computeHabitsReport(userId: string, from: Date, to: Date):
     habits: habitStats,
     series,
     currentStreak,
+    continuity,
     digitalAssetTotal: vaEntries.reduce((s, e) => s + e.totalValue, 0),
   };
 }

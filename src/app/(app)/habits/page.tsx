@@ -13,7 +13,7 @@ import { formatDuration } from "@/lib/money";
 import { PlusIcon, EditIcon, CheckSquareIcon, ClockIcon } from "@/components/icons";
 
 export default function HabitsPage() {
-  const { habits, series, currentStreak, mutate } = useHabits();
+  const { habits, series, mutate } = useHabits();
   const [showHabitForm, setShowHabitForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState<any>(null);
   const [showTrialForm, setShowTrialForm] = useState(false);
@@ -109,7 +109,7 @@ export default function HabitsPage() {
             ))}
           </ul>
         )}
-        {activeHabits.length > 0 && <HabitAdherenceChart series={series} currentStreak={currentStreak} defaultOpen />}
+        {activeHabits.length > 0 && <HabitAdherenceChart series={series} defaultOpen />}
       </Card>
 
       {inactiveHabits.length > 0 && (
