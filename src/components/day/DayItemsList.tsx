@@ -150,7 +150,7 @@ export default function DayItemsList({
       )}
       {editing?.kind === "HABIT" && (
         <HabitDurationModal
-          habit={{ id: editing.source.habitId, title: editing.title, todayDurationMin: editing.minutes }}
+          habit={{ id: editing.source.habitId, title: editing.title, metricKind: editing.source.habitMetricKind, todayDurationMin: editing.minutes, todayAmount: editing.source.habitAmount }}
           date={dayStart}
           onClose={() => setEditing(null)}
           onSaved={() => {

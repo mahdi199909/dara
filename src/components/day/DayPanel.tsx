@@ -14,6 +14,7 @@ import { CheckSquareIcon, ClockIcon } from "@/components/icons";
 import DayItemsList from "@/components/day/DayItemsList";
 import DayNotes from "@/components/day/DayNotes";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
+import { describeDay } from "@/lib/habitMetrics";
 
 /**
  * Everything about one calendar day, in one place: the day's notes, what was scheduled or done
@@ -96,9 +97,9 @@ export default function DayPanel({
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {h.checkedIn && (
-                    <button type="button" onClick={() => setDurationHabit(h)} className="flex items-center gap-1 text-xs text-muted hover:text-accent" aria-label="ثبت زمان عادت">
+                    <button type="button" onClick={() => setDurationHabit(h)} className="flex items-center gap-1 text-xs text-muted hover:text-accent" aria-label="جزئیات عادت">
                       <ClockIcon className="w-3.5 h-3.5" />
-                      {h.durationMin ? formatDuration(h.durationMin) : "زمان"}
+                      {describeDay(h.metricKind, h.amount, h.durationMin) ?? (h.metricKind ? "جزئیات" : "زمان")}
                     </button>
                   )}
                   <button
@@ -143,7 +144,7 @@ export default function DayPanel({
 
       {durationHabit && (
         <HabitDurationModal
-          habit={{ id: durationHabit.id, title: durationHabit.title, todayDurationMin: durationHabit.durationMin }}
+          habit={{ id: durationHabit.id, title: durationHabit.title, metricKind: durationHabit.metricKind, todayDurationMin: durationHabit.durationMin, todayAmount: durationHabit.amount }}
           date={dayStart}
           onClose={() => setDurationHabit(null)}
           onSaved={() => {

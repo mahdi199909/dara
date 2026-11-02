@@ -93,7 +93,7 @@ export default function DayItemRow({
             <p className="truncate text-[11px] text-muted">
               {item.kind === "INSTALLMENT"
                 ? installmentState(item)
-                : [category ?? KIND_LABEL[item.kind], item.minutes ? shortDuration(item.minutes) : null].filter(Boolean).join(" · ")}
+                : [category ?? KIND_LABEL[item.kind], item.detail ?? null, item.minutes ? shortDuration(item.minutes) : null].filter(Boolean).join(" · ")}
             </p>
           </>
         );

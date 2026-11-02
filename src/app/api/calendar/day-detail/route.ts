@@ -24,11 +24,11 @@ async function GET(req: NextRequest) {
     const [habits, checkIns, transactions] = await Promise.all([
       prisma.habit.findMany({
         where: { userId, deletedAt: null, isActive: true, isTrial: false },
-        select: { id: true, title: true, icon: true, color: true },
+        select: { id: true, title: true, icon: true, color: true, metricKind: true },
       }),
       prisma.habitCheckIn.findMany({
         where: { habit: { userId }, date: { gte: dayStart, lte: dayEnd } },
-        select: { habitId: true, durationMin: true },
+        select: { habitId: true, durationMin: true, amount: true },
       }),
       prisma.transaction.findMany({
         where: { userId, deletedAt: null, date: { gte: dayStart, lte: dayEnd } },
@@ -37,14 +37,16 @@ async function GET(req: NextRequest) {
       }),
     ]);
 
-    const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c.durationMin]));
+    const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c]));
     const habitsResult = habits.map((h) => ({
       id: h.id,
       title: h.title,
       icon: h.icon,
       color: h.color,
+      metricKind: h.metricKind,
       checkedIn: checkInByHabit.has(h.id),
-      durationMin: checkInByHabit.get(h.id) ?? null,
+      durationMin: checkInByHabit.get(h.id)?.durationMin ?? null,
+      amount: checkInByHabit.get(h.id)?.amount ?? null,
     }));
 
     return NextResponse.json({ habits: habitsResult, transactions });

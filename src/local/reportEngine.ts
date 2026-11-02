@@ -9,6 +9,7 @@ import { computeTimeCost } from "@/lib/timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence, type HabitLike, type HabitCheckInLike } from "@/lib/habitStreak";
 import { computeContinuity, type Continuity } from "@/lib/continuity";
 import { dayKeyIso } from "@/lib/calendarGrid";
+import { buildHabitCalendar, type HabitCalendarStat } from "@/lib/habitCalendar";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "@/lib/jalali";
 import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "@/lib/dayBattery";
 import { nextMilestoneMinutes } from "@/lib/milestones";
@@ -567,12 +568,34 @@ export function computeCategoryCalendar(db: LocalDb, userId: string, from: Date,
   });
 }
 
+// --- computeHabitCalendar (the habits' own months, in «تقویم دسته‌بندی‌ها») ----------------------
+// Mirrors src/lib/reportEngine.ts's copy of this function; the grouping itself is shared (lib/habitCalendar.ts).
+
+/** Each habit's days in [from, to] (a month, in practice): which days it was done and what each day's tick logged. */
+export function computeHabitCalendar(db: LocalDb, userId: string, from: Date, to: Date): HabitCalendarStat[] {
+  const habits = db.all<{ id: string; title: string; icon: string | null; color: string; metricKind: string | null; isActive: number }>(
+    `SELECT "id","title","icon","color","metricKind","isActive" FROM "Habit" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isTrial" = 0 ORDER BY "createdAt" ASC`,
+    [userId]
+  );
+  const checkIns = db.all<{ habitId: string; date: string; durationMin: number | null; amount: number | null }>(
+    `SELECT hc."habitId", hc."date", hc."durationMin", hc."amount" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+     WHERE h."userId" = ? AND h."deletedAt" IS NULL AND h."isTrial" = 0 AND hc."date" >= ? AND hc."date" <= ?`,
+    [userId, iso(from), iso(to)]
+  );
+  return buildHabitCalendar(
+    habits.map((h) => ({ ...h, isActive: !!h.isActive })),
+    checkIns.map((c) => ({ ...c, date: parseDate(c.date) }))
+  );
+}
+
 // --- computeDayActivity ("Home: امروز") -----------------------------------------------------
 
 export interface DayActivityItem {
   type: "HABIT" | "TRANSACTION" | "TIME_ENTRY";
   id: string;
   habitId?: string | null; // HABIT only: the habit the check-in belongs to (id is the check-in's own)
+  habitMetricKind?: string | null; // HABIT only: what the habit measures (Habit.metricKind), and how much of it that day —
+  habitAmount?: number | null; // not the Toman `amount` below
   title: string;
   timeOfDay: string; // ISO — a real logged moment for all three sources (HabitCheckIn.createdAt included)
   isIncome: boolean | null; // TRANSACTION only
@@ -599,8 +622,8 @@ export function computeDayActivity(db: LocalDb, userId: string, from: Date, to: 
      WHERE a."userId" = ? AND a."deletedAt" IS NULL AND te."startAt" >= ? AND te."startAt" <= ? AND te."durationMin" IS NOT NULL`,
     [userId, fromIso, toIso]
   );
-  const habitCheckIns = db.all<{ id: string; habitId: string; title: string; categoryId: string | null; createdAt: string; durationMin: number | null }>(
-    `SELECT hc."id" as "id", hc."habitId" as "habitId", h."title", h."categoryId", hc."createdAt", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+  const habitCheckIns = db.all<{ id: string; habitId: string; title: string; categoryId: string | null; metricKind: string | null; createdAt: string; durationMin: number | null; habitAmount: number | null }>(
+    `SELECT hc."id" as "id", hc."habitId" as "habitId", h."title", h."categoryId", h."metricKind" as "metricKind", hc."createdAt", hc."durationMin", hc."amount" as "habitAmount" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
      WHERE h."userId" = ? AND h."deletedAt" IS NULL AND hc."date" >= ? AND hc."date" <= ?`,
     [userId, fromIso, toIso]
   );
@@ -624,7 +647,7 @@ export function computeDayActivity(db: LocalDb, userId: string, from: Date, to: 
   for (const h of habitCheckIns) {
     const cat = h.categoryId ? categoryById.get(h.categoryId) : undefined;
     items.push({
-      type: "HABIT", id: h.id, habitId: h.habitId, title: h.title, timeOfDay: h.createdAt,
+      type: "HABIT", id: h.id, habitId: h.habitId, habitMetricKind: h.metricKind, habitAmount: h.habitAmount, title: h.title, timeOfDay: h.createdAt,
       isIncome: null, amount: null, minutes: h.durationMin, categoryIcon: cat?.icon ?? null, categoryColor: cat?.color ?? null,
     });
   }

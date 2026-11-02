@@ -4,6 +4,7 @@ import { useState } from "react";
 import { apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
 import MoneyInput from "@/components/ui/MoneyInput";
+import { HABIT_METRICS, HABIT_METRIC_KINDS, isMetricKind } from "@/lib/habitMetrics";
 import { XIcon, TrashIcon } from "@/components/icons";
 
 export default function HabitFormModal({
@@ -38,6 +39,7 @@ export default function HabitFormModal({
   const [virtualAssetValue, setVirtualAssetValue] = useState(
     habit?.virtualAssetValuePerCheckIn ? String(habit.virtualAssetValuePerCheckIn) : ""
   );
+  const [metricKind, setMetricKind] = useState<string>(isMetricKind(habit?.metricKind) ? habit.metricKind : "");
   const [isActive, setIsActive] = useState(habit?.isActive ?? true);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -54,6 +56,7 @@ export default function HabitFormModal({
         icon: icon || (isEdit ? null : undefined),
         categoryId: categoryId || (isEdit ? null : undefined),
         virtualAssetValuePerCheckIn: virtualAssetValue ? Number(virtualAssetValue) : 0,
+        metricKind: metricKind || (isEdit ? null : undefined),
         ...(isEdit ? { isActive } : {}),
       };
 
@@ -118,6 +121,18 @@ export default function HabitFormModal({
               <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
             ))}
           </select>
+
+          <div>
+            <select value={metricKind} onChange={(e) => setMetricKind(e.target.value)} className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm" aria-label="چه چیزی غیر از تیک ثبت شود">
+              <option value="">فقط تیک (بدون اندازه‌گیری)</option>
+              {HABIT_METRIC_KINDS.map((kind) => (
+                <option key={kind} value={kind}>
+                  ثبت {HABIT_METRICS[kind].label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted mt-1">همه‌اش اختیاری است: بعد از تیک زدن می‌توانی زمان و مقدارش را هم بنویسی، یا فقط تیک بزنی.</p>
+          </div>
 
           <div>
             <MoneyInput value={virtualAssetValue} onChange={setVirtualAssetValue} placeholder="ارزش دارایی دیجیتال به‌ازای هر روز" />

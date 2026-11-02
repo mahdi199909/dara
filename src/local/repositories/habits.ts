@@ -30,6 +30,7 @@ interface HabitRow {
   color: string;
   categoryId: string | null;
   virtualAssetValuePerCheckIn: number;
+  metricKind: string | null;
   isActive: number;
   lastNudgeSentAt: string | null;
   isTrial: number;
@@ -46,6 +47,7 @@ interface HabitCheckInRow {
   habitId: string;
   date: string;
   durationMin: number | null;
+  amount: number | null;
   createdAt: string;
 }
 
@@ -131,6 +133,7 @@ export function listHabits(db: LocalDb, userId: string) {
   const todayCheckIns = checkInRows.filter((c) => parseDate(c.date).getTime() === todayTime);
   const checkedInTodaySet = new Set(todayCheckIns.map((c) => c.habitId));
   const todayDurationByHabit = new Map(todayCheckIns.map((c) => [c.habitId, c.durationMin]));
+  const todayAmountByHabit = new Map(todayCheckIns.map((c) => [c.habitId, c.amount]));
 
   const habitsWithState = habitRows.map((h) => {
     const habitCheckIns: HabitCheckInLike[] = checkInRows.filter((c) => c.habitId === h.id).map((c) => ({ habitId: c.habitId, date: parseDate(c.date) }));
@@ -138,6 +141,7 @@ export function listHabits(db: LocalDb, userId: string) {
       ...toPublicHabit(h, h.categoryId ? categoryById.get(h.categoryId) ?? null : null),
       checkedInToday: checkedInTodaySet.has(h.id),
       todayDurationMin: todayDurationByHabit.get(h.id) ?? null,
+      todayAmount: todayAmountByHabit.get(h.id) ?? null,
       daysSinceLastCheckIn: daysSinceLastCheckIn(habitCheckIns, parseDate(h.createdAt), today),
       trialDayNumber: h.isTrial && h.trialStartDate ? trialDayNumber(parseDate(h.trialStartDate), today) : null,
       trialElapsed: h.isTrial && h.trialStartDate ? isTrialElapsed(parseDate(h.trialStartDate), today) : null,
@@ -154,8 +158,8 @@ export function createHabit(db: LocalDb, userId: string, input: CreateHabitInput
 
   db.run(
     `INSERT INTO "Habit"
-       ("id","userId","title","description","icon","color","categoryId","virtualAssetValuePerCheckIn","isTrial","cue","celebration","trialStartDate","createdAt","updatedAt")
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       ("id","userId","title","description","icon","color","categoryId","virtualAssetValuePerCheckIn","metricKind","isTrial","cue","celebration","trialStartDate","createdAt","updatedAt")
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id,
       userId,
@@ -168,6 +172,7 @@ export function createHabit(db: LocalDb, userId: string, input: CreateHabitInput
       input.color ?? "#3a8d80",
       input.categoryId ?? null,
       input.virtualAssetValuePerCheckIn ?? 0,
+      input.metricKind ?? null,
       isTrial ? 1 : 0,
       input.cue ?? null,
       input.celebration ?? null,
@@ -202,6 +207,7 @@ export function updateHabit(db: LocalDb, userId: string, id: string, input: Upda
   if (input.color !== undefined) set("color", input.color);
   if (input.categoryId !== undefined) set("categoryId", input.categoryId);
   if (input.virtualAssetValuePerCheckIn !== undefined) set("virtualAssetValuePerCheckIn", input.virtualAssetValuePerCheckIn);
+  if (input.metricKind !== undefined) set("metricKind", input.metricKind);
   if (input.isActive !== undefined) set("isActive", input.isActive ? 1 : 0);
   if (input.isTrial !== undefined) set("isTrial", input.isTrial ? 1 : 0);
   if (input.cue !== undefined) set("cue", input.cue);
@@ -259,7 +265,8 @@ export function toggleHabitCheckIn(db: LocalDb, userId: string, habitId: string,
 }
 
 /**
- * Sets (or clears, with durationMin: 0) how long the user spent on a habit that day.
+ * Sets (or clears, with 0) how long the user spent on a habit that day and how much of its own measure
+ * (kilometres, pages, kilocalories); a field the input leaves out is not touched.
  * Implicitly checks the day in if it wasn't already, and re-syncs the day's virtual asset
  * value — see habitSync.ts.
  */
@@ -268,20 +275,33 @@ export function logHabitCheckInDuration(db: LocalDb, userId: string, habitId: st
   if (!habit) throw new ApiError("عادت پیدا نشد.", 404);
 
   const dateIso = startOfDay(input.date ? new Date(input.date) : new Date()).toISOString();
-  const durationMin = input.durationMin > 0 ? input.durationMin : null;
+  // undefined = leave it as it is; 0 = clear it.
+  const durationMin = input.durationMin === undefined ? undefined : input.durationMin > 0 ? input.durationMin : null;
+  const amount = input.amount === undefined ? undefined : input.amount > 0 ? input.amount : null;
   const existing = db.get<HabitCheckInRow>(`SELECT * FROM "HabitCheckIn" WHERE "habitId" = ? AND "date" = ?`, [habitId, dateIso]);
 
   let checkInId: string;
   if (existing) {
-    db.run(`UPDATE "HabitCheckIn" SET "durationMin" = ?, "updatedAt" = ? WHERE "id" = ?`, [durationMin, now(), existing.id]);
+    const sets = [`"updatedAt" = ?`];
+    const params: unknown[] = [now()];
+    if (durationMin !== undefined) {
+      sets.push(`"durationMin" = ?`);
+      params.push(durationMin);
+    }
+    if (amount !== undefined) {
+      sets.push(`"amount" = ?`);
+      params.push(amount);
+    }
+    db.run(`UPDATE "HabitCheckIn" SET ${sets.join(", ")} WHERE "id" = ?`, [...params, existing.id]);
     checkInId = existing.id;
   } else {
     checkInId = crypto.randomUUID();
-    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","createdAt","updatedAt") VALUES (?,?,?,?,?,?)`, [
+    db.run(`INSERT INTO "HabitCheckIn" ("id","habitId","date","durationMin","amount","createdAt","updatedAt") VALUES (?,?,?,?,?,?,?)`, [
       checkInId,
       habitId,
       dateIso,
-      durationMin,
+      durationMin ?? null,
+      amount ?? null,
       now(),
       now(),
     ]);

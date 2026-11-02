@@ -4,6 +4,7 @@
 // installments that fall due that day (Home does not: it has its own strip for them). Pure: the callers
 // fetch, this only merges and orders, so the places can never disagree about what a day contains.
 import { installmentTitle, isOverdue, type InstallmentOccurrence } from "@/lib/installmentCalendar";
+import { formatAmount, isMetricKind } from "@/lib/habitMetrics";
 
 export type DayItemKind = "EVENT" | "TASK" | "HABIT" | "TRANSACTION" | "TIME_ENTRY" | "INSTALLMENT";
 
@@ -18,6 +19,8 @@ export interface DayItem {
   end: string | null;
   minutes?: number;
   isDone?: boolean;
+  /** What a habit check-in logged besides minutes — «۵ کیلومتر» — when its habit measures something. */
+  detail?: string;
   amount?: number;
   isIncome?: boolean;
   category?: { name?: string | null; icon?: string | null } | null;
@@ -33,6 +36,8 @@ interface DayActivityRow {
   type: "HABIT" | "TRANSACTION" | "TIME_ENTRY";
   id: string;
   habitId?: string | null;
+  habitMetricKind?: string | null;
+  habitAmount?: number | null;
   title: string;
   timeOfDay: string;
   isIncome: boolean | null;
@@ -118,6 +123,7 @@ export function buildDayItems(
       start: row.timeOfDay,
       end: null,
       minutes: row.minutes ?? undefined,
+      detail: row.type === "HABIT" && isMetricKind(row.habitMetricKind) && row.habitAmount ? formatAmount(row.habitMetricKind, row.habitAmount) : undefined,
       amount: row.amount ?? undefined,
       isIncome: row.isIncome ?? undefined,
       category: row.categoryIcon ? { icon: row.categoryIcon } : null,

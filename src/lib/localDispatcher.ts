@@ -42,6 +42,7 @@ import {
   computeHiddenCostReport,
   computeHabitsReport,
   computeCategoryCalendar,
+  computeHabitCalendar,
   computeCalendarMonthOverview,
   computeCalendarYearOverview,
   recordDailyCapitalSnapshot,
@@ -516,6 +517,14 @@ register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
   const categories = trackedReport("category_calendar", { from: start, to: end }, () => computeCategoryCalendar(db, userId, start, end));
   return { categories, jy, jm };
 });
+register("GET", "/api/reports/habit-calendar", ({ db, userId, query }) => {
+  const { jy: curJy, jm: curJm } = toJalali(new Date());
+  const jy = Number(query.get("jy") ?? curJy);
+  const jm = Number(query.get("jm") ?? curJm);
+  const { start, end } = jalaliMonthRange(jy, jm);
+  const habits = trackedReport("habit_calendar", { from: start, to: end }, () => computeHabitCalendar(db, userId, start, end));
+  return { habits, jy, jm };
+});
 
 // Mirrors src/app/api/calendar/month-overview/route.ts and .../day-detail/route.ts.
 register("GET", "/api/calendar/month-overview", ({ db, userId, query }) => {
@@ -549,23 +558,25 @@ register("GET", "/api/calendar/day-detail", ({ db, userId, query }) => {
   const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
   const dayEnd = new Date(new Date(dayStart).getTime() + 86_400_000 - 1).toISOString();
 
-  const habits = db.all<{ id: string; title: string; icon: string | null; color: string }>(
-    `SELECT "id","title","icon","color" FROM "Habit" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 AND "isTrial" = 0`,
+  const habits = db.all<{ id: string; title: string; icon: string | null; color: string; metricKind: string | null }>(
+    `SELECT "id","title","icon","color","metricKind" FROM "Habit" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 AND "isTrial" = 0`,
     [userId]
   );
-  const checkIns = db.all<{ habitId: string; durationMin: number | null }>(
-    `SELECT hc."habitId", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+  const checkIns = db.all<{ habitId: string; durationMin: number | null; amount: number | null }>(
+    `SELECT hc."habitId", hc."durationMin", hc."amount" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
      WHERE h."userId" = ? AND hc."date" >= ? AND hc."date" <= ?`,
     [userId, dayStart, dayEnd]
   );
-  const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c.durationMin]));
+  const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c]));
   const habitsResult = habits.map((h) => ({
     id: h.id,
     title: h.title,
     icon: h.icon,
     color: h.color,
+    metricKind: h.metricKind,
     checkedIn: checkInByHabit.has(h.id),
-    durationMin: checkInByHabit.get(h.id) ?? null,
+    durationMin: checkInByHabit.get(h.id)?.durationMin ?? null,
+    amount: checkInByHabit.get(h.id)?.amount ?? null,
   }));
 
   const transactions = db.all<{ id: string; type: string; amount: number; description: string | null; categoryId: string | null }>(

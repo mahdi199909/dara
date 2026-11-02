@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { tomanInt } from "@/lib/schemas/money";
+import { updateHabitSchema } from "@/lib/schemas/habits";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
-
-const updateSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().max(2000).nullable().optional(),
-  icon: z.string().max(8).nullable().optional(),
-  color: z.string().max(20).optional(),
-  categoryId: z.string().nullable().optional(),
-  virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
-  isActive: z.boolean().optional(),
-  // isTrial: false promotes a trial habit to a permanent one (see the Habit model doc).
-  isTrial: z.boolean().optional(),
-  cue: z.string().max(300).nullable().optional(),
-  celebration: z.string().max(300).nullable().optional(),
-});
 
 async function getOwned(userId: string, id: string) {
   const habit = await prisma.habit.findFirst({ where: { id, userId, deletedAt: null } });
@@ -32,7 +17,7 @@ async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> 
   try {
     const userId = await requireUserId();
     const existing = await getOwned(userId, params.id);
-    const body = updateSchema.parse(await req.json());
+    const body = updateHabitSchema.parse(await req.json());
 
     const promoted = existing.isTrial && body.isTrial === false;
 
