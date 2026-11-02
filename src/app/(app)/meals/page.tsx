@@ -17,17 +17,13 @@ import { useMeals } from "@/lib/useMeals";
 import {
   MEAL_KINDS,
   MEAL_KIND_LABELS,
-  addMeal,
   burnedFromHabits,
   dayTotal,
   lastDays,
   mealsOfDay,
   meterOf,
   meterSentence,
-  removeMeal,
-  setTarget,
   suggestions,
-  updateMeal,
   validateMeal,
   validateTarget,
   type MealEntry,
@@ -38,12 +34,13 @@ const number = (n: number) => Math.round(n).toLocaleString("fa-IR");
 
 /**
  * «کالری‌شمار» (athlete mode): the day's meals, the total against the daily target the person chose, and the week. It
- * says how much is left or over and nothing more. Everything here is kept on this device only.
+ * says how much is left or over and nothing more. The meals and the target belong to the account, so they follow the
+ * person to every device.
  */
 export default function MealsPage() {
   const modes = useModes();
-  const { data, save } = useMeals();
   const [day, setDay] = useState(() => dayKeyIso(new Date()));
+  const { data, add, update, remove, saveTarget } = useMeals(day);
   const [editing, setEditing] = useState<MealEntry | "new" | null>(null);
   const [settingTarget, setSettingTarget] = useState(false);
 
@@ -73,6 +70,8 @@ export default function MealsPage() {
     );
   }
 
+  if (!data) return <p className="px-4 py-10 text-sm text-muted text-center">در حال بارگذاری...</p>;
+
   const meals = mealsOfDay(data, day);
   const meter = meterOf(dayTotal(data, day), data.target);
   const burned = burnedFromHabits(activity?.items);
@@ -86,7 +85,7 @@ export default function MealsPage() {
     <div className="px-4 py-6 space-y-4">
       <div>
         <h1 className="text-lg font-bold text-ink">کالری‌شمار</h1>
-        <p className="text-xs text-muted mt-1 leading-relaxed">وعده‌ها و هدف روزانه فقط روی همین دستگاه ذخیره می‌شوند؛ به سرور نمی‌روند و در فایل پشتیبان نیستند.</p>
+        <p className="text-xs text-muted mt-1 leading-relaxed">وعده‌ها و هدف روزانه با حسابت همگام می‌شوند و در فایل پشتیبان هم هستند؛ چرخهٔ ماهانه از این جداست و فقط روی دستگاه می‌ماند.</p>
       </div>
 
       <div className="flex items-center justify-center gap-1">
@@ -159,16 +158,17 @@ export default function MealsPage() {
           meal={editing === "new" ? null : editing}
           day={day}
           onClose={() => setEditing(null)}
-          onSave={(entry) => {
-            save(editing === "new" ? addMeal(data, entry) : updateMeal(data, entry.id, { kind: entry.kind, title: entry.title, kcal: entry.kcal }));
+          onSave={async (entry) => {
+            if (editing === "new") await add({ day: entry.day, kind: entry.kind, title: entry.title, kcal: entry.kcal });
+            else await update(entry.id, { kind: entry.kind, title: entry.title, kcal: entry.kcal });
             setEditing(null);
             notifySaved();
           }}
           onDelete={
             editing === "new"
               ? undefined
-              : () => {
-                  save(removeMeal(data, editing.id));
+              : async () => {
+                  await remove(editing.id);
                   setEditing(null);
                   notifySaved("حذف شد");
                 }
@@ -181,8 +181,8 @@ export default function MealsPage() {
         <TargetSheet
           target={data.target}
           onClose={() => setSettingTarget(false)}
-          onSave={(target) => {
-            save(setTarget(data, target));
+          onSave={async (target) => {
+            await saveTarget(target);
             setSettingTarget(false);
             notifySaved();
           }}
@@ -233,14 +233,27 @@ function MealSheet({
   meal: MealEntry | null;
   day: string;
   onClose: () => void;
-  onSave: (entry: MealEntry) => void;
-  onDelete?: () => void;
+  onSave: (entry: MealEntry) => Promise<void>;
+  onDelete?: () => Promise<void>;
   suggestionList: ReturnType<typeof suggestions>;
 }) {
   const [kind, setKind] = useState<MealKind>(meal?.kind ?? defaultKind());
   const [title, setTitle] = useState(meal?.title ?? "");
   const [kcal, setKcal] = useState(meal ? String(meal.kcal) : "");
   const [error, setError] = useState<string | null>(null);
+
+  const [saving, setSaving] = useState(false);
+
+  async function run(action: () => Promise<void>) {
+    setSaving(true);
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ذخیره نشد.");
+      setSaving(false);
+    }
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -251,7 +264,7 @@ function MealSheet({
       setError(problem);
       return;
     }
-    onSave({ id: meal?.id ?? crypto.randomUUID(), day: meal?.day ?? day, kind, title: title.trim(), kcal: calories });
+    void run(() => onSave({ id: meal?.id ?? "", day: meal?.day ?? day, kind, title: title.trim(), kcal: calories }));
   }
 
   return (
@@ -320,12 +333,12 @@ function MealSheet({
 
         <div className="flex gap-2">
           {onDelete && (
-            <button type="button" onClick={onDelete} className="px-4 rounded-xl border border-line text-muted text-sm hover:text-waste">
+            <button type="button" disabled={saving} onClick={() => void run(onDelete)} className="px-4 rounded-xl border border-line text-muted text-sm hover:text-waste disabled:opacity-40">
               حذف
             </button>
           )}
-          <button type="submit" className="flex-1 rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90">
-            ذخیره
+          <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40">
+            {saving ? "در حال ذخیره..." : "ذخیره"}
           </button>
         </div>
       </form>
@@ -333,14 +346,26 @@ function MealSheet({
   );
 }
 
-function TargetSheet({ target, onClose, onSave }: { target: number | null; onClose: () => void; onSave: (target: number | null) => void }) {
+function TargetSheet({ target, onClose, onSave }: { target: number | null; onClose: () => void; onSave: (target: number | null) => Promise<void> }) {
   const [text, setText] = useState(target === null ? "" : String(target));
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function save(value: number | null) {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(value);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "ذخیره نشد.");
+      setSaving(false);
+    }
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (text.trim() === "") {
-      onSave(null);
+      void save(null);
       return;
     }
     const amount = parseAmount(text);
@@ -350,7 +375,7 @@ function TargetSheet({ target, onClose, onSave }: { target: number | null; onClo
       setError(problem);
       return;
     }
-    onSave(value);
+    void save(value);
   }
 
   return (
@@ -371,8 +396,8 @@ function TargetSheet({ target, onClose, onSave }: { target: number | null; onClo
           <span className="text-xs text-muted shrink-0">کیلوکالری</span>
         </div>
         {error && <p className="text-xs text-waste">{error}</p>}
-        <button type="submit" className="w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90">
-          ذخیره
+        <button type="submit" disabled={saving} className="w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40">
+          {saving ? "در حال ذخیره..." : "ذخیره"}
         </button>
       </form>
     </Sheet>

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { tomanInt } from "@/lib/schemas/money";
 import { CURRENCY_UNITS } from "@/lib/types";
 import { GENDERS, isModesText, parseModes, serializeModes } from "@/lib/modes";
+import { MAX_TARGET, MIN_TARGET } from "@/lib/meals";
 
 export const updateSettingsSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -25,6 +26,8 @@ export const updateSettingsSchema = z.object({
   calendarFeaturedId: z.string().nullable().optional(),
   // Who the person says they are (FEMALE | MALE), or null for "not said" — see src/lib/modes.ts.
   gender: z.enum(GENDERS).nullable().optional(),
+  // The athlete's daily calorie target (kilocalories), or null for none.
+  calorieTarget: z.number().int().min(MIN_TARGET).max(MAX_TARGET).nullable().optional(),
   // The optional modes switched on, comma separated; stored in the canonical order, null for none.
   modes: z
     .string()

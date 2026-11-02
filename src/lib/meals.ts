@@ -1,6 +1,7 @@
 // The athlete mode's calorie meter: the meals a person writes down for a day, the day's total against the daily target
-// they chose, and a week at a glance. Everything is kept on this device (src/lib/deviceStore.ts) and nothing here judges:
-// the meter says how much is left, or how much is over, and that is all. Pure, so it can be tested.
+// they chose, and a week at a glance. The rows live in the account (MealEntry, synced like the rest; the daily target is
+// Settings.calorieTarget) and nothing here judges: the meter says how much is left, or how much is over, and that is
+// all. Pure, so it can be tested.
 import { dayKeyIso, parseDayKey } from "./calendarGrid";
 
 export const MEAL_KINDS = ["BREAKFAST", "LUNCH", "DINNER", "SNACK"] as const;
@@ -25,7 +26,6 @@ export interface MealData {
 }
 
 export const EMPTY_MEALS: MealData = { v: 1, target: null, entries: [] };
-export const MEALS_STORAGE_KEY = "parva.meals.v1";
 
 export const MAX_KCAL = 10_000;
 export const MIN_TARGET = 500;
@@ -43,43 +43,6 @@ export function validateMeal(input: { title: string; kcal: number; kind: string 
 export function validateTarget(target: number): string | null {
   if (!Number.isInteger(target) || target < MIN_TARGET || target > MAX_TARGET) return `هدف روزانه را بین ${MIN_TARGET.toLocaleString("fa-IR")} تا ${MAX_TARGET.toLocaleString("fa-IR")} کیلوکالری بنویس.`;
   return null;
-}
-
-/** A value read back from storage, made safe: anything that is not a well-formed entry is dropped rather than trusted. */
-export function sanitizeMeals(raw: unknown): MealData {
-  if (!raw || typeof raw !== "object") return EMPTY_MEALS;
-  const data = raw as { target?: unknown; entries?: unknown };
-  const target = typeof data.target === "number" && validateTarget(data.target) === null ? data.target : null;
-  const entries = Array.isArray(data.entries)
-    ? data.entries.filter(
-        (e): e is MealEntry =>
-          !!e &&
-          typeof e === "object" &&
-          typeof (e as MealEntry).id === "string" &&
-          typeof (e as MealEntry).day === "string" &&
-          parseDayKey((e as MealEntry).day) !== null &&
-          (MEAL_KINDS as readonly string[]).includes((e as MealEntry).kind) &&
-          typeof (e as MealEntry).title === "string" &&
-          validateMeal({ title: (e as MealEntry).title, kcal: (e as MealEntry).kcal, kind: (e as MealEntry).kind }) === null
-      )
-    : [];
-  return { v: 1, target, entries };
-}
-
-export function addMeal(data: MealData, entry: MealEntry): MealData {
-  return { ...data, entries: [...data.entries, entry] };
-}
-
-export function updateMeal(data: MealData, id: string, patch: Partial<Pick<MealEntry, "kind" | "title" | "kcal" | "day">>): MealData {
-  return { ...data, entries: data.entries.map((e) => (e.id === id ? { ...e, ...patch } : e)) };
-}
-
-export function removeMeal(data: MealData, id: string): MealData {
-  return { ...data, entries: data.entries.filter((e) => e.id !== id) };
-}
-
-export function setTarget(data: MealData, target: number | null): MealData {
-  return { ...data, target };
 }
 
 export function mealsOfDay(data: MealData, day: string): MealEntry[] {

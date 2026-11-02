@@ -1,18 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_MEALS,
-  addMeal,
   burnedFromHabits,
   dayTotal,
   lastDays,
   mealsOfDay,
   meterOf,
   meterSentence,
-  removeMeal,
-  sanitizeMeals,
-  setTarget,
   suggestions,
-  updateMeal,
   validateMeal,
   validateTarget,
   type MealData,
@@ -65,15 +60,6 @@ describe("a day's meals", () => {
     expect(dayTotal(data, "2026-11-02")).toBe(1020);
     expect(dayTotal(data, "2026-11-03")).toBe(650);
     expect(dayTotal(data, "2026-11-04")).toBe(0);
-  });
-
-  it("adds, changes and removes without touching the rest", () => {
-    const added = addMeal(data, meal("e", "2026-11-04", "SNACK", "میوه", 90));
-    expect(added.entries).toHaveLength(5);
-    expect(updateMeal(added, "e", { kcal: 120 }).entries.find((e) => e.id === "e")!.kcal).toBe(120);
-    expect(removeMeal(added, "a").entries.map((e) => e.id)).toEqual(["b", "c", "d", "e"]);
-    expect(data.entries).toHaveLength(4);
-    expect(setTarget(data, null).target).toBeNull();
   });
 });
 
@@ -132,24 +118,6 @@ describe("suggestions", () => {
       { title: "املت", kind: "BREAKFAST", kcal: 340 },
       { title: "سوپ", kind: "DINNER", kcal: 200 },
     ]);
-  });
-});
-
-describe("reading storage back", () => {
-  it("keeps what is well-formed and drops what is not", () => {
-    const data = sanitizeMeals({
-      v: 1,
-      target: 2200,
-      entries: [meal("a", "2026-11-02", "LUNCH", "برنج", 400), { id: "b", day: "not-a-day", kind: "LUNCH", title: "x", kcal: 10 }, { id: "c", day: "2026-11-02", kind: "BRUNCH", title: "x", kcal: 10 }, 7, null, meal("d", "2026-11-02", "LUNCH", "", 10)],
-    });
-    expect(data.target).toBe(2200);
-    expect(data.entries.map((e) => e.id)).toEqual(["a"]);
-  });
-
-  it("falls back to empty for anything else, and ignores a target out of range", () => {
-    expect(sanitizeMeals(null)).toEqual(EMPTY_MEALS);
-    expect(sanitizeMeals("nonsense")).toEqual(EMPTY_MEALS);
-    expect(sanitizeMeals({ target: 5, entries: [] }).target).toBeNull();
   });
 });
 

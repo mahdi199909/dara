@@ -163,6 +163,9 @@ derived name such as `NOTE_ARCHIVE`, so a forgotten row never loses an entry.)
 | `BASKET_CREATED` | BasketHolding | `CREATE` | `BASKET_CREATE_SUCCESS` |
 | `BASKET_UPDATED` | BasketHolding | `UPDATE` | `BASKET_UPDATE_SUCCESS` |
 | `BASKET_DELETED` | BasketHolding | `DELETE` | `BASKET_DELETE_SUCCESS` |
+| `MEAL_CREATED` | MealEntry | `CREATE` | `MEAL_CREATE_SUCCESS` |
+| `MEAL_UPDATED` | MealEntry | `UPDATE` | `MEAL_UPDATE_SUCCESS` |
+| `MEAL_DELETED` | MealEntry | `DELETE` | `MEAL_DELETE_SUCCESS` |
 | `EVENT_COMPLETED` | EventCompletion | `EVENT_COMPLETE` | `EVENT_COMPLETE_SUCCESS` |
 | `EVENT_UNCOMPLETED` | EventCompletion | `EVENT_UNCOMPLETE` | — |
 | `REMINDER_CREATED` | Reminder | `CREATE` | — |

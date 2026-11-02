@@ -74,6 +74,8 @@ export const SYNC_TABLES: SyncTableConfig[] = [
   // A snapshot is never deleted by itself (the chart is history); it has an updatedAt because a day's value is rewritten as prices move.
   { table: "BasketHolding", model: "basketHolding", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   { table: "BasketSnapshot", model: "basketSnapshot", hasUpdatedAt: true, hasDeletedAt: false, ownership: { type: "direct" } },
+  // The athlete's meals: plain rows of the account (the day is text, not a link), deleted softly so a deletion travels.
+  { table: "MealEntry", model: "mealEntry", hasUpdatedAt: true, hasDeletedAt: true, ownership: { type: "direct" } },
   // No updatedAt column — recordDailyCapitalSnapshot upserts *today's* row in place
   // (ON CONFLICT("userId","date") DO UPDATE) as more time gets logged through the day, so a
   // same-day edit after this row's first sync won't be picked up again until a fresh row is

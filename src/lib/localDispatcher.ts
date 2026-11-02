@@ -19,6 +19,7 @@ import * as checklistsRepo from "@/local/repositories/checklists";
 import * as inboxRepo from "@/local/repositories/inbox";
 import * as visionRepo from "@/local/repositories/vision";
 import * as basketRepo from "@/local/repositories/basket";
+import * as mealsRepo from "@/local/repositories/meals";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
 import * as installmentsRepo from "@/local/repositories/installments";
@@ -68,6 +69,7 @@ import { createChecklistItemSchema, createChecklistItemsSchema, createChecklistT
 import { createInboxItemSchema, updateInboxItemSchema, processInboxItemSchema } from "@/lib/schemas/inbox";
 import { createVisionItemSchema, updateVisionItemSchema, createVisionEntrySchema, linkVisionProjectSchema } from "@/lib/schemas/vision";
 import { createBasketHoldingSchema, updateBasketHoldingSchema, recordBasketSnapshotSchema, basketRangeSchema } from "@/lib/schemas/basket";
+import { createMealSchema, updateMealSchema, mealsRangeSchema } from "@/lib/schemas/meals";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
 import { createInstallmentPlanSchema, updateInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
@@ -133,6 +135,9 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "POST /api/basket": { operation: "BASKET_CREATE", entityType: "BasketHolding" },
   "PATCH /api/basket/:id": { operation: "BASKET_UPDATE", entityType: "BasketHolding" },
   "DELETE /api/basket/:id": { operation: "BASKET_DELETE", entityType: "BasketHolding" },
+  "POST /api/meals": { operation: "MEAL_CREATE", entityType: "MealEntry" },
+  "PATCH /api/meals/:id": { operation: "MEAL_UPDATE", entityType: "MealEntry" },
+  "DELETE /api/meals/:id": { operation: "MEAL_DELETE", entityType: "MealEntry" },
   "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
   "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
@@ -287,6 +292,14 @@ register("GET", "/api/basket/history", ({ db, userId, query }) => {
 register("POST", "/api/basket/snapshot", ({ db, userId, body }) => basketRepo.recordBasketSnapshot(db, userId, recordBasketSnapshotSchema.parse(body).prices));
 register("PATCH", "/api/basket/:id", ({ db, userId, params, body }) => ({ holding: basketRepo.updateBasketHolding(db, userId, params.id, updateBasketHoldingSchema.parse(body)) }));
 register("DELETE", "/api/basket/:id", ({ db, userId, params }) => basketRepo.deleteBasketHolding(db, userId, params.id));
+
+// --- Meals (the athlete's calorie meter) -------------------------------------------------------
+register("GET", "/api/meals", ({ db, userId, query }) => ({
+  meals: mealsRepo.listMeals(db, userId, mealsRangeSchema.parse({ from: query.get("from") ?? undefined, to: query.get("to") ?? undefined })),
+}));
+register("POST", "/api/meals", ({ db, userId, body }) => ({ meal: mealsRepo.createMeal(db, userId, createMealSchema.parse(body)) }), 201);
+register("PATCH", "/api/meals/:id", ({ db, userId, params, body }) => ({ meal: mealsRepo.updateMeal(db, userId, params.id, updateMealSchema.parse(body)) }));
+register("DELETE", "/api/meals/:id", ({ db, userId, params }) => mealsRepo.deleteMeal(db, userId, params.id));
 
 // --- Projects ------------------------------------------------------------------------------
 register("GET", "/api/projects", ({ db, userId }) => ({ projects: projectsRepo.listProjects(db, userId) }));

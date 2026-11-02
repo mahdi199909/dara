@@ -82,6 +82,7 @@ export const DATA_EXPORT_TABLES = [
   "VisionEntry",
   "BasketHolding",
   "BasketSnapshot",
+  "MealEntry",
   "CapitalSnapshot",
   "AuditLog",
   "Notification",

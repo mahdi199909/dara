@@ -31,6 +31,7 @@ interface SettingsRow {
   calendarFeaturedId: string | null;
   gender: string | null;
   modes: string | null;
+  calorieTarget: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -106,6 +107,7 @@ export function updateSettings(db: LocalDb, userId: string, input: UpdateSetting
     if (settingsBody.calendarFeaturedId !== undefined) set("calendarFeaturedId", settingsBody.calendarFeaturedId);
     if (settingsBody.gender !== undefined) set("gender", settingsBody.gender);
     if (settingsBody.modes !== undefined) set("modes", settingsBody.modes);
+    if (settingsBody.calorieTarget !== undefined) set("calorieTarget", settingsBody.calorieTarget);
     if (dashboardCardPrefs !== undefined) set("dashboardCardPrefs", JSON.stringify(dashboardCardPrefs));
     set("updatedAt", now());
 

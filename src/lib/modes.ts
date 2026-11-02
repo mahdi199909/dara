@@ -12,7 +12,7 @@ export type Mode = (typeof MODES)[number];
 export const MODE_INFO: Record<Mode, { label: string; hint: string }> = {
   athlete: {
     label: "ورزشکار",
-    hint: "کالری‌شمار وعده‌ها با هدف روزانه. فقط روی همین دستگاه می‌ماند و به سرور نمی‌رود.",
+    hint: "کالری‌شمار وعده‌ها با هدف روزانه؛ با حساب همگام می‌شود.",
   },
   timeBlocking: {
     label: "تایم‌بلاکینگ",

@@ -66,6 +66,7 @@ export const DOMAINS = [
   "VISION_ENTRY",
   "BASKET",
   "PRICE",
+  "MEAL",
 ] as const;
 export type Domain = (typeof DOMAINS)[number];
 
@@ -120,6 +121,7 @@ export const MODULE_OF_DOMAIN: Readonly<Record<Domain, string>> = {
   VISION_ENTRY: "vision",
   BASKET: "basket",
   PRICE: "prices",
+  MEAL: "meals",
 };
 
 export const OPERATION_RESULTS = ["STARTED", "SUCCESS", "FAILED"] as const;
@@ -139,6 +141,7 @@ export const OPERATIONS = {
   VISION: ["CREATE", "UPDATE", "DELETE"],
   VISION_ENTRY: ["CREATE", "DELETE"],
   BASKET: ["CREATE", "UPDATE", "DELETE"],
+  MEAL: ["CREATE", "UPDATE", "DELETE"],
   EVENT: ["CREATE", "UPDATE", "DELETE", "COMPLETE"],
   HABIT: ["CREATE", "UPDATE", "DELETE", "CHECKIN", "UNDO"],
   ACCOUNT: ["CREATE", "UPDATE", "DELETE", "TRANSFER"],

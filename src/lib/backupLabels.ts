@@ -28,6 +28,7 @@ export const TABLE_LABELS_FA: Record<string, string> = {
   VisionEntry: "ثبت پیشرفت ویژن‌برد",
   BasketHolding: "سبد دارایی",
   BasketSnapshot: "تاریخچه ارزش سبد دارایی",
+  MealEntry: "وعده‌های کالری‌شمار",
   CapitalSnapshot: "تاریخچه سرمایه",
   AuditLog: "سابقه فعالیت",
   Notification: "اعلان",

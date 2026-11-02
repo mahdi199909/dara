@@ -76,6 +76,7 @@ model User {
   visionEntries       VisionEntry[]
   basketHoldings      BasketHolding[]
   basketSnapshots     BasketSnapshot[]
+  mealEntries         MealEntry[]
   budgets             Budget[]
   savingsGoals        SavingsGoal[]
   verificationCodes   VerificationCode[]
@@ -126,6 +127,8 @@ model Settings {
   gender String?
   // The optional modes switched on, comma separated: athlete, timeBlocking, timeBoxing (see src/lib/modes.ts).
   modes  String?
+  // The athlete's daily calorie target in kilocalories (500-10000); null = none set. Synced with the account like the modes.
+  calorieTarget Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -999,6 +1002,26 @@ model BasketSnapshot {
   updatedAt DateTime @updatedAt
 
   @@index([userId, date])
+}
+
+// The athlete's calorie meter: one row per meal written down. `day` is the calendar day it was eaten, "YYYY-MM-DD" in the
+// person's own time, kept as text so a time-zone change can never move a meal to another day (src/lib/meals.ts). The
+// daily target lives in Settings.calorieTarget. A meal is deleted softly, so a deletion travels with sync.
+model MealEntry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  day   String
+  kind  String // BREAKFAST | LUNCH | DINNER | SNACK
+  title String
+  kcal  Int
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, day])
 }
 
 // ---------------------------------------------------------------------------

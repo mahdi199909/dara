@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-366 events in 49 domains.
+375 events in 50 domains.
 
 ## AUTH
 
@@ -705,4 +705,20 @@ Default module: `prices`
 | `PRICE_FEED_FAILED` | WARN | protected | yes | One address of the price feed could not be read or had nothing usable; the next address is tried. |
 | `PRICE_FEED_REFRESHED` | DEBUG | — | yes | The market prices were read from the feed (how many assets were priced and which had no usable row are in the fields). |
 | `PRICE_RATE_LIMITED` | WARN | protected | yes | Too many price requests from one address. |
+
+## MEAL
+
+Default module: `meals`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `MEAL_CREATE_FAILED` | ERROR | protected | yes | Meal create failed. |
+| `MEAL_CREATE_STARTED` | DEBUG | — | reserved | Meal create started. |
+| `MEAL_CREATE_SUCCESS` | INFO | — | yes | Meal create success. |
+| `MEAL_DELETE_FAILED` | ERROR | protected | yes | Meal delete failed. |
+| `MEAL_DELETE_STARTED` | DEBUG | — | reserved | Meal delete started. |
+| `MEAL_DELETE_SUCCESS` | INFO | — | yes | Meal delete success. |
+| `MEAL_UPDATE_FAILED` | ERROR | protected | yes | Meal update failed. |
+| `MEAL_UPDATE_STARTED` | DEBUG | — | reserved | Meal update started. |
+| `MEAL_UPDATE_SUCCESS` | INFO | — | yes | Meal update success. |
 
