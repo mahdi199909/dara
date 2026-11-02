@@ -69,7 +69,7 @@ export default function DayPanel({
 
   return (
     <div className="space-y-4">
-      <DayNotes dayKey={dayKeyIso(dayStart)} highlightId={highlightId} onChanged={onChanged} />
+      <DayNotes key={dayKeyIso(dayStart)} dayKey={dayKeyIso(dayStart)} highlightId={highlightId} onChanged={onChanged} />
 
       <section>
         <p className="text-xs font-medium text-muted mb-1.5">کارها، رویدادها و اقساط</p>

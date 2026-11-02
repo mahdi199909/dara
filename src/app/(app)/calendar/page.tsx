@@ -17,6 +17,7 @@ import FeaturedMetricPicker from "@/components/calendar/FeaturedMetricPicker";
 import { toPersianDigits, compactDuration, formatDuration, signed } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { dayKeyIso } from "@/lib/calendarGrid";
+import { draftDays } from "@/lib/noteDrafts";
 import { installmentOccurrences, installmentTitle, installmentsInRange, isOverdue, monthInstallments, type InstallmentOccurrence, type InstallmentPlanLike } from "@/lib/installmentCalendar";
 
 /** Compact Toman amount for a small calendar cell — "۵۰۰ه"/"۱.۲م", not the full formatted string. */
@@ -86,6 +87,13 @@ function CalendarPageInner() {
     fetcher
   );
   const noteDays = useMemo(() => new Set((notesData?.notes ?? []).map((n) => n.day)), [notesData]);
+  // Days with a note typed but not yet saved (src/lib/noteDrafts.ts). They live in this device's storage, so they are read
+  // after mount and again whenever a day's window closes (that is when one can have been left behind).
+  const [draftTick, setDraftTick] = useState(0);
+  const [draftDaySet, setDraftDaySet] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setDraftDaySet(draftDays());
+  }, [draftTick, view, jy, jm]);
 
   const { data: overviewData, mutate: mutateOverview } = useSWR<{
     overview: { days: any[]; monthIncome: number; monthExpense: number; monthProductiveMinutes: number; monthFeaturedTotal: number | null; featured: any };
@@ -435,6 +443,7 @@ function CalendarPageInner() {
                     <span className={`text-xs flex items-center gap-1 ${inMonth ? "text-ink" : "text-muted"}`}>
                       {toPersianDigits(jd)}
                       {noteDays.has(dayKeyIso(day)) && <span aria-label="نوت دارد" className="text-[9px] leading-none">📝</span>}
+                      {draftDaySet.has(dayKeyIso(day)) && <span aria-label="پیش‌نویس ثبت‌نشده دارد" className="text-[9px] leading-none">✏️</span>}
                       {(dayEvents.length > 0 || dayInstallments.length > 0) && (
                         <span className="mr-auto flex items-center gap-0.5">
                           {dayEvents.length > 0 && <span aria-label="رویداد دارد" className="w-1.5 h-1.5 rounded-full bg-accent" />}
@@ -501,7 +510,7 @@ function CalendarPageInner() {
         <DayDetailModal
           date={detailDay}
           highlightId={highlightId}
-          onClose={() => { setDetailDay(null); setHighlightId(null); }}
+          onClose={() => { setDetailDay(null); setHighlightId(null); setDraftTick((t) => t + 1); }}
           onChanged={() => { mutateOverview(); mutate(); }}
         />
       )}
