@@ -671,8 +671,6 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
               <p className="text-sm font-bold text-waste">{format(overallRemaining, { withSuffix: true })}</p>
             </Card>
           </div>
-
-          <DebtPayoffOptimizer plans={data.plans.filter((p: any) => p.summary.remainingCount > 0)} />
         </>
       )}
 
@@ -700,6 +698,9 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
         .map((plan) => (
           <InstallmentPlanCard key={plan.id} plan={plan} accounts={accounts} onChanged={mutate} highlighted={plan.id === highlightPlanId} />
         ))}
+
+      {/* «اولویتِ پرداختِ اضافه» is rarely used, so it sits at the very bottom, after everything people come here for. */}
+      {data && data.plans.length > 0 && <DebtPayoffOptimizer plans={data.plans.filter((p: any) => p.summary.remainingCount > 0)} />}
     </div>
   );
 }
