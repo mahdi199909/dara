@@ -46,7 +46,9 @@ beforeEach(() => {
 });
 afterEach(() => memory.restore());
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+// The module's queue is promises only (no timers), so this just lets it drain. A fixed pause that is too short fails
+// on a machine busy with the whole suite — the pause is generous because nothing here depends on it being short.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
 const inAnHour = () => new Date(Date.now() + 3_600_000).toISOString();
 const reminder = (id: string, remindAt = inAnHour()) => ({ id, title: "عنوان", body: "متن", remindAt });
 
