@@ -3,6 +3,8 @@
 // Opens the screen a home-screen widget pointed at. The widgets launch MainActivity with a
 // `parva://open/<screen>` link (see WidgetLinks.java); Capacitor's App plugin reports it as
 // `appUrlOpen` when the app was already running, and as the launch URL when the tap started it.
+// A notification that carries a screen (the end-of-day review) opens it the same way, through the
+// local-notifications plugin's tap event (see listenForNotificationTaps).
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { routeFromWidgetUrl } from "@/lib/widgetRoutes";
@@ -47,6 +49,21 @@ export default function DeepLinkHandler() {
     return () => {
       cancelled = true;
       remove?.();
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    let cancelled = false;
+    let stop: (() => void) | undefined;
+    import("@/local/nativeNotifications")
+      .then(({ listenForNotificationTaps }) => {
+        if (!cancelled) stop = listenForNotificationTaps((route) => router.push(route));
+      })
+      .catch((err) => log.warn("SYSTEM_DEEP_LINK_FAILED", { error: err, layer: "local" }));
+    return () => {
+      cancelled = true;
+      stop?.();
     };
   }, [router]);
 

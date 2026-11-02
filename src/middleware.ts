@@ -21,7 +21,8 @@ const ADMIN_API_PREFIX = "/api/admin";
 // /api/checkup and /api/checkup/event: the public research form on parvaapp.ir/checkup saves anonymous
 // answers there, from people who have no account. Write-only, Origin-checked and rate-limited by the routes
 // themselves (see src/app/api/checkup/route.ts). Exactly these two paths.
-const PUBLIC_API_PATHS = ["/api/metrics", "/api/checkup", "/api/checkup/event"];
+// /api/prices: market prices for the asset basket; no person's data, answered from a server-side cache (rate-limited by the route).
+const PUBLIC_API_PATHS = ["/api/metrics", "/api/checkup", "/api/checkup/event", "/api/prices"];
 // The APK download link (rewritten to /api/app/apk): people download the app before they have an account.
 // robots.txt: crawlers must reach it (not a redirect to /login) to learn this host is not for indexing.
 const PUBLIC_FILE_PATHS = ["/parvaapp.apk", "/robots.txt"];

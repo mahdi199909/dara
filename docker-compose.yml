@@ -78,6 +78,8 @@ services:
       # The audit trail (see doc/logging/audit.md).
       AUDIT_RETENTION_DAYS: ${AUDIT_RETENTION_DAYS:-730}
       AUDIT_MONEY_MODE: ${AUDIT_MONEY_MODE:-values}
+      # Market prices for the asset basket (src/lib/priceFeed.ts). Empty = the built-in tgju.org addresses.
+      PRICE_FEED_URLS: ${PRICE_FEED_URLS:-}
     # Loopback only: the app is reached through nginx on the same host (TLS, body-size limit, and the
     # X-Forwarded-For entry the rate limits trust — see src/lib/clientIp.ts). Published on every
     # interface, as it used to be, anyone could skip all three at http://<server-ip>:3000.

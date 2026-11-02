@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { streakByDay } from "./journeyStreaks";
+import { missedDaysBefore, streakByDay } from "./journeyStreaks";
+
+describe("missedDaysBefore", () => {
+  it("counts the days left alone just before each day — none for the first, 0 for a day after a day", () => {
+    const missed = missedDaysBefore(["2026-09-20", "2026-09-21", "2026-09-25", "2026-09-26"]);
+    expect(missed.has("2026-09-20")).toBe(false);
+    expect(missed.get("2026-09-21")).toBe(0);
+    expect(missed.get("2026-09-25")).toBe(3); // the 22nd, 23rd and 24th
+    expect(missed.get("2026-09-26")).toBe(0);
+  });
+
+  it("does not mind the order, a day listed twice, or a month and a year boundary", () => {
+    const missed = missedDaysBefore(["2027-01-03", "2026-12-30", "2026-12-30"]);
+    expect([...missed.entries()]).toEqual([["2027-01-03", 3]]);
+  });
+
+  it("is steady across the days a clock change makes 23 or 25 hours long", () => {
+    const missed = missedDaysBefore(["2026-03-28", "2026-03-31", "2026-10-24", "2026-10-27"]);
+    expect(missed.get("2026-03-31")).toBe(2);
+    expect(missed.get("2026-10-24")).toBe(206);
+    expect(missed.get("2026-10-27")).toBe(2);
+  });
+});
 
 describe("streakByDay", () => {
   it("counts the run of consecutive days that ends on each day", () => {

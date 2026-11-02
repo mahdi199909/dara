@@ -5,15 +5,22 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { toJalali } from "@/lib/jalali";
 import { toPersianDigits } from "@/lib/money";
 import { ChevronDownIcon, FlameIcon } from "@/components/icons";
+import { computeContinuity, continuityDetail, continuityHeadline, type Continuity } from "@/lib/continuity";
 
 function shortJalali(dateIso: string) {
   const { jm, jd } = toJalali(new Date(dateIso));
   return toPersianDigits(`${jd}/${jm}`);
 }
 
-/** Collapsible line chart of daily habit adherence (% of active habits checked in each day). */
-export default function HabitAdherenceChart({ series, currentStreak, defaultOpen = false }: { series: any[]; currentStreak: number; defaultOpen?: boolean }) {
+/**
+ * «استمرار» above a collapsible line chart of daily habit adherence (% of active habits checked in each day). The headline
+ * is where the person stands today and how often they came back (src/lib/continuity.ts) — not a count that falls to zero
+ * on the first miss. It is worked out from `series` unless the caller already has it for a longer lookback.
+ */
+export default function HabitAdherenceChart({ series, continuity, defaultOpen = false }: { series: any[]; continuity?: Continuity; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
+  const c = continuity ?? computeContinuity(series, new Date());
+  const detail = continuityDetail(c);
 
   const chartData = series.map((d) => ({ date: d.date, percent: Math.round(d.ratio * 100) }));
   const hasData = chartData.some((d) => d.percent > 0);
@@ -22,14 +29,15 @@ export default function HabitAdherenceChart({ series, currentStreak, defaultOpen
     <div>
       <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between text-sm text-ink py-1">
         <span className="flex items-center gap-1.5">
-          <FlameIcon className={`w-4 h-4 ${currentStreak > 0 ? "text-amber-500" : "text-muted"}`} />
-          <span>{currentStreak > 0 ? `${toPersianDigits(currentStreak)} روز پشت‌سرهم` : "بدون استریک فعال"}</span>
+          <FlameIcon className={`w-4 h-4 ${c.state === "ACTIVE" || c.state === "BACK" ? "text-amber-500" : "text-muted"}`} />
+          <span>{continuityHeadline(c)}</span>
         </span>
         <span className="flex items-center gap-1 text-muted">
           نمودار پایبندی
           <ChevronDownIcon className={`w-4 h-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </span>
       </button>
+      {detail && <p className="text-xs text-muted mt-0.5 pr-[1.375rem]">{detail}</p>}
       {open && (
         <div className="mt-2">
           {!hasData ? (

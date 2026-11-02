@@ -90,7 +90,7 @@ export default function TrialHabitFormModal({ onClose, onCreated }: { onClose: (
             {loading ? "در حال ثبت..." : "شروع عادت تستی"}
           </button>
           <p className="text-xs text-muted text-center mt-2">
-            بعد از ۳ روز ازت می‌پرسیم ادامه بدی یا نه — تا اون‌موقع روی استریک اصلی‌ات تأثیری نداره.
+            بعد از ۳ روز ازت می‌پرسیم ادامه بدی یا نه — تا اون‌موقع روی استمرارت تأثیری نداره.
           </p>
         </form>
       </div>

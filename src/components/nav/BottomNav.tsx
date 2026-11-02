@@ -9,6 +9,8 @@ import { APP_DISPLAY_NAME } from "@/lib/appVersion";
 import { MoreIcon, XIcon, SearchIcon } from "@/components/icons";
 import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
 import NotificationBell from "@/components/NotificationBell";
+import { useModes } from "@/lib/useModes";
+import { navItemVisible } from "@/lib/modes";
 
 // The native-feeling replacement for the old hamburger + full-screen NavDrawer: the four most
 // used sections stay one tap away here, everything else (+ logout) lives behind "بیشتر". Fixed
@@ -19,6 +21,9 @@ export default function BottomNav({ userName }: { userName: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
+  // Entries that belong to a mode (the athlete's calorie meter, a way of planning) show only while it is on.
+  const modeState = useModes();
+  const moreItems = MORE_NAV_ITEMS.filter((item) => navItemVisible(item.requires, modeState));
 
   function closeMore() {
     setMoreOpen(false);
@@ -63,7 +68,7 @@ export default function BottomNav({ userName }: { userName: string }) {
     router.refresh();
   }
 
-  const moreActive = MORE_NAV_ITEMS.some((i) => (i.href === "/" ? pathname === "/" : pathname.startsWith(i.href)));
+  const moreActive = moreItems.some((i) => (i.href === "/" ? pathname === "/" : pathname.startsWith(i.href)));
 
   return (
     <>
@@ -123,7 +128,7 @@ export default function BottomNav({ userName }: { userName: string }) {
             </div>
 
             <div className="px-3 pb-2 grid grid-cols-3 gap-2">
-              {MORE_NAV_ITEMS.map((item) => {
+              {moreItems.map((item) => {
                 const active = pathname.startsWith(item.href);
                 const Icon = item.icon;
                 return (

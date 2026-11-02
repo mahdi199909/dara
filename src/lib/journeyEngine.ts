@@ -329,6 +329,9 @@ function everydaySentences(entries: EverydayEntry[]): string[] {
 // ---------------------------------------------------------------------------------------------
 // Habits
 
+/** Coming back to a habit after at least this many days away is said aloud in the story. */
+const RETURN_WORTH_SAYING_DAYS = 3;
+
 /** A streak is worth saying aloud at these lengths, not on every single day of it. */
 export function isNotableStreak(days: number): boolean {
   return [3, 5, 7, 10, 14, 21].includes(days) || (days >= 30 && days % 30 === 0) || (days >= 50 && days % 50 === 0);
@@ -384,6 +387,17 @@ function habitsSentence(habits: JourneyHabitRow[], dayKey: string, sameAsYesterd
       ? choose(dayKey, "streak", [`${name} ${n} روز است که پشت‌سر هم ادامه دارد`, `${name} حالا ${n} روز پیاپی شده است`, `${n} روز است که ${name} را یک روز هم جا نینداخته‌ام`])
       : choose(dayKey, "streak1", [`${n} روز است که پشت‌سر هم ادامه دارد`, `حالا ${n} روز پیاپی شده است`, `${n} روز است که یک روز هم جایش را خالی نگذاشته‌ام`]);
     streak = `؛ ${clause}`;
+  } else {
+    // No streak worth saying — but a habit picked up again after days away is worth a line: coming back is the point.
+    const returned = [...ordered].sort((a, b) => (b.returnedAfter ?? 0) - (a.returnedAfter ?? 0)).find((h) => (h.returnedAfter ?? 0) >= RETURN_WORTH_SAYING_DAYS);
+    if (returned) {
+      const name = quote(cleanTitle(returned.title));
+      const n = faCount(returned.returnedAfter ?? 0);
+      const clause = many
+        ? choose(dayKey, "return", [`${name} را بعد از ${n} روز دوباره شروع کردم`, `بعد از ${n} روز سراغ ${name} برگشتم`])
+        : choose(dayKey, "return1", [`بعد از ${n} روز دوباره سراغش برگشتم`, `${n} روز وقفه افتاده بود و امروز برگشتم`]);
+      streak = `؛ ${clause}`;
+    }
   }
   return `${main}${streak}.`;
 }

@@ -62,6 +62,11 @@ export const DOMAINS = [
   "CHECKUP",
   "CHECKLIST",
   "INBOX",
+  "VISION",
+  "VISION_ENTRY",
+  "BASKET",
+  "PRICE",
+  "MEAL",
 ] as const;
 export type Domain = (typeof DOMAINS)[number];
 
@@ -112,6 +117,11 @@ export const MODULE_OF_DOMAIN: Readonly<Record<Domain, string>> = {
   CHECKUP: "checkup",
   CHECKLIST: "checklists",
   INBOX: "inbox",
+  VISION: "vision",
+  VISION_ENTRY: "vision",
+  BASKET: "basket",
+  PRICE: "prices",
+  MEAL: "meals",
 };
 
 export const OPERATION_RESULTS = ["STARTED", "SUCCESS", "FAILED"] as const;
@@ -128,6 +138,10 @@ export const OPERATIONS = {
   NOTE: ["CREATE", "UPDATE", "DELETE"],
   CHECKLIST: ["CREATE", "UPDATE", "DELETE", "RESET"],
   INBOX: ["CREATE", "UPDATE", "DELETE", "PROCESS"],
+  VISION: ["CREATE", "UPDATE", "DELETE"],
+  VISION_ENTRY: ["CREATE", "DELETE"],
+  BASKET: ["CREATE", "UPDATE", "DELETE"],
+  MEAL: ["CREATE", "UPDATE", "DELETE"],
   EVENT: ["CREATE", "UPDATE", "DELETE", "COMPLETE"],
   HABIT: ["CREATE", "UPDATE", "DELETE", "CHECKIN", "UNDO"],
   ACCOUNT: ["CREATE", "UPDATE", "DELETE", "TRANSFER"],
@@ -296,6 +310,11 @@ const STANDALONE = {
   CHECKUP_HONEYPOT: s("INFO", "The hidden bot field was filled; the request was answered but nothing was stored."),
   CHECKUP_EVENT_RECORDED: s("DEBUG", "A report event (viewed, shared, saved, invite) was stamped on an answer sheet."),
   CHECKUP_SAVE_FAILED: s("ERROR", "An answer sheet of the public research form could not be stored.", { protected: true }),
+
+  // --- Market prices for the asset basket (read from a public feed and cached; nothing personal)
+  PRICE_FEED_REFRESHED: s("DEBUG", "The market prices were read from the feed (how many assets were priced and which had no usable row are in the fields)."),
+  PRICE_FEED_FAILED: s("WARN", "One address of the price feed could not be read or had nothing usable; the next address is tried.", { protected: true }),
+  PRICE_RATE_LIMITED: s("WARN", "Too many price requests from one address.", { protected: true }),
 
   // --- The logging system reporting on itself
   LOG_QUEUE_OVERFLOW: s("WARN", "The log queue was full and records were dropped.", { protected: true }),

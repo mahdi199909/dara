@@ -2,6 +2,7 @@
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
 import { tomanInt } from "@/lib/schemas/money";
+import { visionAmount } from "@/lib/schemas/vision";
 import { TASK_SOURCES, TASK_STATUSES, VALUE_TYPES } from "@/lib/types";
 
 export const createTaskSchema = z.object({
@@ -17,12 +18,17 @@ export const createTaskSchema = z.object({
   incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
+  // The time box given to the task, in minutes: how long it may take, not when it happens (time boxing, «برنامه‌ریزی روز»).
+  boxMinutes: z.number().int().min(1).max(1440).optional(),
   // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
   allowOverlap: z.boolean().optional(),
   // The account this entry's expense or income is booked to; the person's default account when left out.
   accountId: z.string().optional(),
   // TIMER = saved by «زمان‌سنج» (its history and totals list these).
   source: z.enum(TASK_SOURCES).optional(),
+  // A goal on the vision board this task counts toward (while it is DONE), and by how much. 1 when left out.
+  visionItemId: z.string().min(1).optional(),
+  visionValue: visionAmount.optional(),
 });
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 
@@ -39,7 +45,12 @@ export const updateTaskSchema = z.object({
   incomeAmount: tomanInt().min(0).optional(),
   startAt: z.string().datetime().nullable().optional(),
   endAt: z.string().datetime().nullable().optional(),
+  // null takes the time box away.
+  boxMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   // Set by a client that already saw the overlap warning and chose to save anyway (see src/lib/timeOverlap.ts).
   allowOverlap: z.boolean().optional(),
+  // null takes the task off its goal.
+  visionItemId: z.string().min(1).nullable().optional(),
+  visionValue: visionAmount.nullable().optional(),
 });
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

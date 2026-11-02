@@ -180,6 +180,26 @@ describe("habits", () => {
     expect([1, 2, 4, 6, 8, 15, 29].some(isNotableStreak)).toBe(false);
   });
 
+  it("says a return after days away, in the habit's own sentence", () => {
+    const back = textOf(dayOf(buildChapter({ month: MEHR, rows: rows({ habits: [{ ...habit("ورزش", 1), returnedAfter: 5 }] }), now: NOW }).entries, dayKey(24)));
+    expect(back).toMatch(/پنج روز/);
+    expect(back).toMatch(/برگشتم/);
+    expect(back.split(".").filter((sentence) => sentence.includes("«ورزش»") || sentence.includes("برگشتم"))).toHaveLength(1);
+  });
+
+  it("says nothing of a short break, a first time, or a day after a day", () => {
+    for (const returnedAfter of [undefined, 0, 1, 2]) {
+      const text = textOf(dayOf(buildChapter({ month: MEHR, rows: rows({ habits: [{ ...habit("ورزش", 1), returnedAfter }] }), now: NOW }).entries, dayKey(24)));
+      expect(text).not.toMatch(/برگشتم/);
+    }
+  });
+
+  it("leaves a streak worth saying to its own sentence rather than also announcing a return", () => {
+    const text = textOf(dayOf(buildChapter({ month: MEHR, rows: rows({ habits: [{ ...habit("ورزش", 7), returnedAfter: 9 }] }), now: NOW }).entries, dayKey(24)));
+    expect(text).toMatch(/هفت روز/);
+    expect(text).not.toMatch(/برگشتم/);
+  });
+
   it("puts a habit checked in for a day on that day, whatever hour the row says", () => {
     const chapter = buildChapter({ month: MEHR, rows: rows({ habits: [habit("ورزش", 1)] }), now: NOW });
     expect(days(chapter.entries).map((d) => d.key)).toEqual([dayKey(24)]);

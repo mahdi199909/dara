@@ -72,6 +72,11 @@ model User {
   dailyNotes          DailyNote[]
   checklistItems      ChecklistItem[]
   inboxItems          InboxItem[]
+  visionItems         VisionItem[]
+  visionEntries       VisionEntry[]
+  basketHoldings      BasketHolding[]
+  basketSnapshots     BasketSnapshot[]
+  mealEntries         MealEntry[]
   budgets             Budget[]
   savingsGoals        SavingsGoal[]
   verificationCodes   VerificationCode[]
@@ -116,6 +121,14 @@ model Settings {
   // Calendar month-view 4th metric — see schema.prisma's copy of this comment.
   calendarFeaturedType String?
   calendarFeaturedId   String?
+
+  // Who the person says they are, when they choose to: FEMALE | MALE. null = not said. The monthly-cycle section
+  // is offered only for FEMALE (and its data never leaves the device — see src/lib/cycleStore.ts).
+  gender String?
+  // The optional modes switched on, comma separated: athlete, timeBlocking, timeBoxing (see src/lib/modes.ts).
+  modes  String?
+  // The athlete's daily calorie target in kilocalories (500-10000); null = none set. Synced with the account like the modes.
+  calorieTarget Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,6 +200,8 @@ model Project {
   status      String    @default("ACTIVE") // ACTIVE | COMPLETED | ARCHIVED
   color       String    @default("#3a8d80")
   completedAt DateTime?
+  // The goal on the vision board this project belongs to (plain column, no FK).
+  visionItemId String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -257,8 +272,14 @@ model Task {
   incomeAmount Float     @default(0) // Toman, synced to a linked INCOME Transaction — see lib/directCostSync.ts
   startAt      DateTime?
   endAt        DateTime?
+  // The time box the person gave it, in minutes: how long it may take, not when it happens (see startAt/endAt).
+  boxMinutes   Int?
   // What made the task when it was not typed in by hand: TIMER = a stretch timed by «زمان‌سنج».
   source       String?
+  // The goal on the vision board this task counts toward, and by how much (2 = two grams of gold). Plain
+  // columns, no FK, so sync can apply rows in any order. The task counts only while it is DONE.
+  visionItemId String?
+  visionValue  Float?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -657,6 +678,10 @@ model Habit {
   // checked in — the habit-tracker equivalent of an Activity/Task's virtual asset value.
   virtualAssetValuePerCheckIn Float @default(0)
 
+  // What the habit measures besides the tick, when the person wants that: DISTANCE (km) | PAGES | CALORIES (kcal).
+  // null = tick only. Time (minutes) is not a kind: any habit can log minutes (HabitCheckIn.durationMin).
+  metricKind String?
+
   isActive        Boolean   @default(true)
   // Guards the "come back to this habit" nudge notification from re-firing every time
   // /api/notifications is polled — see lib/habitStreak.ts / the notifications route.
@@ -698,6 +723,9 @@ model HabitCheckIn {
   // Activity/Task/Event time already does, and adds a time-based virtual asset value on top
   // of the habit's flat per-check-in value when its category has a virtual-asset rate.
   durationMin Int?
+
+  // Optional — how much of the habit's own measure (Habit.metricKind) that day: kilometres, pages or kilocalories.
+  amount Float?
 
   createdAt DateTime @default(now())
   // See VirtualAssetEntry.updatedAt's comment: @default(now()) is required, not just
@@ -881,6 +909,119 @@ model InboxItem {
   deletedAt DateTime?
 
   @@index([userId])
+}
+
+// The vision board. A vision is a top-level item (parentId null) and the goals sit under it. Every item can
+// carry the person's own yardstick — a unit, a starting value, a target — all optional, so a vision can be
+// plain words. parentId is a plain column with no self-FK, on purpose: sync can then apply rows in any order
+// (same reason as ChecklistItem.parentId).
+model VisionItem {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId    String?
+  title       String
+  description String?
+  icon        String?
+  color       String  @default("#3a8d80")
+  status      String  @default("ACTIVE") // ACTIVE | ACHIEVED | ARCHIVED
+  sortOrder   Int     @default(0)
+
+  unit        String? // the yardstick's label, e.g. "گرم طلا", "صفحه", "میلیون تومان"
+  startValue  Float   @default(0)
+  targetValue Float?
+  mode        String  @default("ADD") // ADD = every entry is added up; SET = the latest entry is the current value
+  targetDate  DateTime?
+  achievedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  entries VisionEntry[]
+
+  @@index([userId])
+}
+
+// A progress entry typed in by hand. What «ثبت کار» tasks add is not stored here: it comes from the tasks
+// themselves (Task.visionItemId / visionValue), so a task and its contribution can never disagree.
+model VisionEntry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   VisionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  value Float
+  date  DateTime
+  note  String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([itemId])
+}
+
+// The asset basket: what the person holds of the main currencies and metals. `assetKey` is an id from
+// src/lib/basketCatalog.ts — plain text rather than a table, because the catalog ships with the app. One quantity per
+// asset; two devices that each add the same asset before they sync leave two rows, and the basket sums them
+// (src/lib/basket.ts).
+model BasketHolding {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  assetKey String
+  quantity Float
+  note     String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId])
+}
+
+// The basket's total value on one Jalali day, written when the page has live prices — it is what the value chart draws.
+// `date` is a Jalali day key ("1405-08-11") for the same reason as CapitalSnapshot.date. Unlike CapitalSnapshot it has
+// an updatedAt (the value changes during the day, and a sync must carry the change) and NO unique (userId, date): two
+// devices may each record the same day before they sync, and the newest row wins when the chart is read.
+model BasketSnapshot {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date       String
+  totalValue Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+}
+
+// The athlete's calorie meter: one row per meal written down. `day` is the calendar day it was eaten, "YYYY-MM-DD" in the
+// person's own time, kept as text so a time-zone change can never move a meal to another day (src/lib/meals.ts). The
+// daily target lives in Settings.calorieTarget. A meal is deleted softly, so a deletion travels with sync.
+model MealEntry {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  day   String
+  kind  String // BREAKFAST | LUNCH | DINNER | SNACK
+  title String
+  kcal  Int
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, day])
 }
 
 // ---------------------------------------------------------------------------

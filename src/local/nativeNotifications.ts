@@ -51,8 +51,11 @@ export const TIMER_NOTIFICATION_ID = 2_147_483_002;
 /** The «صندوق ورودی» review reminders: the next few occasions are armed at once, one id each. */
 export const INBOX_REVIEW_NOTIFICATION_IDS = [2_147_483_010, 2_147_483_011, 2_147_483_012, 2_147_483_013, 2_147_483_014, 2_147_483_015, 2_147_483_016] as const;
 
+/** The «مرور پایان روز» reminders: the next week's evenings are armed at once, one id each. */
+export const END_OF_DAY_NOTIFICATION_IDS = [2_147_483_020, 2_147_483_021, 2_147_483_022, 2_147_483_023, 2_147_483_024, 2_147_483_025, 2_147_483_026] as const;
+
 /** Notifications with a fixed id belong to a feature of their own, not to a Reminder row — the reconcile below leaves them alone. */
-const FIXED_NOTIFICATION_IDS: ReadonlySet<number> = new Set([TEST_NOTIFICATION_ID, TIMER_NOTIFICATION_ID, ...INBOX_REVIEW_NOTIFICATION_IDS]);
+const FIXED_NOTIFICATION_IDS: ReadonlySet<number> = new Set([TEST_NOTIFICATION_ID, TIMER_NOTIFICATION_ID, ...INBOX_REVIEW_NOTIFICATION_IDS, ...END_OF_DAY_NOTIFICATION_IDS]);
 
 /**
  * Same algorithm as Java's String.hashCode() — deterministic, and the `| 0` keeps the result
@@ -347,6 +350,8 @@ export interface FixedNotification {
   title: string;
   body: string;
   at: Date;
+  /** Carried through the tap: `{ route: "/review" }` opens that screen (see listenForNotificationTaps). */
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -375,6 +380,7 @@ export function replaceFixedNotifications(ids: readonly number[], wanted: FixedN
           schedule: { at: w.at, allowWhileIdle: true },
           channelId: arming.channelId,
           isExactNotification: arming.exact,
+          ...(w.extra ? { extra: w.extra } : {}),
         })),
       });
       log.debug("LOCAL_NOTIFICATION_SCHEDULED", { layer: "local", entityType: "fixed", count: future.length, exact: arming.exact });
@@ -382,6 +388,33 @@ export function replaceFixedNotifications(ids: readonly number[], wanted: FixedN
       log.error("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "fixed" });
     }
   });
+}
+
+/**
+ * Calls `handler(route)` when the person taps one of OUR notifications that carries a screen to open
+ * (`extra.route`, a path inside the app) — also when that tap is what started the app. Returns what stops listening.
+ * Anything else a notification carries is ignored: a route must be a plain app path, never a URL.
+ */
+export function listenForNotificationTaps(handler: (route: string) => void): () => void {
+  let remove: (() => void) | undefined;
+  let cancelled = false;
+  void (async () => {
+    try {
+      const { plugin } = await loadPlugin();
+      const handle = await plugin.addListener("localNotificationActionPerformed", (event) => {
+        const route = (event.notification?.extra as { route?: unknown } | undefined)?.route;
+        if (typeof route === "string" && /^\/[A-Za-z0-9\-_/]*$/.test(route)) handler(route);
+      });
+      remove = () => void handle.remove();
+      if (cancelled) remove();
+    } catch (err) {
+      log.warn("LOCAL_NOTIFICATION_FAILED", { error: err, errorCode: "NOTIF-001", layer: "local", operation: "tap_listener" });
+    }
+  })();
+  return () => {
+    cancelled = true;
+    remove?.();
+  };
 }
 
 /** Forgets what this module remembers between calls (the channel it already created) — tests only. */

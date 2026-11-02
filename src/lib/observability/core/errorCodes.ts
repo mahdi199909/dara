@@ -78,6 +78,10 @@ export const ERROR_CODES = {
   "CHECKUP-005": { name: "TOO_LARGE", description: "The request body was larger than the form ever sends.", httpStatus: 413, retryable: false },
   "CHECKUP-006": { name: "NOT_FOUND", description: "A report event named an answer sheet that does not exist or is too old.", httpStatus: 404, retryable: false },
 
+  // --- Market prices for the asset basket (/api/prices)
+  "PRICE-001": { name: "UNAVAILABLE", description: "The market could not be read and there is no recent copy to show; the basket keeps its last known prices.", httpStatus: 503, retryable: true },
+  "PRICE-002": { name: "RATE_LIMITED", description: "Too many price requests from one address.", httpStatus: 429, retryable: true },
+
   // --- System and logging itself
   "SYS-001": { name: "UNHANDLED_ERROR", description: "An exception nobody handled.", httpStatus: 500, retryable: false },
   "SYS-002": { name: "DEPENDENCY_UNAVAILABLE", description: "A required dependency (database, platform API) was unavailable.", httpStatus: 503, retryable: true },

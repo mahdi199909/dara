@@ -9,11 +9,11 @@ import TrialHabitFormModal from "@/components/habits/TrialHabitFormModal";
 import TrialHabitCard from "@/components/habits/TrialHabitCard";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
-import { formatDuration } from "@/lib/money";
+import { describeDay } from "@/lib/habitMetrics";
 import { PlusIcon, EditIcon, CheckSquareIcon, ClockIcon } from "@/components/icons";
 
 export default function HabitsPage() {
-  const { habits, series, currentStreak, mutate } = useHabits();
+  const { habits, series, mutate } = useHabits();
   const [showHabitForm, setShowHabitForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState<any>(null);
   const [showTrialForm, setShowTrialForm] = useState(false);
@@ -92,10 +92,10 @@ export default function HabitsPage() {
                   <button
                     onClick={() => setDurationHabit(h)}
                     className="shrink-0 flex items-center gap-1 text-xs text-muted hover:text-accent transition"
-                    aria-label="ثبت زمان عادت"
+                    aria-label="جزئیات عادت"
                   >
                     <ClockIcon className="w-3.5 h-3.5" />
-                    {h.todayDurationMin ? formatDuration(h.todayDurationMin) : "زمان"}
+                    {describeDay(h.metricKind, h.todayAmount, h.todayDurationMin) ?? (h.metricKind ? "جزئیات" : "زمان")}
                   </button>
                 )}
                 <button
@@ -109,7 +109,7 @@ export default function HabitsPage() {
             ))}
           </ul>
         )}
-        {activeHabits.length > 0 && <HabitAdherenceChart series={series} currentStreak={currentStreak} defaultOpen />}
+        {activeHabits.length > 0 && <HabitAdherenceChart series={series} defaultOpen />}
       </Card>
 
       {inactiveHabits.length > 0 && (

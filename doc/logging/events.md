@@ -9,7 +9,7 @@ Every event a log call may use. Names are `DOMAIN_ACTION_RESULT`: English, const
 - **Emitted** — `yes` when application code already writes it; otherwise the event is *reserved* for a later phase (see architecture.md).
 - Operations (`*_STARTED` / `*_SUCCESS` / `*_FAILED`) are generated: `STARTED` is `DEBUG`, `SUCCESS` is `INFO`, `FAILED` is `ERROR` and protected. `SUCCESS` is only ever logged after the work — including its database commit — has finished.
 
-339 events in 45 domains.
+375 events in 50 domains.
 
 ## AUTH
 
@@ -650,4 +650,75 @@ Default module: `inbox`
 | `INBOX_UPDATE_FAILED` | ERROR | protected | yes | Inbox update failed. |
 | `INBOX_UPDATE_STARTED` | DEBUG | — | reserved | Inbox update started. |
 | `INBOX_UPDATE_SUCCESS` | INFO | — | yes | Inbox update success. |
+
+## VISION
+
+Default module: `vision`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `VISION_CREATE_FAILED` | ERROR | protected | yes | Vision create failed. |
+| `VISION_CREATE_STARTED` | DEBUG | — | reserved | Vision create started. |
+| `VISION_CREATE_SUCCESS` | INFO | — | yes | Vision create success. |
+| `VISION_DELETE_FAILED` | ERROR | protected | yes | Vision delete failed. |
+| `VISION_DELETE_STARTED` | DEBUG | — | reserved | Vision delete started. |
+| `VISION_DELETE_SUCCESS` | INFO | — | yes | Vision delete success. |
+| `VISION_UPDATE_FAILED` | ERROR | protected | yes | Vision update failed. |
+| `VISION_UPDATE_STARTED` | DEBUG | — | reserved | Vision update started. |
+| `VISION_UPDATE_SUCCESS` | INFO | — | yes | Vision update success. |
+
+## VISION_ENTRY
+
+Default module: `vision`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `VISION_ENTRY_CREATE_FAILED` | ERROR | protected | yes | Vision entry create failed. |
+| `VISION_ENTRY_CREATE_STARTED` | DEBUG | — | reserved | Vision entry create started. |
+| `VISION_ENTRY_CREATE_SUCCESS` | INFO | — | yes | Vision entry create success. |
+| `VISION_ENTRY_DELETE_FAILED` | ERROR | protected | yes | Vision entry delete failed. |
+| `VISION_ENTRY_DELETE_STARTED` | DEBUG | — | reserved | Vision entry delete started. |
+| `VISION_ENTRY_DELETE_SUCCESS` | INFO | — | yes | Vision entry delete success. |
+
+## BASKET
+
+Default module: `basket`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `BASKET_CREATE_FAILED` | ERROR | protected | yes | Basket create failed. |
+| `BASKET_CREATE_STARTED` | DEBUG | — | reserved | Basket create started. |
+| `BASKET_CREATE_SUCCESS` | INFO | — | yes | Basket create success. |
+| `BASKET_DELETE_FAILED` | ERROR | protected | yes | Basket delete failed. |
+| `BASKET_DELETE_STARTED` | DEBUG | — | reserved | Basket delete started. |
+| `BASKET_DELETE_SUCCESS` | INFO | — | yes | Basket delete success. |
+| `BASKET_UPDATE_FAILED` | ERROR | protected | yes | Basket update failed. |
+| `BASKET_UPDATE_STARTED` | DEBUG | — | reserved | Basket update started. |
+| `BASKET_UPDATE_SUCCESS` | INFO | — | yes | Basket update success. |
+
+## PRICE
+
+Default module: `prices`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `PRICE_FEED_FAILED` | WARN | protected | yes | One address of the price feed could not be read or had nothing usable; the next address is tried. |
+| `PRICE_FEED_REFRESHED` | DEBUG | — | yes | The market prices were read from the feed (how many assets were priced and which had no usable row are in the fields). |
+| `PRICE_RATE_LIMITED` | WARN | protected | yes | Too many price requests from one address. |
+
+## MEAL
+
+Default module: `meals`
+
+| Event | Level | Flags | Emitted | Description |
+| --- | --- | --- | --- | --- |
+| `MEAL_CREATE_FAILED` | ERROR | protected | yes | Meal create failed. |
+| `MEAL_CREATE_STARTED` | DEBUG | — | reserved | Meal create started. |
+| `MEAL_CREATE_SUCCESS` | INFO | — | yes | Meal create success. |
+| `MEAL_DELETE_FAILED` | ERROR | protected | yes | Meal delete failed. |
+| `MEAL_DELETE_STARTED` | DEBUG | — | reserved | Meal delete started. |
+| `MEAL_DELETE_SUCCESS` | INFO | — | yes | Meal delete success. |
+| `MEAL_UPDATE_FAILED` | ERROR | protected | yes | Meal update failed. |
+| `MEAL_UPDATE_STARTED` | DEBUG | — | reserved | Meal update started. |
+| `MEAL_UPDATE_SUCCESS` | INFO | — | yes | Meal update success. |
 

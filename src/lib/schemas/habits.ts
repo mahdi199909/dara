@@ -2,6 +2,10 @@
 // (on-device) so both validate identically — see the Android local-data-layer plan.
 import { z } from "zod";
 import { tomanInt } from "@/lib/schemas/money";
+import { HABIT_METRIC_KINDS } from "@/lib/habitMetrics";
+
+// What the habit measures besides the tick: kilometres, pages or kilocalories. null = tick only.
+const metricKind = z.enum(HABIT_METRIC_KINDS);
 
 export const createHabitSchema = z.object({
   title: z.string().min(1).max(200),
@@ -10,6 +14,7 @@ export const createHabitSchema = z.object({
   color: z.string().max(20).optional(),
   categoryId: z.string().nullable().optional(),
   virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
+  metricKind: metricKind.nullable().optional(),
   // BJ Fogg "Tiny Habits" trial — see the isTrial doc comment on the Habit model.
   isTrial: z.boolean().optional(),
   cue: z.string().max(300).nullable().optional(),
@@ -24,6 +29,7 @@ export const updateHabitSchema = z.object({
   color: z.string().max(20).optional(),
   categoryId: z.string().nullable().optional(),
   virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
+  metricKind: metricKind.nullable().optional(),
   isActive: z.boolean().optional(),
   // isTrial: false promotes a trial habit to a permanent one (see the Habit model doc).
   isTrial: z.boolean().optional(),
@@ -36,9 +42,14 @@ export type UpdateHabitInput = z.infer<typeof updateHabitSchema>;
 export const habitCheckInToggleSchema = z.object({ date: z.string().datetime().optional() });
 export type HabitCheckInToggleInput = z.infer<typeof habitCheckInToggleSchema>;
 
-// From the same file's PATCH handler (logs a duration against today's check-in).
-export const habitCheckInDurationSchema = z.object({
-  date: z.string().datetime().optional(),
-  durationMin: z.number().int().min(0).max(1440),
-});
+// From the same file's PATCH handler: what the person says about that day's check-in, all of it optional — how long it
+// took (minutes) and, for a habit that measures something, how much (kilometres, pages, kilocalories). A field that is
+// left out is not touched; 0 clears it.
+export const habitCheckInDurationSchema = z
+  .object({
+    date: z.string().datetime().optional(),
+    durationMin: z.number().int().min(0).max(1440).optional(),
+    amount: z.number().min(0).max(1_000_000).optional(),
+  })
+  .refine((body) => body.durationMin !== undefined || body.amount !== undefined, { message: "زمان یا مقدار را بنویس." });
 export type HabitCheckInDurationInput = z.infer<typeof habitCheckInDurationSchema>;

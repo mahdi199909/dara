@@ -17,6 +17,8 @@ import FeaturedMetricPicker from "@/components/calendar/FeaturedMetricPicker";
 import { toPersianDigits, compactDuration, formatDuration, signed } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { dayKeyIso } from "@/lib/calendarGrid";
+import { draftDays } from "@/lib/noteDrafts";
+import { installmentOccurrences, installmentTitle, installmentsInRange, isOverdue, monthInstallments, type InstallmentOccurrence, type InstallmentPlanLike } from "@/lib/installmentCalendar";
 
 /** Compact Toman amount for a small calendar cell — "۵۰۰ه"/"۱.۲م", not the full formatted string. */
 function compactMoney(amount: number): string {
@@ -85,6 +87,13 @@ function CalendarPageInner() {
     fetcher
   );
   const noteDays = useMemo(() => new Set((notesData?.notes ?? []).map((n) => n.day)), [notesData]);
+  // Days with a note typed but not yet saved (src/lib/noteDrafts.ts). They live in this device's storage, so they are read
+  // after mount and again whenever a day's window closes (that is when one can have been left behind).
+  const [draftTick, setDraftTick] = useState(0);
+  const [draftDaySet, setDraftDaySet] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setDraftDaySet(draftDays());
+  }, [draftTick, view, jy, jm]);
 
   const { data: overviewData, mutate: mutateOverview } = useSWR<{
     overview: { days: any[]; monthIncome: number; monthExpense: number; monthProductiveMinutes: number; monthFeaturedTotal: number | null; featured: any };
@@ -153,6 +162,46 @@ function CalendarPageInner() {
     }
     return map;
   }, [data]);
+
+  // Installments fall due on a day, like an all-day event: they come from the plans (the same list the installments tab
+  // reads), are grouped by this page's day key, and their month sums come from the helper the installments dashboard uses.
+  const { data: plansData } = useSWR<{ plans: InstallmentPlanLike[] }>("/api/installment-plans", fetcher);
+  const hasPlans = (plansData?.plans.length ?? 0) > 0;
+  const installments = useMemo(() => installmentOccurrences(plansData?.plans ?? []), [plansData]);
+  const installmentsByDay = useMemo(() => {
+    const map = new Map<string, InstallmentOccurrence[]>();
+    for (const occurrence of installments) {
+      const key = dayKey(occurrence.day);
+      const list = map.get(key);
+      if (list) list.push(occurrence);
+      else map.set(key, [occurrence]);
+    }
+    return map;
+  }, [installments]);
+  const monthSums = useMemo(() => monthInstallments(installments, jy, jm), [installments, jy, jm]);
+  const agendaInstallments = useMemo(() => (view === "agenda" ? installmentsInRange(installments, range.from, range.to) : []), [view, installments, range]);
+
+  // The month's list: its events and installments by day (only days of this Jalali month, not the neighbours the grid shows).
+  const monthList = useMemo(() => {
+    if (view !== "month") return [];
+    const days = new Map<string, { day: Date; events: any[]; installments: InstallmentOccurrence[] }>();
+    const slot = (day: Date) => {
+      const key = dayKey(day);
+      let entry = days.get(key);
+      if (!entry) {
+        entry = { day: new Date(day.getFullYear(), day.getMonth(), day.getDate()), events: [], installments: [] };
+        days.set(key, entry);
+      }
+      return entry;
+    };
+    for (const occ of data?.occurrences ?? []) {
+      const start = new Date(occ.startAt);
+      const { jy: ey, jm: em } = toJalali(start);
+      if (ey === jy && em === jm) slot(start).events.push(occ);
+    }
+    for (const occurrence of monthSums.items) slot(occurrence.day).installments.push(occurrence);
+    return [...days.values()].sort((a, b) => a.day.getTime() - b.day.getTime());
+  }, [view, data, monthSums, jy, jm]);
 
   function navigate(delta: number) {
     if (view === "year") {
@@ -343,6 +392,33 @@ function CalendarPageInner() {
             </Card>
           </div>
 
+          {hasPlans && (
+            <Card className="p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-muted">اقساط {JALALI_MONTH_NAMES[jm - 1]}</p>
+                <Link href="/finance?tab=installments" className="text-[11px] text-accent">
+                  مدیریت اقساط
+                </Link>
+              </div>
+              {monthSums.count === 0 ? (
+                <p className="text-[11px] text-muted">در این ماه قسطی سررسید نمی‌شود.</p>
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-bold text-ink">{format(monthSums.total, { withSuffix: true })}</span>
+                    <span className="text-[11px] text-muted">
+                      {toPersianDigits(monthSums.paidCount)} از {toPersianDigits(monthSums.count)} قسط پرداخت‌شده
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <span className="text-accent">پرداخت‌شده {format(monthSums.paid, { withSuffix: true })}</span>
+                    <span className="text-waste">مانده {format(monthSums.remaining, { withSuffix: true })}</span>
+                  </div>
+                </>
+              )}
+            </Card>
+          )}
+
           <Card className="p-3">
             <div className="grid grid-cols-7 text-center text-xs text-muted mb-2">
               {WEEKDAY_HEADERS.map((w) => <div key={w}>{w}</div>)}
@@ -353,6 +429,9 @@ function CalendarPageInner() {
                 const inMonth = dJm === jm;
                 const isToday = isSameDay(day, new Date());
                 const summary = overviewByDay.get(dayKeyIso(day));
+                const dayEvents = occurrencesByDay.get(dayKey(day)) ?? [];
+                const dayInstallments = installmentsByDay.get(dayKey(day)) ?? [];
+                const dueAmount = dayInstallments.filter((i) => !i.paid).reduce((s, i) => s + i.amount, 0);
                 return (
                   <button
                     key={day.toISOString()}
@@ -364,7 +443,15 @@ function CalendarPageInner() {
                     <span className={`text-xs flex items-center gap-1 ${inMonth ? "text-ink" : "text-muted"}`}>
                       {toPersianDigits(jd)}
                       {noteDays.has(dayKeyIso(day)) && <span aria-label="نوت دارد" className="text-[9px] leading-none">📝</span>}
+                      {draftDaySet.has(dayKeyIso(day)) && <span aria-label="پیش‌نویس ثبت‌نشده دارد" className="text-[9px] leading-none">✏️</span>}
+                      {(dayEvents.length > 0 || dayInstallments.length > 0) && (
+                        <span className="mr-auto flex items-center gap-0.5">
+                          {dayEvents.length > 0 && <span aria-label="رویداد دارد" className="w-1.5 h-1.5 rounded-full bg-accent" />}
+                          {dayInstallments.length > 0 && <span aria-label="قسط دارد" className="w-1.5 h-1.5 rounded-full bg-waste" />}
+                        </span>
+                      )}
                     </span>
+                    {dueAmount > 0 && <span className="text-[8px] leading-tight font-medium text-waste truncate">💳{compactMoney(dueAmount)}</span>}
                     {summary && (
                       <div className="flex-1 overflow-hidden flex flex-col gap-px w-full text-[8px] leading-tight font-medium">
                         {summary.income > 0 && <span className="text-accent">{signed("+", compactMoney(summary.income))}</span>}
@@ -383,11 +470,47 @@ function CalendarPageInner() {
         </>
       )}
 
+      {view === "month" && (
+        <Card className="p-4 space-y-3">
+          <h2 className="font-bold text-ink text-sm">رویدادها و اقساط {JALALI_MONTH_NAMES[jm - 1]}</h2>
+          {monthList.length === 0 ? (
+            <p className="text-xs text-muted">رویداد یا قسطی در این ماه ثبت نشده.</p>
+          ) : (
+            monthList.map(({ day, events, installments: due }) => (
+              <div key={dayKey(day)} className="space-y-1.5">
+                <button type="button" onClick={() => setDetailDay(day)} className="text-xs text-muted hover:text-ink">
+                  {formatJalali(day, { withWeekday: true, long: true })}
+                </button>
+                <ul className="space-y-1.5">
+                  {events.map((occ) => (
+                    <li key={occ.occurrenceId}>
+                      <button onClick={() => openEdit(occ)} className="w-full flex items-center gap-3 text-sm text-right hover:bg-canvas rounded-lg -mx-1 px-1">
+                        <span className="text-muted w-14 shrink-0" dir="ltr">{occ.event.allDay ? "—" : formatTime(new Date(occ.startAt))}</span>
+                        <span className={`truncate ${occ.isDone ? "text-muted line-through" : "text-ink"}`}>{occ.event.title}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {due.map((i) => (
+                    <li key={i.id}>
+                      <Link href={`/finance?tab=installments&plan=${i.planId}`} className="flex items-center gap-3 text-sm hover:bg-canvas rounded-lg -mx-1 px-1">
+                        <span className="w-14 shrink-0 text-center">💳</span>
+                        <span className={`flex-1 min-w-0 truncate ${i.paid ? "text-muted line-through" : isOverdue(i) ? "text-waste" : "text-ink"}`}>{installmentTitle(i)}</span>
+                        <span className="shrink-0 text-xs font-bold text-waste">{signed("-", format(i.amount, { withSuffix: true }))}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+        </Card>
+      )}
+
       {detailDay && (
         <DayDetailModal
           date={detailDay}
           highlightId={highlightId}
-          onClose={() => { setDetailDay(null); setHighlightId(null); }}
+          onClose={() => { setDetailDay(null); setHighlightId(null); setDraftTick((t) => t + 1); }}
           onChanged={() => { mutateOverview(); mutate(); }}
         />
       )}
@@ -407,11 +530,12 @@ function CalendarPageInner() {
             const day = new Date(range.from.getTime() + i * 86400000);
             const events = occurrencesByDay.get(dayKey(day)) ?? [];
             const tasks = tasksByDay.get(dayKey(day)) ?? [];
+            const due = installmentsByDay.get(dayKey(day)) ?? [];
             return (
               <Card key={i} className="p-3">
                 <p className="text-xs text-muted mb-2">{weekdayNameFa(day)} {toPersianDigits(toJalali(day).jd)}</p>
                 <div className="space-y-1.5">
-                  {events.length === 0 && tasks.length === 0 ? (
+                  {events.length === 0 && tasks.length === 0 && due.length === 0 ? (
                     <p className="text-xs text-muted">—</p>
                   ) : (
                     <>
@@ -428,6 +552,15 @@ function CalendarPageInner() {
                         <div key={t.id} className="text-xs bg-amber-50 text-amber-700 rounded-lg px-2 py-1">
                           ☐ {t.title}
                         </div>
+                      ))}
+                      {due.map((inst) => (
+                        <Link
+                          key={inst.id}
+                          href={`/finance?tab=installments&plan=${inst.planId}`}
+                          className={`block text-xs rounded-lg px-2 py-1 bg-waste-soft text-waste ${inst.paid ? "opacity-60 line-through" : ""}`}
+                        >
+                          💳 {installmentTitle(inst)} · {format(inst.amount, { withSuffix: true })}
+                        </Link>
                       ))}
                     </>
                   )}
@@ -446,18 +579,19 @@ function CalendarPageInner() {
 
       {view === "agenda" && (
         <div className="space-y-3">
-          {Array.from(occurrencesByDay.entries()).length === 0 && Array.from(tasksByDay.entries()).length === 0 ? (
-            <EmptyState message="رویداد یا کاری در ۳۰ روز آینده ثبت نشده." />
+          {Array.from(occurrencesByDay.entries()).length === 0 && Array.from(tasksByDay.entries()).length === 0 && agendaInstallments.length === 0 ? (
+            <EmptyState message="رویداد، کار یا قسطی در ۳۰ روز آینده ثبت نشده." />
           ) : (
-            Array.from(new Set([...occurrencesByDay.keys(), ...tasksByDay.keys()]))
+            Array.from(new Set([...occurrencesByDay.keys(), ...tasksByDay.keys(), ...agendaInstallments.map((i) => dayKey(i.day))]))
               .map((key) => {
                 const events = occurrencesByDay.get(key) ?? [];
                 const tasks = tasksByDay.get(key) ?? [];
-                const anyDate = events[0]?.startAt ?? tasks[0]?.dueDate;
-                return { key, events, tasks, anyDate: new Date(anyDate) };
+                const due = agendaInstallments.filter((i) => dayKey(i.day) === key);
+                const anyDate = events[0]?.startAt ?? tasks[0]?.dueDate ?? due[0]?.day;
+                return { key, events, tasks, due, anyDate: new Date(anyDate) };
               })
               .sort((a, b) => a.anyDate.getTime() - b.anyDate.getTime())
-              .map(({ key, events, tasks, anyDate }) => (
+              .map(({ key, events, tasks, due, anyDate }) => (
                 <Card key={key} className="p-4">
                   <p className="text-xs text-muted mb-2">{formatJalali(anyDate, { withWeekday: true, long: true })}</p>
                   <ul className="space-y-1.5">
@@ -482,6 +616,15 @@ function CalendarPageInner() {
                       <li key={t.id} className="flex items-center gap-3 text-sm">
                         <span className="w-14 shrink-0 flex"><CheckSquareIcon className="w-3.5 h-3.5 text-amber-500" /></span>
                         <span className="text-ink">{t.title}</span>
+                      </li>
+                    ))}
+                    {due.map((inst) => (
+                      <li key={inst.id}>
+                        <Link href={`/finance?tab=installments&plan=${inst.planId}`} className="flex items-center gap-3 text-sm">
+                          <span className="w-14 shrink-0 flex">💳</span>
+                          <span className={`flex-1 min-w-0 truncate ${inst.paid ? "text-muted line-through" : isOverdue(inst) ? "text-waste" : "text-ink"}`}>{installmentTitle(inst)}</span>
+                          <span className="shrink-0 text-xs font-bold text-waste">{signed("-", format(inst.amount, { withSuffix: true }))}</span>
+                        </Link>
                       </li>
                     ))}
                   </ul>

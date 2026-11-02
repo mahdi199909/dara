@@ -1,25 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { tomanInt } from "@/lib/schemas/money";
+import { createHabitSchema } from "@/lib/schemas/habits";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, trialDayNumber, isTrialElapsed } from "@/lib/habitStreak";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
-
-const createSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).nullable().optional(),
-  icon: z.string().max(8).nullable().optional(),
-  color: z.string().max(20).optional(),
-  categoryId: z.string().nullable().optional(),
-  virtualAssetValuePerCheckIn: tomanInt().min(0).optional(),
-  // BJ Fogg "Tiny Habits" trial — see the isTrial doc comment on the Habit model.
-  isTrial: z.boolean().optional(),
-  cue: z.string().max(300).nullable().optional(),
-  celebration: z.string().max(300).nullable().optional(),
-});
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -51,11 +37,13 @@ async function GET() {
     const todayCheckIns = checkIns.filter((c) => c.date.getTime() === today.getTime());
     const checkedInTodaySet = new Set(todayCheckIns.map((c) => c.habitId));
     const todayDurationByHabit = new Map(todayCheckIns.map((c) => [c.habitId, c.durationMin]));
+    const todayAmountByHabit = new Map(todayCheckIns.map((c) => [c.habitId, c.amount]));
 
     const habitsWithState = habits.map((h) => ({
       ...h,
       checkedInToday: checkedInTodaySet.has(h.id),
       todayDurationMin: todayDurationByHabit.get(h.id) ?? null,
+      todayAmount: todayAmountByHabit.get(h.id) ?? null,
       daysSinceLastCheckIn: daysSinceLastCheckIn(
         checkIns.filter((c) => c.habitId === h.id),
         h.createdAt,
@@ -74,7 +62,7 @@ async function GET() {
 async function POST(req: NextRequest) {
   try {
     const userId = await requireUserId();
-    const body = createSchema.parse(await req.json());
+    const body = createHabitSchema.parse(await req.json());
 
     const habit = await prisma.habit.create({
       data: {
@@ -84,6 +72,7 @@ async function POST(req: NextRequest) {
         icon: body.icon,
         color: body.color,
         categoryId: body.categoryId,
+        metricKind: body.metricKind,
         virtualAssetValuePerCheckIn: body.virtualAssetValuePerCheckIn ?? 0,
         isTrial: body.isTrial ?? false,
         cue: body.cue,

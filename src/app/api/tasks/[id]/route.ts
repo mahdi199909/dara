@@ -6,6 +6,7 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { syncTaskDirectCostTransaction, syncTaskIncomeTransaction, syncTaskVirtualAsset } from "@/lib/directCostSync";
 import { updateTaskSchema } from "@/lib/schemas/tasks";
 import { assertNoOverlap } from "@/lib/timeOverlapServer";
+import { assertVisionItemOwned } from "@/lib/visionServer";
 import { occupiedRange } from "@/lib/timeOverlap";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 import { withTransaction } from "@/lib/transaction";
@@ -30,6 +31,11 @@ async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> 
       await assertNoOverlap(userId, occupiedRange(startAt, endAt), { allowOverlap, self: { kind: "TASK", id: existing.id } });
     }
 
+    // The link to a goal: taking the task off its goal takes its amount with it; putting it on one counts 1 unless an amount is given.
+    if (body.visionItemId) await assertVisionItemOwned(userId, body.visionItemId);
+    const visionPatch =
+      body.visionItemId === null ? { visionValue: null } : body.visionItemId ? { visionValue: body.visionValue ?? existing.visionValue ?? 1 } : {};
+
     const wasDone = existing.status === "DONE";
     const willBeDone = body.status === "DONE";
 
@@ -40,6 +46,7 @@ async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> 
           where: { id: params.id },
           data: {
             ...body,
+            ...visionPatch,
             dueDate: body.dueDate === undefined ? undefined : body.dueDate ? new Date(body.dueDate) : null,
             startAt: body.startAt === undefined ? undefined : body.startAt ? new Date(body.startAt) : null,
             endAt: body.endAt === undefined ? undefined : body.endAt ? new Date(body.endAt) : null,

@@ -6,6 +6,7 @@ import { fetcher, apiPost } from "@/lib/apiClient";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import { dayKeyIso } from "@/lib/calendarGrid";
 import { buildDayItems } from "@/lib/dayItems";
+import { installmentOccurrences, installmentsOnDay, type InstallmentPlanLike } from "@/lib/installmentCalendar";
 import { formatDuration, signed } from "@/lib/money";
 import { refreshAllCaches } from "@/lib/refreshCaches";
 import { Card } from "@/components/ui/Card";
@@ -13,6 +14,7 @@ import { CheckSquareIcon, ClockIcon } from "@/components/icons";
 import DayItemsList from "@/components/day/DayItemsList";
 import DayNotes from "@/components/day/DayNotes";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
+import { describeDay } from "@/lib/habitMetrics";
 
 /**
  * Everything about one calendar day, in one place: the day's notes, what was scheduled or done
@@ -38,13 +40,16 @@ export default function DayPanel({
   const { data: eventsData, mutate: mutateEvents } = useSWR<{ occurrences: any[]; taskOccurrences: any[] }>(`/api/events?${range}`, fetcher);
   const { data: activityData, mutate: mutateActivity } = useSWR<{ items: any[] }>(`/api/day-activity?${range}`, fetcher);
   const { data: detailData, mutate: mutateDetail } = useSWR<{ habits: any[]; transactions: any[] }>(`/api/calendar/day-detail?date=${dayStart.toISOString()}`, fetcher);
+  const { data: plansData } = useSWR<{ plans: InstallmentPlanLike[] }>("/api/installment-plans", fetcher);
   const [durationHabit, setDurationHabit] = useState<any>(null);
 
   // Time entries are the only thing /api/day-activity adds here: its habit and money rows are shown by the
   // dedicated sections below, which carry more (every habit with a tick, every transaction of the day).
+  // The installments that fall due this day join the list (paying one is done on the installments tab, which its row links to).
+  const dueToday = useMemo(() => installmentsOnDay(installmentOccurrences(plansData?.plans ?? []), dayStart), [plansData, dayStart]);
   const items = useMemo(
-    () => buildDayItems(eventsData, { items: (activityData?.items ?? []).filter((i) => i.type === "TIME_ENTRY") }),
-    [eventsData, activityData]
+    () => buildDayItems(eventsData, { items: (activityData?.items ?? []).filter((i) => i.type === "TIME_ENTRY") }, dueToday),
+    [eventsData, activityData, dueToday]
   );
   const habits = detailData?.habits ?? [];
   const transactions = detailData?.transactions ?? [];
@@ -65,14 +70,14 @@ export default function DayPanel({
 
   return (
     <div className="space-y-4">
-      <DayNotes dayKey={dayKeyIso(dayStart)} highlightId={highlightId} onChanged={onChanged} />
+      <DayNotes key={dayKeyIso(dayStart)} dayKey={dayKeyIso(dayStart)} highlightId={highlightId} onChanged={onChanged} />
 
       <section>
-        <p className="text-xs font-medium text-muted mb-1.5">کارها و رویدادها</p>
+        <p className="text-xs font-medium text-muted mb-1.5">کارها، رویدادها و اقساط</p>
         {loading ? (
           <p className="text-sm text-muted text-center py-4">در حال بارگذاری...</p>
         ) : items.length === 0 ? (
-          <p className="text-xs text-muted">رویداد یا کاری برای این روز ثبت نشده.</p>
+          <p className="text-xs text-muted">رویداد، کار یا قسطی برای این روز ثبت نشده.</p>
         ) : (
           <Card className="p-3">
             <DayItemsList items={items} day={dayStart} highlightId={highlightId} onChanged={refetch} />
@@ -92,9 +97,9 @@ export default function DayPanel({
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {h.checkedIn && (
-                    <button type="button" onClick={() => setDurationHabit(h)} className="flex items-center gap-1 text-xs text-muted hover:text-accent" aria-label="ثبت زمان عادت">
+                    <button type="button" onClick={() => setDurationHabit(h)} className="flex items-center gap-1 text-xs text-muted hover:text-accent" aria-label="جزئیات عادت">
                       <ClockIcon className="w-3.5 h-3.5" />
-                      {h.durationMin ? formatDuration(h.durationMin) : "زمان"}
+                      {describeDay(h.metricKind, h.amount, h.durationMin) ?? (h.metricKind ? "جزئیات" : "زمان")}
                     </button>
                   )}
                   <button
@@ -139,7 +144,7 @@ export default function DayPanel({
 
       {durationHabit && (
         <HabitDurationModal
-          habit={{ id: durationHabit.id, title: durationHabit.title, todayDurationMin: durationHabit.durationMin }}
+          habit={{ id: durationHabit.id, title: durationHabit.title, metricKind: durationHabit.metricKind, todayDurationMin: durationHabit.durationMin, todayAmount: durationHabit.amount }}
           date={dayStart}
           onClose={() => setDurationHabit(null)}
           onSaved={() => {

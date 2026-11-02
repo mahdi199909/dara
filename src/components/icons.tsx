@@ -261,3 +261,65 @@ export function RotateIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** A target: the vision board's mark. */
+export function TargetIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.2" />
+    </svg>
+  );
+}
+
+/** A crescent moon: the end-of-day review's mark. */
+export function MoonIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+/** A bowl with steam: the athlete's calorie meter. */
+export function MealIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z" />
+      <path d="M9 7.5c0-1.3 1-1.3 1-2.6M14 7.5c0-1.3 1-1.3 1-2.6" />
+    </svg>
+  );
+}
+
+/** Three blocks on a timeline: planning a day. */
+export function PlanIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="4" y="4" width="16" height="4" rx="1" />
+      <rect x="4" y="10" width="10" height="4" rx="1" />
+      <rect x="4" y="16" width="13" height="4" rx="1" />
+    </svg>
+  );
+}
+
+/** A circle holding a drop: the monthly cycle. */
+export function CycleIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5c2 2.4 3 3.9 3 5.3a3 3 0 0 1-6 0c0-1.4 1-2.9 3-5.3Z" />
+    </svg>
+  );
+}
+
+/** Two coins: the asset basket's mark. */
+export function CoinsIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="9" cy="9" r="6" />
+      <path d="M15.2 10.2A6 6 0 1 1 10.2 15.2" />
+      <path d="M9 6.6v4.8M7.4 8.2h3.2" />
+    </svg>
+  );
+}

@@ -17,6 +17,9 @@ import * as savingsGoalsRepo from "@/local/repositories/savingsGoals";
 import * as notesRepo from "@/local/repositories/notes";
 import * as checklistsRepo from "@/local/repositories/checklists";
 import * as inboxRepo from "@/local/repositories/inbox";
+import * as visionRepo from "@/local/repositories/vision";
+import * as basketRepo from "@/local/repositories/basket";
+import * as mealsRepo from "@/local/repositories/meals";
 import * as accountsRepo from "@/local/repositories/accounts";
 import * as transactionsRepo from "@/local/repositories/transactions";
 import * as installmentsRepo from "@/local/repositories/installments";
@@ -40,6 +43,7 @@ import {
   computeHiddenCostReport,
   computeHabitsReport,
   computeCategoryCalendar,
+  computeHabitCalendar,
   computeCalendarMonthOverview,
   computeCalendarYearOverview,
   recordDailyCapitalSnapshot,
@@ -63,6 +67,9 @@ import { createSavingsGoalSchema, updateSavingsGoalSchema } from "@/lib/schemas/
 import { createNoteSchema, updateNoteSchema, noteQuerySchema } from "@/lib/schemas/notes";
 import { createChecklistItemSchema, createChecklistItemsSchema, createChecklistTreeSchema, updateChecklistItemSchema } from "@/lib/schemas/checklists";
 import { createInboxItemSchema, updateInboxItemSchema, processInboxItemSchema } from "@/lib/schemas/inbox";
+import { createVisionItemSchema, updateVisionItemSchema, createVisionEntrySchema, linkVisionProjectSchema } from "@/lib/schemas/vision";
+import { createBasketHoldingSchema, updateBasketHoldingSchema, recordBasketSnapshotSchema, basketRangeSchema } from "@/lib/schemas/basket";
+import { createMealSchema, updateMealSchema, mealsRangeSchema } from "@/lib/schemas/meals";
 import { createAccountSchema, updateAccountSchema } from "@/lib/schemas/accounts";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/schemas/transactions";
 import { createInstallmentPlanSchema, updateInstallmentPlanSchema, payInstallmentSchema } from "@/lib/schemas/installments";
@@ -118,6 +125,19 @@ const OPERATION_OF_ROUTE: Record<string, { operation: OperationBase; entityType:
   "PATCH /api/inbox/:id": { operation: "INBOX_UPDATE", entityType: "InboxItem" },
   "DELETE /api/inbox/:id": { operation: "INBOX_DELETE", entityType: "InboxItem" },
   "POST /api/inbox/:id/process": { operation: "INBOX_PROCESS", entityType: "InboxItem" },
+  "POST /api/vision": { operation: "VISION_CREATE", entityType: "VisionItem" },
+  "PATCH /api/vision/:id": { operation: "VISION_UPDATE", entityType: "VisionItem" },
+  "DELETE /api/vision/:id": { operation: "VISION_DELETE", entityType: "VisionItem" },
+  "POST /api/vision/:id/entries": { operation: "VISION_ENTRY_CREATE", entityType: "VisionEntry" },
+  "DELETE /api/vision/:id/entries/:entryId": { operation: "VISION_ENTRY_DELETE", entityType: "VisionEntry" },
+  "POST /api/vision/:id/projects": { operation: "PROJECT_UPDATE", entityType: "Project" },
+  "DELETE /api/vision/:id/projects/:projectId": { operation: "PROJECT_UPDATE", entityType: "Project" },
+  "POST /api/basket": { operation: "BASKET_CREATE", entityType: "BasketHolding" },
+  "PATCH /api/basket/:id": { operation: "BASKET_UPDATE", entityType: "BasketHolding" },
+  "DELETE /api/basket/:id": { operation: "BASKET_DELETE", entityType: "BasketHolding" },
+  "POST /api/meals": { operation: "MEAL_CREATE", entityType: "MealEntry" },
+  "PATCH /api/meals/:id": { operation: "MEAL_UPDATE", entityType: "MealEntry" },
+  "DELETE /api/meals/:id": { operation: "MEAL_DELETE", entityType: "MealEntry" },
   "POST /api/projects": { operation: "PROJECT_CREATE", entityType: "Project" },
   "PATCH /api/projects/:id": { operation: "PROJECT_UPDATE", entityType: "Project" },
   "DELETE /api/projects/:id": { operation: "PROJECT_DELETE", entityType: "Project" },
@@ -250,6 +270,36 @@ register("POST", "/api/inbox", ({ db, userId, body }) => ({ item: inboxRepo.crea
 register("POST", "/api/inbox/:id/process", ({ db, userId, params, body }) => inboxRepo.processInboxItem(db, userId, params.id, processInboxItemSchema.parse(body).to));
 register("PATCH", "/api/inbox/:id", ({ db, userId, params, body }) => ({ item: inboxRepo.updateInboxItem(db, userId, params.id, updateInboxItemSchema.parse(body)) }));
 register("DELETE", "/api/inbox/:id", ({ db, userId, params }) => inboxRepo.deleteInboxItem(db, userId, params.id));
+
+// --- Vision board ---------------------------------------------------------------------------
+register("GET", "/api/vision", ({ db, userId }) => ({ items: visionRepo.listVision(db, userId) }));
+register("POST", "/api/vision", ({ db, userId, body }) => ({ item: visionRepo.createVisionItem(db, userId, createVisionItemSchema.parse(body)) }), 201);
+register("GET", "/api/vision/:id", ({ db, userId, params }) => visionRepo.getVisionDetail(db, userId, params.id));
+register("PATCH", "/api/vision/:id", ({ db, userId, params, body }) => ({ item: visionRepo.updateVisionItem(db, userId, params.id, updateVisionItemSchema.parse(body)) }));
+register("DELETE", "/api/vision/:id", ({ db, userId, params }) => visionRepo.deleteVisionItem(db, userId, params.id));
+register("POST", "/api/vision/:id/entries", ({ db, userId, params, body }) => ({ entry: visionRepo.addVisionEntry(db, userId, params.id, createVisionEntrySchema.parse(body)) }), 201);
+register("DELETE", "/api/vision/:id/entries/:entryId", ({ db, userId, params }) => visionRepo.deleteVisionEntry(db, userId, params.id, params.entryId));
+register("POST", "/api/vision/:id/projects", ({ db, userId, params, body }) => visionRepo.linkVisionProject(db, userId, params.id, linkVisionProjectSchema.parse(body).projectId));
+register("DELETE", "/api/vision/:id/projects/:projectId", ({ db, userId, params }) => visionRepo.unlinkVisionProject(db, userId, params.id, params.projectId));
+
+// --- Asset basket ----------------------------------------------------------------------------
+register("GET", "/api/basket", ({ db, userId }) => ({ holdings: basketRepo.listBasketHoldings(db, userId) }));
+register("POST", "/api/basket", ({ db, userId, body }) => ({ holding: basketRepo.createBasketHolding(db, userId, createBasketHoldingSchema.parse(body)) }), 201);
+register("GET", "/api/basket/history", ({ db, userId, query }) => {
+  const range = basketRangeSchema.parse(query.get("range") ?? undefined);
+  return { range, points: basketRepo.listBasketPoints(db, userId, range) };
+});
+register("POST", "/api/basket/snapshot", ({ db, userId, body }) => basketRepo.recordBasketSnapshot(db, userId, recordBasketSnapshotSchema.parse(body).prices));
+register("PATCH", "/api/basket/:id", ({ db, userId, params, body }) => ({ holding: basketRepo.updateBasketHolding(db, userId, params.id, updateBasketHoldingSchema.parse(body)) }));
+register("DELETE", "/api/basket/:id", ({ db, userId, params }) => basketRepo.deleteBasketHolding(db, userId, params.id));
+
+// --- Meals (the athlete's calorie meter) -------------------------------------------------------
+register("GET", "/api/meals", ({ db, userId, query }) => ({
+  meals: mealsRepo.listMeals(db, userId, mealsRangeSchema.parse({ from: query.get("from") ?? undefined, to: query.get("to") ?? undefined })),
+}));
+register("POST", "/api/meals", ({ db, userId, body }) => ({ meal: mealsRepo.createMeal(db, userId, createMealSchema.parse(body)) }), 201);
+register("PATCH", "/api/meals/:id", ({ db, userId, params, body }) => ({ meal: mealsRepo.updateMeal(db, userId, params.id, updateMealSchema.parse(body)) }));
+register("DELETE", "/api/meals/:id", ({ db, userId, params }) => mealsRepo.deleteMeal(db, userId, params.id));
 
 // --- Projects ------------------------------------------------------------------------------
 register("GET", "/api/projects", ({ db, userId }) => ({ projects: projectsRepo.listProjects(db, userId) }));
@@ -480,6 +530,14 @@ register("GET", "/api/reports/category-calendar", ({ db, userId, query }) => {
   const categories = trackedReport("category_calendar", { from: start, to: end }, () => computeCategoryCalendar(db, userId, start, end));
   return { categories, jy, jm };
 });
+register("GET", "/api/reports/habit-calendar", ({ db, userId, query }) => {
+  const { jy: curJy, jm: curJm } = toJalali(new Date());
+  const jy = Number(query.get("jy") ?? curJy);
+  const jm = Number(query.get("jm") ?? curJm);
+  const { start, end } = jalaliMonthRange(jy, jm);
+  const habits = trackedReport("habit_calendar", { from: start, to: end }, () => computeHabitCalendar(db, userId, start, end));
+  return { habits, jy, jm };
+});
 
 // Mirrors src/app/api/calendar/month-overview/route.ts and .../day-detail/route.ts.
 register("GET", "/api/calendar/month-overview", ({ db, userId, query }) => {
@@ -513,23 +571,25 @@ register("GET", "/api/calendar/day-detail", ({ db, userId, query }) => {
   const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString();
   const dayEnd = new Date(new Date(dayStart).getTime() + 86_400_000 - 1).toISOString();
 
-  const habits = db.all<{ id: string; title: string; icon: string | null; color: string }>(
-    `SELECT "id","title","icon","color" FROM "Habit" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 AND "isTrial" = 0`,
+  const habits = db.all<{ id: string; title: string; icon: string | null; color: string; metricKind: string | null }>(
+    `SELECT "id","title","icon","color","metricKind" FROM "Habit" WHERE "userId" = ? AND "deletedAt" IS NULL AND "isActive" = 1 AND "isTrial" = 0`,
     [userId]
   );
-  const checkIns = db.all<{ habitId: string; durationMin: number | null }>(
-    `SELECT hc."habitId", hc."durationMin" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
+  const checkIns = db.all<{ habitId: string; durationMin: number | null; amount: number | null }>(
+    `SELECT hc."habitId", hc."durationMin", hc."amount" FROM "HabitCheckIn" hc JOIN "Habit" h ON h."id" = hc."habitId"
      WHERE h."userId" = ? AND hc."date" >= ? AND hc."date" <= ?`,
     [userId, dayStart, dayEnd]
   );
-  const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c.durationMin]));
+  const checkInByHabit = new Map(checkIns.map((c) => [c.habitId, c]));
   const habitsResult = habits.map((h) => ({
     id: h.id,
     title: h.title,
     icon: h.icon,
     color: h.color,
+    metricKind: h.metricKind,
     checkedIn: checkInByHabit.has(h.id),
-    durationMin: checkInByHabit.get(h.id) ?? null,
+    durationMin: checkInByHabit.get(h.id)?.durationMin ?? null,
+    amount: checkInByHabit.get(h.id)?.amount ?? null,
   }));
 
   const transactions = db.all<{ id: string; type: string; amount: number; description: string | null; categoryId: string | null }>(

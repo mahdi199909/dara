@@ -2,7 +2,9 @@ import { prisma } from "./db";
 import { computeHourlyValue } from "./hourlyValue";
 import { computeTimeCost } from "./timeCost";
 import { computeAdherenceSeries, computeCurrentStreak, daysSinceLastCheckIn, type DayAdherence } from "./habitStreak";
+import { computeContinuity, type Continuity } from "./continuity";
 import { dayKeyIso } from "./calendarGrid";
+import { buildHabitCalendar, type HabitCalendarStat } from "./habitCalendar";
 import { toJalali, jalaliMonthRange, jalaliDateKey } from "./jalali";
 import { computeDaySegments, type TimedInterval, type CategoryKindForBattery, type DayBatteryResult } from "./dayBattery";
 import { nextMilestoneMinutes } from "./milestones";
@@ -380,6 +382,8 @@ export interface HabitsReport {
   habits: HabitStat[];
   series: DayAdherence[]; // within [from, to]
   currentStreak: number; // always as-of-today, independent of the report's [from, to]
+  /** The same lookback, read as continuity — how often the person showed up and came back (src/lib/continuity.ts). */
+  continuity: Continuity;
   digitalAssetTotal: number; // within [from, to]
 }
 
@@ -419,6 +423,7 @@ export async function computeHabitsReport(userId: string, from: Date, to: Date):
   const series = computeAdherenceSeries(habits, rangeCheckIns, rangeFrom, rangeTo);
   const streakSeries = computeAdherenceSeries(habits, streakCheckIns, streakFrom, today);
   const currentStreak = computeCurrentStreak(streakSeries, today);
+  const continuity = computeContinuity(streakSeries, today);
 
   const lastCheckInByHabit = new Map<string, Date>();
   const checkedDaysByHabit = new Map<string, Set<number>>();
@@ -465,6 +470,7 @@ export async function computeHabitsReport(userId: string, from: Date, to: Date):
     habits: habitStats,
     series,
     currentStreak,
+    continuity,
     digitalAssetTotal: vaEntries.reduce((s, e) => s + e.totalValue, 0),
   };
 }
@@ -607,6 +613,25 @@ export async function computeCategoryCalendar(userId: string, from: Date, to: Da
   });
 }
 
+// --- computeHabitCalendar (the habits' own months, in «تقویم دسته‌بندی‌ها») ----------------------
+// Mirrors src/local/reportEngine.ts's copy of this function; the grouping itself is shared (lib/habitCalendar.ts).
+
+/** Each habit's days in [from, to] (a month, in practice): which days it was done and what each day's tick logged. */
+export async function computeHabitCalendar(userId: string, from: Date, to: Date): Promise<HabitCalendarStat[]> {
+  const [habits, checkIns] = await Promise.all([
+    prisma.habit.findMany({
+      where: { userId, deletedAt: null, isTrial: false },
+      select: { id: true, title: true, icon: true, color: true, metricKind: true, isActive: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.habitCheckIn.findMany({
+      where: { habit: { userId, deletedAt: null, isTrial: false }, date: { gte: from, lte: to } },
+      select: { habitId: true, date: true, durationMin: true, amount: true },
+    }),
+  ]);
+  return buildHabitCalendar(habits, checkIns);
+}
+
 // --- computeDayActivity ("Home: امروز") -----------------------------------------------------
 // Mirrors src/local/reportEngine.ts's copy of this function — see its doc comment.
 
@@ -615,6 +640,9 @@ export interface DayActivityItem {
   id: string;
   /** HABIT only: the habit the check-in belongs to (id is the check-in's own) — what un-checking or logging its time needs. */
   habitId?: string | null;
+  /** HABIT only: what the habit measures (Habit.metricKind) and how much of it that day — not the Toman `amount` below. */
+  habitMetricKind?: string | null;
+  habitAmount?: number | null;
   title: string;
   timeOfDay: string;
   isIncome: boolean | null;
@@ -632,7 +660,7 @@ export async function computeDayActivity(userId: string, from: Date, to: Date): 
     }),
     prisma.habitCheckIn.findMany({
       where: { habit: { userId, deletedAt: null }, date: { gte: from, lte: to } },
-      include: { habit: { select: { title: true, category: { select: { icon: true, color: true } } } } },
+      include: { habit: { select: { title: true, metricKind: true, category: { select: { icon: true, color: true } } } } },
     }),
     prisma.transaction.findMany({
       where: { userId, deletedAt: null, date: { gte: from, lte: to }, taskId: null, eventId: null },
@@ -659,6 +687,8 @@ export async function computeDayActivity(userId: string, from: Date, to: Date): 
       type: "HABIT",
       id: h.id,
       habitId: h.habitId,
+      habitMetricKind: h.habit.metricKind,
+      habitAmount: h.amount,
       title: h.habit.title,
       timeOfDay: h.createdAt.toISOString(),
       isIncome: null,

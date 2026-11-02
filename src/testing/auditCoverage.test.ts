@@ -18,6 +18,7 @@ const EXEMPT: Record<string, string> = {
     "it applies rows a device already recorded in its own history; the server's application log keeps a per-push summary (SYNC_PUSH_SUCCESS / SYNC_PARTIAL_SUCCESS). A durable per-push audit entry waits for phase 4, when a push carries a device and a sync id",
   "checkup/route.ts": "anonymous answers to the public research form, tied to no account; the row itself is the record (CHECKUP_SAVED / CHECKUP_COMPLETED in the log)",
   "checkup/event/route.ts": "stamps when an anonymous form answer viewed or shared its report; tied to no account",
+  "basket/snapshot/route.ts": "records the day's value of the basket for the chart — the app's own bookkeeping, like the capital snapshot, not an edit by the person; the holdings it is worked out from are audited when they change (BASKET_CREATED / UPDATED / DELETED)",
 };
 
 function routeFiles(dir: string, out: string[] = []): string[] {

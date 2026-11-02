@@ -26,6 +26,9 @@ export const PROFILE_SETTINGS_FIELDS = [
   "theme",
   "calendarFeaturedType",
   "calendarFeaturedId",
+  "gender",
+  "modes",
+  "calorieTarget",
 ] as const;
 
 export type ProfileSettingsField = (typeof PROFILE_SETTINGS_FIELDS)[number];

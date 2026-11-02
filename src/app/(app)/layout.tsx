@@ -6,6 +6,7 @@ import { BOTTOM_NAV_HEIGHT_PX } from "@/lib/layoutConstants";
 import GlobalCaptureFab from "@/components/GlobalCaptureFab";
 import FocusTimerPill from "@/components/FocusTimerPill";
 import InboxReviewScheduler from "@/components/InboxReviewScheduler";
+import EndOfDayScheduler from "@/components/EndOfDayScheduler";
 import UpgradeToast from "@/components/UpgradeToast";
 import SavedToast from "@/components/SavedToast";
 import SWRProvider from "@/components/SWRProvider";
@@ -25,6 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main style={{ paddingBottom: `calc(${BOTTOM_NAV_HEIGHT_PX}px + env(safe-area-inset-bottom) + 1.5rem)` }}>{children}</main>
         <FocusTimerPill />
         <InboxReviewScheduler />
+        <EndOfDayScheduler />
         <GlobalCaptureFab />
         <BottomNav userName={user.name} />
       </div>

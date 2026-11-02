@@ -57,6 +57,8 @@
 | `CHECKUP-004` | ORIGIN_REFUSED | 403 | no | yes | The request did not come from one of the site's own origins. |
 | `CHECKUP-005` | TOO_LARGE | 413 | no | yes | The request body was larger than the form ever sends. |
 | `CHECKUP-006` | NOT_FOUND | 404 | no | yes | A report event named an answer sheet that does not exist or is too old. |
+| `PRICE-001` | UNAVAILABLE | 503 | yes | yes | The market could not be read and there is no recent copy to show; the basket keeps its last known prices. |
+| `PRICE-002` | RATE_LIMITED | 429 | yes | yes | Too many price requests from one address. |
 | `SYS-001` | UNHANDLED_ERROR | 500 | no | yes | An exception nobody handled. |
 | `SYS-002` | DEPENDENCY_UNAVAILABLE | 503 | yes | reserved | A required dependency (database, platform API) was unavailable. |
 | `LOG-001` | SINK_FAILED | — | yes | yes | A log sink failed to write; logging continues without it. |

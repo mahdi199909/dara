@@ -57,6 +57,8 @@ export interface JourneyHabitRow {
   minutes: number | null;
   /** How many days in a row this habit had been done, counting this one (1 = it had been missed the day before). */
   streak: number;
+  /** How many days it had been left alone just before this one — 0 when it was done the day before. Absent for the first time ever. */
+  returnedAfter?: number;
 }
 
 export interface JourneyNoteRow {

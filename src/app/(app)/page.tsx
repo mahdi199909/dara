@@ -11,6 +11,7 @@ import SmartCaptureConfirm from "@/components/SmartCaptureConfirm";
 import CaptureIntentConfirm from "@/components/CaptureIntentConfirm";
 import HabitAdherenceChart from "@/components/habits/HabitAdherenceChart";
 import HabitDurationModal from "@/components/habits/HabitDurationModal";
+import { describeDay } from "@/lib/habitMetrics";
 import PersonalDashboard from "@/components/home/PersonalDashboard";
 import DayItemsList from "@/components/day/DayItemsList";
 import { buildDayItems } from "@/lib/dayItems";
@@ -119,7 +120,7 @@ export default function HomePage() {
     `/api/day-activity?from=${from.toISOString()}&to=${to.toISOString()}`,
     fetcher
   );
-  const { habits, series, currentStreak, mutate: mutateHabits } = useHabits();
+  const { habits, series, mutate: mutateHabits } = useHabits();
 
   // Everything logged or scheduled for today, from every source the app has — events and tasks
   // come from /api/events (already recurrence-expanded; see that route's own comment), the rest
@@ -251,17 +252,17 @@ export default function HomePage() {
                     <button
                       onClick={() => setDurationHabit(h)}
                       className="shrink-0 flex items-center gap-1 text-xs text-muted hover:text-accent transition"
-                      aria-label="ثبت زمان عادت"
+                      aria-label="جزئیات عادت"
                     >
                       <ClockIcon className="w-3.5 h-3.5" />
-                      {h.todayDurationMin ? formatDuration(h.todayDurationMin) : "زمان"}
+                      {describeDay(h.metricKind, h.todayAmount, h.todayDurationMin) ?? (h.metricKind ? "جزئیات" : "زمان")}
                     </button>
                   )}
                 </li>
               ))}
             </ul>
           )}
-          {activeHabits.length > 0 && <HabitAdherenceChart series={series} currentStreak={currentStreak} />}
+          {activeHabits.length > 0 && <HabitAdherenceChart series={series} />}
         </div>
       </div>
 

@@ -15,14 +15,18 @@ const plugin = vi.hoisted(() => ({
   update: vi.fn(),
   cancel: vi.fn(),
   getPending: vi.fn(),
+  addListener: vi.fn(),
 }));
 vi.mock("@capacitor/local-notifications", () => ({ LocalNotifications: plugin }));
 
 import { installMemoryLogger } from "@/lib/observability/testing";
 import {
+  END_OF_DAY_NOTIFICATION_IDS,
   REMINDER_CHANNEL_ID,
   TEST_NOTIFICATION_ID,
   cancelReminderNotification,
+  listenForNotificationTaps,
+  replaceFixedNotifications,
   requestNotificationPermission,
   rescheduleReminderNotification,
   resetNativeNotificationsForTests,
@@ -42,7 +46,9 @@ beforeEach(() => {
 });
 afterEach(() => memory.restore());
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+// The module's queue is promises only (no timers), so this just lets it drain. A fixed pause that is too short fails
+// on a machine busy with the whole suite — the pause is generous because nothing here depends on it being short.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 150));
 const inAnHour = () => new Date(Date.now() + 3_600_000).toISOString();
 const reminder = (id: string, remindAt = inAnHour()) => ({ id, title: "عنوان", body: "متن", remindAt });
 
@@ -280,5 +286,65 @@ describe("sendTestNotification", () => {
 
   it("uses an id no reminder can hold in a reconcile's stale list", () => {
     expect(Number.isInteger(TEST_NOTIFICATION_ID) && TEST_NOTIFICATION_ID <= 2_147_483_647).toBe(true);
+  });
+});
+
+describe("the end-of-day reminders", () => {
+  it("have their own ids, which the reconcile never cancels as stale", async () => {
+    plugin.getPending.mockResolvedValue({ notifications: END_OF_DAY_NOTIFICATION_IDS.map((id) => ({ id })) });
+    syncScheduledReminderNotifications([]);
+    await settle();
+    expect(plugin.cancel).not.toHaveBeenCalled();
+  });
+
+  it("carry the screen to open through the tap, only when one is given", async () => {
+    const soon = new Date(Date.now() + 3_600_000);
+    replaceFixedNotifications(END_OF_DAY_NOTIFICATION_IDS, [
+      { id: END_OF_DAY_NOTIFICATION_IDS[0], title: "مرور پایان روز", body: "متن", at: soon, extra: { route: "/review" } },
+      { id: END_OF_DAY_NOTIFICATION_IDS[1], title: "مرور پایان روز", body: "متن", at: new Date(soon.getTime() + 86_400_000) },
+    ]);
+    await settle();
+    expect(plugin.cancel).toHaveBeenCalledWith({ notifications: END_OF_DAY_NOTIFICATION_IDS.map((id) => ({ id })) });
+    const [{ notifications }] = plugin.schedule.mock.calls[0];
+    expect(notifications[0].extra).toEqual({ route: "/review" });
+    expect("extra" in notifications[1]).toBe(false);
+  });
+});
+
+describe("listenForNotificationTaps", () => {
+  const tapped = (extra: unknown) => ({ notification: { id: 1, title: "t", body: "b", extra }, actionId: "tap" });
+
+  it("hands over the route a tapped notification carries, and only that", async () => {
+    const remove = vi.fn();
+    plugin.addListener.mockResolvedValue({ remove });
+    const routes: string[] = [];
+    const stop = listenForNotificationTaps((route) => routes.push(route));
+    await settle();
+
+    expect(plugin.addListener).toHaveBeenCalledWith("localNotificationActionPerformed", expect.any(Function));
+    const listener = plugin.addListener.mock.calls[0][1] as (event: unknown) => void;
+    listener(tapped({ route: "/review" }));
+    // Not a route of the app: a URL, a path that climbs out, something that is not text, nothing at all.
+    for (const extra of [{ route: "https://evil.example/review" }, { route: "//evil.example" }, { route: "review" }, { route: "/a?b=c" }, { route: 7 }, {}, undefined]) listener(tapped(extra));
+    expect(routes).toEqual(["/review"]);
+
+    stop();
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it("stops listening even when asked before the plugin had answered", async () => {
+    const remove = vi.fn();
+    plugin.addListener.mockResolvedValue({ remove });
+    const stop = listenForNotificationTaps(() => {});
+    stop();
+    await settle();
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it("writes it down, and does not throw, when the plugin cannot listen", async () => {
+    plugin.addListener.mockRejectedValue(new Error("no plugin"));
+    expect(() => listenForNotificationTaps(() => {})).not.toThrow();
+    await settle();
+    expect(memory.sink.find("LOCAL_NOTIFICATION_FAILED").length).toBeGreaterThan(0);
   });
 });

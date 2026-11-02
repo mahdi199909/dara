@@ -39,6 +39,11 @@ export const LIMITS = {
   checkupNewPerIp: { max: 30, windowMs: 60 * MINUTE },
   /** Any page save or report event (a full form is ~7 writes). */
   checkupWritePerIp: { max: 300, windowMs: 60 * MINUTE },
+  /**
+   * The public price list. An answer comes from memory, so this only stops one address from using the server as a
+   * free feed; generous because mobile carriers put many people behind one address (CGNAT).
+   */
+  pricesPerIp: { max: 600, windowMs: 15 * MINUTE },
 } satisfies Record<string, Limit>;
 
 const buckets = new Map<string, Bucket>();

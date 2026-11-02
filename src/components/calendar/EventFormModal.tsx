@@ -5,6 +5,7 @@ import { apiPost, apiPatch, apiDelete } from "@/lib/apiClient";
 import { useCategories } from "@/lib/hooks";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import MoneyInput from "@/components/ui/MoneyInput";
+import AccountPicker from "@/components/AccountPicker";
 import TimePicker from "@/components/ui/TimePicker";
 import { XIcon, TrashIcon } from "@/components/icons";
 import { REMINDER_OFFSET_PRESETS, RECURRENCE_FREQS, type RecurrenceFreq } from "@/lib/types";
@@ -57,6 +58,9 @@ export default function EventFormModal({
   const [categoryId, setCategoryId] = useState(event?.categoryId ?? "");
   const [directCost, setDirectCost] = useState(event?.directCost ? String(event.directCost) : "");
   const [incomeAmount, setIncomeAmount] = useState(event?.incomeAmount ? String(event.incomeAmount) : "");
+  // The account a NEW event's cost or income is booked to; null = the default one. (Editing an event does not move
+  // its transactions to another account, so the choice is only offered when creating.)
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [recurrenceFreq, setRecurrenceFreq] = useState<RecurrenceFreq>(event?.recurrenceFreq ?? "NONE");
   const [recurrenceEndMode, setRecurrenceEndMode] = useState<"NEVER" | "COUNT" | "DATE">(
     event?.recurrenceCount ? "COUNT" : event?.recurrenceUntil ? "DATE" : "NEVER"
@@ -163,7 +167,7 @@ export default function EventFormModal({
         await apiPatch(`/api/events/${event.id}`, payload);
         await applyReminderChanges();
       } else {
-        await apiPost("/api/events", { ...payload, reminderOffsets });
+        await apiPost("/api/events", { ...payload, reminderOffsets, accountId: accountId ?? undefined });
       }
       onCreated();
     } catch (err: any) {
@@ -234,6 +238,9 @@ export default function EventFormModal({
             <MoneyInput value={directCost} onChange={setDirectCost} placeholder="هزینه" />
             <MoneyInput value={incomeAmount} onChange={setIncomeAmount} placeholder="درآمد" />
           </div>
+          {!isEdit && (Number(directCost) > 0 || Number(incomeAmount) > 0) && (
+            <AccountPicker value={accountId} onChange={setAccountId} flow={Number(directCost) > 0 ? "COST" : "INCOME"} />
+          )}
 
           <select value={recurrenceFreq} onChange={(e) => setRecurrenceFreq(e.target.value as RecurrenceFreq)} className="bg-surface w-full rounded-xl border border-line px-3 py-2 text-sm">
             {RECURRENCE_FREQS.map((f) => (

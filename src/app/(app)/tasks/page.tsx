@@ -8,6 +8,7 @@ import { Card, EmptyState } from "@/components/ui/Card";
 import { TrashIcon, PlusIcon } from "@/components/icons";
 import JalaliDateInput from "@/components/ui/JalaliDateInput";
 import CategoryChipPicker, { selectableCategories } from "@/components/CategoryChipPicker";
+import GoalPicker, { NO_GOAL, goalAmount, type GoalChoice } from "@/components/vision/GoalPicker";
 import { formatJalali } from "@/lib/jalali";
 import { formatDuration, signed } from "@/lib/money";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
@@ -130,6 +131,7 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
   const [categoryId, setCategoryId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [dueDate, setDueDate] = useState<Date | null>(null);
+  const [goal, setGoal] = useState<GoalChoice>(NO_GOAL);
   const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -142,6 +144,8 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
         categoryId: categoryId || undefined,
         projectId: projectId || undefined,
         dueDate: dueDate ? dueDate.toISOString() : undefined,
+        visionItemId: goal.visionItemId || undefined,
+        visionValue: goal.visionItemId ? goalAmount(goal) : undefined,
       });
       onDone();
     } finally {
@@ -202,6 +206,7 @@ function NewTaskForm({ categories, projects, onDone }: { categories: any[]; proj
             </button>
           )}
         </div>
+        <GoalPicker value={goal} onChange={setGoal} />
         <button
           type="submit"
           disabled={loading}
