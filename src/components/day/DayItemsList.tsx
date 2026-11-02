@@ -79,7 +79,8 @@ export default function DayItemsList({
 
   // Time entries have no route to edit or delete them, so their rows carry no menu.
   const editable = (item: DayItem) => item.kind === "EVENT" || item.kind === "TASK" || (item.kind === "HABIT" && !!item.source.habitId);
-  const deletable = (item: DayItem) => item.kind !== "TIME_ENTRY" && (item.kind !== "HABIT" || !!item.source.habitId);
+  // An installment is paid or changed on the installments tab (its row links there), not from a day's list.
+  const deletable = (item: DayItem) => item.kind !== "TIME_ENTRY" && item.kind !== "INSTALLMENT" && (item.kind !== "HABIT" || !!item.source.habitId);
 
   return (
     <>

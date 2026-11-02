@@ -1,13 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { formatTime } from "@/lib/jalali";
 import { formatDuration, shortDuration, signed } from "@/lib/money";
 import { useCurrencyUnit } from "@/lib/currencyUnit";
 import type { DayItem } from "@/lib/dayItems";
 import { CheckSquareIcon, EditIcon, TrashIcon, XIcon } from "@/components/icons";
 
-const KIND_LABEL: Record<DayItem["kind"], string> = { EVENT: "رویداد", TASK: "کار", HABIT: "عادت", TRANSACTION: "تراکنش", TIME_ENTRY: "فعالیت" };
+const KIND_LABEL: Record<DayItem["kind"], string> = { EVENT: "رویداد", TASK: "کار", HABIT: "عادت", TRANSACTION: "تراکنش", TIME_ENTRY: "فعالیت", INSTALLMENT: "قسط" };
+
+/** What an installment row says under its title: where it stands. */
+function installmentState(item: DayItem): string {
+  return item.isDone ? "قسط · پرداخت‌شده" : item.overdue ? "قسط · دیرکرد" : "قسط · در انتظار";
+}
 
 /** Three dots in a column — the "more" mark for a row (the icon set's own "more" is a four-square grid, which reads as a menu). */
 function DotsIcon({ className }: { className?: string }) {
@@ -62,7 +68,7 @@ export default function DayItemRow({
         </button>
       ) : (
         <span className="shrink-0 w-5 h-5 flex items-center justify-center text-accent">
-          {item.kind === "HABIT" ? "🔥" : item.kind === "TRANSACTION" ? (item.isIncome ? "+" : "-") : "⏱"}
+          {item.kind === "HABIT" ? "🔥" : item.kind === "TRANSACTION" ? (item.isIncome ? "+" : "-") : item.kind === "INSTALLMENT" ? "💳" : "⏱"}
         </span>
       )}
 
@@ -77,12 +83,26 @@ export default function DayItemRow({
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <p className={`truncate ${item.isDone ? "text-muted line-through" : "text-ink"}`}>{item.title}</p>
-        <p className="truncate text-[11px] text-muted">
-          {[category ?? KIND_LABEL[item.kind], item.minutes ? shortDuration(item.minutes) : null].filter(Boolean).join(" · ")}
-        </p>
-      </div>
+      {(() => {
+        const text = (
+          <>
+            <p className={`truncate ${item.isDone ? "text-muted line-through" : item.overdue ? "text-waste" : "text-ink"}`}>{item.title}</p>
+            <p className="truncate text-[11px] text-muted">
+              {item.kind === "INSTALLMENT"
+                ? installmentState(item)
+                : [category ?? KIND_LABEL[item.kind], item.minutes ? shortDuration(item.minutes) : null].filter(Boolean).join(" · ")}
+            </p>
+          </>
+        );
+        // Something managed elsewhere (an installment) opens its own page; the rest is plain text with a menu.
+        return item.href ? (
+          <Link href={item.href} className="flex-1 min-w-0">
+            {text}
+          </Link>
+        ) : (
+          <div className="flex-1 min-w-0">{text}</div>
+        );
+      })()}
 
       {item.amount !== undefined && (
         <span className={`shrink-0 text-xs font-bold ${item.isIncome ? "text-accent" : "text-waste"}`}>

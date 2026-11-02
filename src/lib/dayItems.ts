@@ -1,9 +1,11 @@
 // One day's list of things — what Home shows as «فعالیت‌های امروز» and the calendar shows for a
 // picked day: calendar events (each occurrence of a recurring one), tasks, and what /api/day-activity
-// adds (finished time entries, habit check-ins, independent transactions). Pure: the callers fetch,
-// this only merges and orders, so the two places can never disagree about what a day contains.
+// adds (finished time entries, habit check-ins, independent transactions). The calendar also passes the
+// installments that fall due that day (Home does not: it has its own strip for them). Pure: the callers
+// fetch, this only merges and orders, so the places can never disagree about what a day contains.
+import { installmentTitle, isOverdue, type InstallmentOccurrence } from "@/lib/installmentCalendar";
 
-export type DayItemKind = "EVENT" | "TASK" | "HABIT" | "TRANSACTION" | "TIME_ENTRY";
+export type DayItemKind = "EVENT" | "TASK" | "HABIT" | "TRANSACTION" | "TIME_ENTRY" | "INSTALLMENT";
 
 export interface DayItem {
   key: string;
@@ -19,6 +21,10 @@ export interface DayItem {
   amount?: number;
   isIncome?: boolean;
   category?: { name?: string | null; icon?: string | null } | null;
+  /** Where tapping the row goes, for something that is managed elsewhere (an installment, on the installments tab). */
+  href?: string;
+  /** An installment that is unpaid with its day already gone. */
+  overdue?: boolean;
   /** The original occurrence / task / activity row, for the edit forms. */
   source: any;
 }
@@ -44,7 +50,8 @@ function minutesBetween(start: string | null, end: string | null): number | unde
 
 export function buildDayItems(
   events: { occurrences?: any[]; taskOccurrences?: any[] } | undefined,
-  dayActivity: { items?: DayActivityRow[] } | undefined
+  dayActivity: { items?: DayActivityRow[] } | undefined,
+  installments?: readonly InstallmentOccurrence[]
 ): DayItem[] {
   const items: DayItem[] = [];
 
@@ -80,6 +87,25 @@ export function buildDayItems(
       isIncome: task.directCost > 0 ? false : task.incomeAmount > 0 ? true : undefined,
       category: task.category ?? null,
       source: task,
+    });
+  }
+
+  // An installment has a due DAY, no clock time, so like a task with only a due day it sorts to the top of the list.
+  for (const occurrence of installments ?? []) {
+    items.push({
+      key: `installment-${occurrence.id}`,
+      kind: "INSTALLMENT",
+      id: occurrence.id,
+      title: installmentTitle(occurrence),
+      start: null,
+      end: null,
+      isDone: occurrence.paid,
+      amount: occurrence.amount,
+      isIncome: false,
+      category: null,
+      href: `/finance?tab=installments&plan=${occurrence.planId}`,
+      overdue: isOverdue(occurrence),
+      source: occurrence,
     });
   }
 

@@ -23,6 +23,7 @@ import { InstallmentPlanCard, NewInstallmentPlanForm, formatPercent } from "@/co
 import NewTransactionForm from "@/components/finance/NewTransactionForm";
 import { detectRecurringTransactions, recurringSpendThisMonth, type RecurringCandidate } from "@/lib/recurringTransactions";
 import { computeEffectiveAnnualRate } from "@/lib/installments";
+import { installmentOccurrences, monthInstallments } from "@/lib/installmentCalendar";
 import { rankDebtsForPayoff, monthsSoonerWithExtra, type DebtForPayoff, type PayoffStrategy } from "@/lib/debtPayoffOptimizer";
 
 const TABS = [
@@ -602,20 +603,13 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
   // This Jalali month's installments across every plan — a planning overview independent of
   // any single plan's own card, which only shows that one plan's totals. Carries planTitle
   // through so the horizontal strip below can label each chip without a second lookup.
+  // The calendar's month card reads the same helper (src/lib/installmentCalendar.ts), so the two can never disagree.
   const { jy: curJy, jm: curJm } = toJalali(new Date());
-  const thisMonthInstallments = (data?.plans ?? [])
-    .flatMap((plan: any) =>
-      plan.installments
-        .filter((i: any) => {
-          const { jy, jm } = toJalali(new Date(i.dueDate));
-          return jy === curJy && jm === curJm;
-        })
-        .map((i: any) => ({ ...i, planTitle: plan.title }))
-    )
-    .sort((a: any, b: any) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  const thisMonthTotal = thisMonthInstallments.reduce((s: number, i: any) => s + i.amount, 0);
-  const thisMonthPaid = thisMonthInstallments.filter((i: any) => i.status === "PAID").reduce((s: number, i: any) => s + i.amount, 0);
-  const thisMonthRemaining = thisMonthTotal - thisMonthPaid;
+  const thisMonth = monthInstallments(installmentOccurrences(data?.plans ?? []), curJy, curJm);
+  const thisMonthInstallments = thisMonth.items;
+  const thisMonthTotal = thisMonth.total;
+  const thisMonthPaid = thisMonth.paid;
+  const thisMonthRemaining = thisMonth.remaining;
 
   // Lifetime totals across every plan (not just this month) — the "big picture" debt situation,
   // below the month dashboard. Each plan's own summary (summarizeInstallments) already has these.
@@ -649,14 +643,14 @@ function InstallmentsTab({ highlightPlanId }: { highlightPlanId?: string | null 
 
             {thisMonthInstallments.length > 0 && (
               <div className="flex gap-2 overflow-x-auto scrollbar-thin snap-x snap-mandatory pt-4 mt-4 border-t border-line -mx-1 px-1">
-                {thisMonthInstallments.map((i: any) => (
+                {thisMonthInstallments.map((i) => (
                   <div key={i.id} className="shrink-0 snap-start w-[128px] rounded-xl border border-line bg-canvas p-2.5">
                     <p className="text-xs text-ink truncate">{i.planTitle}</p>
-                    <p className="text-[10px] text-muted mt-1">{formatJalali(new Date(i.dueDate))}</p>
-                    <p className={`text-xs font-bold mt-1.5 ${i.status === "PAID" ? "text-accent" : "text-ink"}`}>
+                    <p className="text-[10px] text-muted mt-1">{formatJalali(i.day)}</p>
+                    <p className={`text-xs font-bold mt-1.5 ${i.paid ? "text-accent" : "text-ink"}`}>
                       {format(i.amount, { withSuffix: true })}
                     </p>
-                    {i.status === "PAID" && <p className="text-[10px] text-accent mt-0.5">پرداخت‌شده</p>}
+                    {i.paid && <p className="text-[10px] text-accent mt-0.5">پرداخت‌شده</p>}
                   </div>
                 ))}
               </div>
