@@ -5,7 +5,8 @@
 // (password only, address unverified) so registration never stops. Web and app alike.
 import { useState } from "react";
 import { ApiClientError } from "@/lib/apiClient";
-import { registerWithCode, registerWithPassword, requestCode, type AuthResult } from "@/lib/authApi";
+import { registerWithCode, registerWithPassword, registerWithPhone, requestCode, type AuthResult } from "@/lib/authApi";
+import { PHONE_SIGNUP_NEEDS_CODE, looksLikePhone } from "@/lib/phone";
 import { CodeField, ResendButton, inputClass, primaryButtonClass, retryAfterOf, useCountdown } from "./CodeField";
 
 function messageOf(err: unknown): string {
@@ -28,6 +29,17 @@ export default function RegisterWithCode({ onAuthenticated }: { onAuthenticated:
     setError(null);
     if (password.length < 8) return setError("رمز عبور باید حداقل ۸ کاراکتر باشد.");
     setBusy(true);
+    // A mobile number signs up straight away while the SMS gateway is not set up (it is verified later in Settings).
+    if (!PHONE_SIGNUP_NEEDS_CODE && looksLikePhone(identifier)) {
+      try {
+        await onAuthenticated(await registerWithPhone(name, identifier.trim(), password));
+      } catch (err) {
+        setError(messageOf(err));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     try {
       const res = await requestCode("REGISTER", identifier);
       setSentTo(res.sentTo);
@@ -70,7 +82,7 @@ export default function RegisterWithCode({ onAuthenticated }: { onAuthenticated:
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="رمز عبور (حداقل ۸ کاراکتر)" autoComplete="new-password" dir="ltr" className={`${inputClass} text-left`} required />
         {error && <p className="text-xs text-waste leading-relaxed">{error}</p>}
         <button type="submit" disabled={busy || !name.trim() || !identifier.trim() || left > 0} className={primaryButtonClass}>
-          {busy ? "در حال ارسال..." : "ثبت‌نام و ارسال کد"}
+          {busy ? "در حال ارسال..." : !PHONE_SIGNUP_NEEDS_CODE && looksLikePhone(identifier) ? "ثبت‌نام" : "ثبت‌نام و ارسال کد"}
         </button>
       </form>
     );

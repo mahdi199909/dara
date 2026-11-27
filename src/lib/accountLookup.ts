@@ -20,10 +20,14 @@ export function parseIdentifier(raw: string): Identifier {
 
 const ACCOUNT_SELECT = { id: true, email: true, name: true, passwordHash: true, sessionVersion: true, disabledAt: true, emailVerifiedAt: true, phone: true, phoneVerifiedAt: true, mustChangePassword: true } as const;
 
-/** The account an identifier points at. A phone number only counts once it was verified on that account. */
-export async function findAccount(id: Identifier) {
+/**
+ * The account an identifier points at. A phone number only counts once it was verified on that account,
+ * except for password sign-in (`unverifiedPhoneOk`): a number signed up without a code can sign in with its password.
+ * One-time-code flows never use that, so a code only ever opens the account of whoever really holds the number.
+ */
+export async function findAccount(id: Identifier, opts: { unverifiedPhoneOk?: boolean } = {}) {
   if (id.channel === "EMAIL") return prisma.user.findUnique({ where: { email: id.target }, select: ACCOUNT_SELECT });
-  return prisma.user.findFirst({ where: { phone: id.target, phoneVerifiedAt: { not: null } }, select: ACCOUNT_SELECT });
+  return prisma.user.findFirst({ where: opts.unverifiedPhoneOk ? { phone: id.target } : { phone: id.target, phoneVerifiedAt: { not: null } }, select: ACCOUNT_SELECT });
 }
 
 /** What to show (and send as the legacy `email` field) for an account: its email, else its phone. */

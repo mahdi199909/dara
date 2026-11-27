@@ -21,6 +21,13 @@ export function normalizeIranMobile(input: string): string | null {
   return /^09\d{9}$/.test(digits) ? digits : null;
 }
 
+/**
+ * Whether signing up with a mobile number needs the SMS code first. Off for now (no SMS panel yet): the number is
+ * stored unverified, it signs in with the password, and a later code verification (Settings) makes it verified.
+ * Flip to true once the SMS gateway is set up; the code-based sign-up (/api/auth/code/register) is already there.
+ */
+export const PHONE_SIGNUP_NEEDS_CODE = false;
+
 /** Whether a sign-in field holds a phone number rather than an email address. */
 export function looksLikePhone(input: string): boolean {
   return !input.includes("@") && normalizeIranMobile(input) !== null;

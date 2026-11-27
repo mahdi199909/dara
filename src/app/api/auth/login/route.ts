@@ -40,7 +40,7 @@ async function POST(req: NextRequest) {
       throw new ApiError("تعداد تلاش‌های ورود بیش از حد مجاز است. کمی بعد دوباره تلاش کنید.", 429, "AUTH-002", { retryAfterSeconds: Math.ceil(rl.retryAfterMs / 1000) });
     }
 
-    const user = await findAccount(id);
+    const user = await findAccount(id, { unverifiedPhoneOk: true });
     // Always pay for one bcrypt comparison, so the response time does not tell whether the account exists.
     const passwordOk = await verifyPassword(body.password, user?.passwordHash ?? TIMING_DUMMY_HASH);
     if (!user || !passwordOk) {

@@ -163,3 +163,53 @@ describe("the owner resets a password by hand", () => {
     expect(login.json.mustChangePassword).toBe(true);
   });
 });
+
+describe("registering with a mobile number, no code (while there is no SMS gateway)", () => {
+  it("creates the account with the number unverified, signs in by password, and keeps codes closed to it", async () => {
+    const phone = newPhone();
+    const created = await server.web("POST", "/api/auth/register", { name: "بی‌کد", phone, password: "phone-pass-1" });
+    expect(created.status).toBe(200);
+    const row = await server.prisma.user.findUnique({ where: { id: created.json.id } });
+    expect(row.email).toBeNull();
+    expect(row.phone).toBe(phone);
+    expect(row.phoneVerifiedAt).toBeNull();
+
+    server.setWebSession(undefined);
+    const login = await server.web("POST", "/api/auth/login", { identifier: phone, password: "phone-pass-1" });
+    expect(login.status).toBe(200);
+    expect(login.json.id).toBe(created.json.id);
+    expect((await server.web("POST", "/api/auth/login", { identifier: phone, password: "wrong-pass-1" })).status).toBe(401);
+
+    // A one-time code never opens an account whose number was not verified: nothing is sent, and no code works.
+    clearDevOutbox();
+    await server.web("POST", "/api/auth/code/request", { purpose: "LOGIN_OTP", identifier: phone });
+    expect(getDevOutbox()).toHaveLength(0);
+  });
+
+  it("refuses a second sign-up on the same number, and accepts Persian digits", async () => {
+    const phone = newPhone();
+    const persian = phone.replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)]);
+    expect((await server.web("POST", "/api/auth/register", { name: "x", phone: persian, password: "phone-pass-1" })).status).toBe(200);
+    const again = await server.web("POST", "/api/auth/register", { name: "y", phone, password: "phone-pass-2" });
+    expect(again.status).toBe(409);
+    expect(again.json.code).toBe("AUTH-005");
+  });
+
+  it("needs an email or a number, and a valid number", async () => {
+    expect((await server.web("POST", "/api/auth/register", { name: "x", password: "phone-pass-1" })).status).toBe(400);
+    expect((await server.web("POST", "/api/auth/register", { name: "x", phone: "12345", password: "phone-pass-1" })).status).toBe(400);
+  });
+
+  it("lets the real holder take the number over by verifying it with a code", async () => {
+    const phone = newPhone();
+    await server.web("POST", "/api/auth/register", { name: "claimer", phone, password: "phone-pass-1" });
+    server.setWebSession(undefined);
+    await server.web("POST", "/api/auth/code/request", { purpose: "REGISTER", identifier: phone });
+    const code = lastCodeFor(phone);
+    const real = await server.web("POST", "/api/auth/code/register", { name: "real owner", identifier: phone, code, password: "phone-pass-2" });
+    expect(real.status).toBe(200);
+    const holder = await server.prisma.user.findFirst({ where: { phone } });
+    expect(holder.id).toBe(real.json.id);
+    expect(holder.phoneVerifiedAt).not.toBeNull();
+  });
+});

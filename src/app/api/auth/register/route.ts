@@ -8,15 +8,21 @@ import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { seedDefaultCategoriesForUser } from "@/lib/defaults";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
 import { accountLabel, passwordSchema } from "@/lib/accountLookup";
+import { normalizeIranMobile } from "@/lib/phone";
 import { checkRateLimit, LIMITS } from "@/lib/rateLimit";
 import { logRateLimited, logRegisterFailed, logRegisterSuccess } from "@/lib/observability/server/authEvents";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
-const schema = z.object({
-  name: z.string().trim().min(1, "نام الزامی است.").max(100),
-  email: z.string().trim().max(254).email("ایمیل نامعتبر است."),
-  password: passwordSchema,
-});
+// Sign-up without a code: on an email (older app builds send only this) or on a mobile number (stored unverified,
+// see PHONE_SIGNUP_NEEDS_CODE in lib/phone.ts). One of the two is required.
+const schema = z
+  .object({
+    name: z.string().trim().min(1, "نام الزامی است.").max(100),
+    email: z.string().trim().max(254).email("ایمیل نامعتبر است.").optional(),
+    phone: z.string().trim().max(40).optional(),
+    password: passwordSchema,
+  })
+  .refine((b) => Boolean(b.email || b.phone), { message: "ایمیل یا شماره موبایل را وارد کنید.", path: ["email"] });
 
 export async function OPTIONS() {
   return corsPreflight();
@@ -33,12 +39,25 @@ async function POST(req: NextRequest) {
     }
 
     const body = schema.parse(await req.json());
-    const email = body.email.toLowerCase();
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      logRegisterFailed({ email, reason: "email_taken", ip: ipAddress });
-      throw new ApiError("این ایمیل قبلاً ثبت شده است. اگر رمز را فراموش کرده‌اید از «فراموشی رمز عبور» استفاده کنید.", 409, "AUTH-005");
+    let email: string | null = null;
+    let phone: string | null = null;
+    if (body.email) {
+      email = body.email.toLowerCase();
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) {
+        logRegisterFailed({ email, reason: "email_taken", ip: ipAddress });
+        throw new ApiError("این ایمیل قبلاً ثبت شده است. اگر رمز را فراموش کرده‌اید از «فراموشی رمز عبور» استفاده کنید.", 409, "AUTH-005");
+      }
+    } else {
+      phone = normalizeIranMobile(body.phone ?? "");
+      if (!phone) throw new ApiError("شماره موبایل معتبر وارد کنید (مثل 09121234567).", 400, "VAL-001");
+      // Any account holding the number (verified or not) blocks a second sign-up on it; verifying the number by
+      // code later (Settings, or the code sign-up) takes it over from an unverified claim.
+      const existing = await prisma.user.findFirst({ where: { phone }, select: { id: true } });
+      if (existing) {
+        logRegisterFailed({ email: phone, reason: "email_taken", ip: ipAddress });
+        throw new ApiError("این شماره موبایل قبلاً ثبت شده است. اگر رمز را فراموش کرده‌اید از «فراموشی رمز عبور» استفاده کنید.", 409, "AUTH-005");
+      }
     }
 
     const passwordHash = await hashPassword(body.password);
@@ -46,6 +65,7 @@ async function POST(req: NextRequest) {
       data: {
         name: body.name,
         email,
+        phone,
         passwordHash,
         settings: { create: {} },
       },

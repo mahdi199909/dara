@@ -86,6 +86,11 @@ export function registerWithPassword(name: string, email: string, password: stri
   return call<AuthBody>("POST", "/api/auth/register", { name, email, password }).then(toResult);
 }
 
+/** Sign-up on a mobile number with no code (see PHONE_SIGNUP_NEEDS_CODE): the number is stored unverified. */
+export function registerWithPhone(name: string, phone: string, password: string): Promise<AuthResult> {
+  return call<AuthBody>("POST", "/api/auth/register", { name, phone, password }).then(toResult);
+}
+
 /** Replaces a temporary password the owner set by hand; `token` is the one the sign-in just returned (the app). */
 export function chooseNewPassword(newPassword: string, token?: string): Promise<string> {
   return call<{ ok: true; token: string }>("POST", "/api/account/password", { newPassword }, { token }).then((r) => r.token);
