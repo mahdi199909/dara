@@ -51,12 +51,20 @@ function limitVerify(ip: string | null, target: string): void {
 }
 
 /** Sign-in or password-reset code for someone who is not signed in. */
-export async function requestPublicCode(input: { purpose: "LOGIN_OTP" | "RESET_PASSWORD"; identifier: string; ip: string | null }): Promise<CodeSentAnswer> {
+export async function requestPublicCode(input: { purpose: "LOGIN_OTP" | "RESET_PASSWORD" | "REGISTER"; identifier: string; ip: string | null }): Promise<CodeSentAnswer> {
   limitRequest(input.ip);
   const id = parseIdentifier(input.identifier);
   await assertChannelAvailable(id.channel);
 
   const user = await findAccount(id);
+  if (input.purpose === "REGISTER") {
+    // Signing up is the one place that says so when the address is taken: the person needs to know to sign in instead.
+    if (user) throw new ApiError(id.channel === "EMAIL" ? "این ایمیل قبلاً ثبت شده است. وارد شوید یا از «فراموشی رمز عبور» استفاده کنید." : "این شماره موبایل قبلاً ثبت شده است. وارد شوید یا از «فراموشی رمز عبور» استفاده کنید.", 409, "AUTH-005");
+    const { code } = await issueCode({ purpose: "REGISTER", channel: id.channel, target: id.target, userId: null, ipAddress: input.ip });
+    await sendCode({ channel: id.channel, to: id.target, code, purpose: "REGISTER" });
+    logCodeSent({ purpose: "REGISTER", channel: id.channel, target: id.target, userId: null, ip: input.ip });
+    return { ok: true, channel: id.channel, sentTo: masked(id), retryAfterSeconds: RESEND_COOLDOWN_MS / 1000 };
+  }
   const usable = user && !user.disabledAt;
   const { code } = await issueCode({ purpose: input.purpose, channel: id.channel, target: id.target, userId: usable ? user.id : null, ipAddress: input.ip });
   if (usable) {
@@ -64,6 +72,18 @@ export async function requestPublicCode(input: { purpose: "LOGIN_OTP" | "RESET_P
     logCodeSent({ purpose: input.purpose, channel: id.channel, target: id.target, userId: user.id, ip: input.ip });
   }
   return { ok: true, channel: id.channel, sentTo: masked(id), retryAfterSeconds: RESEND_COOLDOWN_MS / 1000 };
+}
+
+/** Checks the code that proves an address or phone is the person's own, before an account is created on it. */
+export async function verifyRegisterCode(input: { identifier: string; code: string; ip: string | null }): Promise<Identifier> {
+  const id = parseIdentifier(input.identifier);
+  limitVerify(input.ip, id.target);
+  const result = await consumeCode({ purpose: "REGISTER", target: id.target, code: latinCode(input.code) });
+  if (!result.ok) {
+    logCodeFailed({ purpose: "REGISTER", target: id.target, reason: result.reason, ip: input.ip });
+    throw codeRejected();
+  }
+  return id;
 }
 
 /**

@@ -6,7 +6,7 @@ import { issueSession, accountDisabledError } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
-import { codeSchema, passwordSchema } from "@/lib/accountLookup";
+import { accountLabel, codeSchema, passwordSchema } from "@/lib/accountLookup";
 import { verifyPublicCode } from "@/lib/codeFlows";
 import { logAccountDisabled, logPasswordReset } from "@/lib/observability/server/authEvents";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
@@ -41,17 +41,18 @@ async function POST(req: NextRequest) {
       data: {
         passwordHash,
         passwordChangedAt: now,
+        mustChangePassword: false,
         sessionVersion: { increment: 1 },
         ...(id.channel === "EMAIL" && !user.emailVerifiedAt ? { emailVerifiedAt: now } : {}),
       },
-      select: { id: true, email: true, name: true, sessionVersion: true },
+      select: { id: true, email: true, phone: true, name: true, sessionVersion: true },
     });
 
     const token = await issueSession(updated);
     await writeAuditLog({ userId: user.id, action: "PASSWORD_RESET", entityType: "User", entityId: user.id, newValue: { channel: id.channel }, ipAddress, userAgent });
     logPasswordReset({ userId: user.id, ip: ipAddress });
 
-    return withCors(NextResponse.json({ id: updated.id, name: updated.name, email: updated.email, token }));
+    return withCors(NextResponse.json({ id: updated.id, name: updated.name, email: accountLabel(updated), token }));
   } catch (err) {
     return withCors(handleApiError(err));
   }

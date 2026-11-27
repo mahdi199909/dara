@@ -25,8 +25,8 @@ export function changeLicense(userId: string, change: LicenseChangeBody) {
   return adminPost<{ status: string; endsAt: string | null; daysRemaining: number | null }>(`/api/admin/users/${encodeURIComponent(userId)}/license`, change);
 }
 
-export function accountAction(userId: string, action: "disable" | "enable" | "signout" | "verify-email") {
-  return adminPost<{ ok: true }>(`/api/admin/users/${encodeURIComponent(userId)}/actions`, { action });
+export function accountAction(userId: string, action: "disable" | "enable" | "signout" | "verify-email" | "reset-password") {
+  return adminPost<{ ok: true; temporaryPassword?: string }>(`/api/admin/users/${encodeURIComponent(userId)}/actions`, { action });
 }
 
 export function errorMessage(err: unknown): string {

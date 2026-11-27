@@ -12,7 +12,7 @@ import { prisma } from "./db";
 import { ApiError } from "./apiError";
 import { sessionSecret } from "./sessionSecret";
 
-export type OtpPurpose = "VERIFY_EMAIL" | "VERIFY_PHONE" | "LOGIN_OTP" | "RESET_PASSWORD";
+export type OtpPurpose = "VERIFY_EMAIL" | "VERIFY_PHONE" | "LOGIN_OTP" | "RESET_PASSWORD" | "REGISTER";
 export type OtpChannel = "EMAIL" | "SMS";
 
 export const CODE_LENGTH = 6;

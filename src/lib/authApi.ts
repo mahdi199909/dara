@@ -27,13 +27,13 @@ async function nativeToken(): Promise<string | null> {
   return (await getCachedLicense())?.token ?? null;
 }
 
-async function call<T>(method: "GET" | "POST", path: string, body?: unknown, opts: { auth?: boolean } = {}): Promise<T> {
+async function call<T>(method: "GET" | "POST", path: string, body?: unknown, opts: { auth?: boolean; token?: string } = {}): Promise<T> {
   const init: RequestInit = { method, headers: body !== undefined ? { "Content-Type": "application/json" } : {} };
   if (body !== undefined) init.body = JSON.stringify(body);
   let res: Response;
   if (isNativePlatform()) {
-    if (opts.auth) {
-      const token = await nativeToken();
+    if (opts.auth || opts.token) {
+      const token = opts.token ?? (await nativeToken());
       if (!token) throw new ApiClientError("این دستگاه هنوز به حساب کاربری وصل نشده است. اول وارد حساب شوید.", 401);
       (init.headers as Record<string, string>).Authorization = `Bearer ${token}`;
     }
@@ -50,10 +50,12 @@ async function call<T>(method: "GET" | "POST", path: string, body?: unknown, opt
 export interface AuthResult {
   user: { id: string; name: string; email: string };
   token: string;
+  /** The owner reset this password by hand: the person must choose a new one before going on. */
+  mustChangePassword?: boolean;
 }
 
-type AuthBody = { id: string; name: string; email: string; token: string };
-const toResult = ({ token, ...user }: AuthBody): AuthResult => ({ user, token });
+type AuthBody = { id: string; name: string; email: string; token: string; mustChangePassword?: boolean };
+const toResult = ({ token, mustChangePassword, ...user }: AuthBody): AuthResult => ({ user, token, ...(mustChangePassword ? { mustChangePassword: true } : {}) });
 
 export interface CodeSent {
   ok: true;
@@ -62,7 +64,7 @@ export interface CodeSent {
   retryAfterSeconds: number;
 }
 
-export function requestCode(purpose: "LOGIN_OTP" | "RESET_PASSWORD", identifier: string): Promise<CodeSent> {
+export function requestCode(purpose: "LOGIN_OTP" | "RESET_PASSWORD" | "REGISTER", identifier: string): Promise<CodeSent> {
   return call("POST", "/api/auth/code/request", { purpose, identifier });
 }
 
@@ -74,6 +76,21 @@ export function resetPasswordWithCode(identifier: string, code: string, newPassw
   return call<AuthBody>("POST", "/api/auth/code/reset-password", { identifier, code, newPassword }).then(toResult);
 }
 
+/** Creates an account on an email or mobile number, proven by the code requestCode("REGISTER", ...) sent there. */
+export function registerWithCode(input: { name: string; identifier: string; code: string; password: string }): Promise<AuthResult> {
+  return call<AuthBody>("POST", "/api/auth/code/register", input).then(toResult);
+}
+
+/** The older email + password sign-up, with no code (used while the server cannot send email yet). */
+export function registerWithPassword(name: string, email: string, password: string): Promise<AuthResult> {
+  return call<AuthBody>("POST", "/api/auth/register", { name, email, password }).then(toResult);
+}
+
+/** Replaces a temporary password the owner set by hand; `token` is the one the sign-in just returned (the app). */
+export function chooseNewPassword(newPassword: string, token?: string): Promise<string> {
+  return call<{ ok: true; token: string }>("POST", "/api/account/password", { newPassword }, { token }).then((r) => r.token);
+}
+
 export function loginWithPassword(identifier: string, password: string): Promise<AuthResult> {
   return call<AuthBody>("POST", "/api/auth/login", { identifier, password }).then(toResult);
 }
@@ -82,7 +99,7 @@ export function loginWithPassword(identifier: string, password: string): Promise
 
 export interface AccountSecurity {
   name: string;
-  email: string;
+  email: string | null;
   emailVerified: boolean;
   phone: string | null;
   phoneVerified: boolean;

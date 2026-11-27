@@ -9,7 +9,7 @@ import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 // Public: someone who is not signed in asks for a code to sign in with, or to reset a forgotten password.
 // The answer is the same whether or not the address/number has an account (see codeFlows.ts).
 const schema = z.object({
-  purpose: z.enum(["LOGIN_OTP", "RESET_PASSWORD"]),
+  purpose: z.enum(["LOGIN_OTP", "RESET_PASSWORD", "REGISTER"]),
   identifier: z.string().min(1, "ایمیل یا شماره موبایل را وارد کنید.").max(254),
 });
 

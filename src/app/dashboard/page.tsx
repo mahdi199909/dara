@@ -69,7 +69,7 @@ function MiniUserList({ title, users, empty, href }: { title: string; users: Adm
               <div className="min-w-0">
                 <p className="truncate">{u.name}</p>
                 <p className="text-xs text-muted truncate" dir="ltr">
-                  {u.email}
+                  {u.email ?? u.phone ?? ""}
                 </p>
               </div>
               <div className="text-left shrink-0">

@@ -26,7 +26,7 @@ datasource db {
 
 model User {
   id           String   @id @default(cuid())
-  email        String   @unique
+  email        String?  @unique
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
@@ -41,6 +41,8 @@ model User {
   // "sign out of all devices", an admin suspension). Tokens from before this column existed carry none = 0.
   sessionVersion    Int       @default(0)
   passwordChangedAt DateTime?
+  // Set when the owner resets the password by hand (temporary password); the next sign-in must choose a new one.
+  mustChangePassword Boolean   @default(false)
   lastLoginAt       DateTime?
   // Refreshed at most every few minutes by an authenticated request — the admin dashboard's "last seen".
   lastSeenAt        DateTime?

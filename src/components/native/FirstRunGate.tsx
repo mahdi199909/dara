@@ -15,7 +15,10 @@
 // shell to verify the swap against.
 import { useEffect, useState } from "react";
 import CodeSignIn from "@/components/auth/CodeSignIn";
+import RegisterWithCode from "@/components/auth/RegisterWithCode";
+import ForcedPasswordChange from "@/components/auth/ForcedPasswordChange";
 import type { AuthResult } from "@/lib/authApi";
+import { remoteLogin } from "@/lib/remoteAuth";
 import { getCachedLicense, completeFirstRun, continueOffline, refreshLicenseStatus, syncWithServer, AccountSwitchRequired } from "@/lib/nativeOnboarding";
 import { checkVersionGate, refreshVersionGate, type VersionGateResult } from "@/lib/versionGate";
 import { APP_DISPLAY_NAME } from "@/lib/appVersion";
@@ -64,7 +67,9 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
   // Set once a one-time code or a password reset signed the person in; the rest of first-run (account
   // switch check, license, first sync) then runs exactly as after a password sign-in.
   const [preauth, setPreauth] = useState<AuthResult | null>(null);
-  const [name, setName] = useState("");
+  // A sign-in whose password the owner reset by hand: held here until the person has chosen a new one.
+  const [forced, setForced] = useState<AuthResult | null>(null);
+  const [name] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -249,6 +254,12 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
     setNetworkError(false);
     setLoading(true);
     try {
+      // A password sign-in is made here (not inside completeFirstRun) so a reset-by-owner password can be caught.
+      if (!auth && mode === "login") auth = await remoteLogin(email, password);
+      if (auth?.mustChangePassword) {
+        setForced(auth);
+        return;
+      }
       await completeFirstRun({ mode: mode === "register" ? "register" : "login", name, email, password, confirmSwitch, preauth: auth ?? undefined });
       setSwitchPrompt(null);
       setReady(true);
@@ -374,7 +385,25 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             </div>
           </div>
         )}
-        {mode === "code" || mode === "forgot" ? (
+        {forced ? (
+          <ForcedPasswordChange
+            token={forced.token}
+            onDone={async (newToken) => {
+              const auth = { ...forced, token: newToken, mustChangePassword: false };
+              setForced(null);
+              setPreauth(auth);
+              await submit(false, auth);
+            }}
+          />
+        ) : mode === "register" ? (
+          <RegisterWithCode
+            onAuthenticated={async (result) => {
+              setPreauth(result);
+              setEmail(result.user.email);
+              await submit(false, result);
+            }}
+          />
+        ) : mode === "code" || mode === "forgot" ? (
           <>
             <CodeSignIn
               purpose={mode === "code" ? "LOGIN_OTP" : "RESET_PASSWORD"}
@@ -389,20 +418,11 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
           </>
         ) : (
         <form onSubmit={onSubmit} className="space-y-3">
-          {mode === "register" && (
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="نام"
-              className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm"
-              required
-            />
-          )}
           <input
-            type={mode === "register" ? "email" : "text"}
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder={mode === "register" ? "ایمیل" : "ایمیل یا شماره موبایل"}
+            placeholder="ایمیل یا شماره موبایل"
             dir="ltr"
             className="bg-surface w-full rounded-xl border border-line px-3 py-2.5 text-sm text-left"
             required
@@ -422,7 +442,7 @@ export default function FirstRunGate({ children }: { children: React.ReactNode }
             disabled={loading}
             className="w-full rounded-xl bg-accent text-on-accent py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40"
           >
-            {loading ? "در حال بررسی..." : mode === "login" ? "ورود" : "ثبت‌نام"}
+            {loading ? "در حال بررسی..." : "ورود"}
           </button>
           {networkError && (
             <button

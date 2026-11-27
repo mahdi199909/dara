@@ -141,8 +141,8 @@ function Users() {
                     {u.disabled && <span className="rounded bg-waste-soft text-waste px-1.5 text-[10px]">غیرفعال</span>}
                   </div>
                   <div className="text-xs text-muted flex items-center gap-1" dir="ltr">
-                    <span className="truncate max-w-[16rem]">{u.email}</span>
-                    <span title={u.emailVerified ? "ایمیل تأییدشده" : "ایمیل تأیید نشده"}>{u.emailVerified ? "✓" : "·"}</span>
+                    <span className="truncate max-w-[16rem]">{u.email ?? u.phone ?? "—"}</span>
+                    {u.email && <span title={u.emailVerified ? "ایمیل تأییدشده" : "ایمیل تأیید نشده"}>{u.emailVerified ? "✓" : "·"}</span>}
                   </div>
                 </td>
                 <td className="px-3 py-3 text-xs" dir="ltr">

@@ -6,7 +6,7 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { hitLimits, LIMITS, resetRateLimit } from "@/lib/rateLimit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
-import { findAccount, parseIdentifier, TIMING_DUMMY_HASH } from "@/lib/accountLookup";
+import { accountLabel, findAccount, parseIdentifier, TIMING_DUMMY_HASH } from "@/lib/accountLookup";
 import { logAccountDisabled, logLoginFailed, logLoginSuccess, logRateLimited } from "@/lib/observability/server/authEvents";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
 
@@ -67,7 +67,7 @@ async function POST(req: NextRequest) {
 
     // `token` lets the Android app carry this session as a bearer token (see requireUserId) —
     // the web frontend already has it via the Set-Cookie header above and simply ignores this field.
-    return withCors(NextResponse.json({ id: user.id, name: user.name, email: user.email, token }));
+    return withCors(NextResponse.json({ id: user.id, name: user.name, email: accountLabel(user), token, mustChangePassword: user.mustChangePassword }));
   } catch (err) {
     return withCors(handleApiError(err));
   }

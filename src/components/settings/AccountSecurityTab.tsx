@@ -85,12 +85,12 @@ function EmailCard({ account, onChanged }: { account: AccountSecurity; onChanged
     <Card className="p-5 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-bold text-ink text-sm">ایمیل</h2>
-        <Badge ok={account.emailVerified}>{account.emailVerified ? "تأییدشده" : "تأیید نشده"}</Badge>
+        {account.email && <Badge ok={account.emailVerified}>{account.emailVerified ? "تأییدشده" : "تأیید نشده"}</Badge>}
       </div>
       <p className="text-sm text-ink" dir="ltr">
-        {account.email}
+        {account.email ?? "ایمیلی ثبت نشده است"}
       </p>
-      {!account.emailVerified && (
+      {account.email && !account.emailVerified && (
         <>
           <p className="text-xs text-muted leading-relaxed">
             با تأیید ایمیل، اگر رمزتان را فراموش کنید می‌توانید با کدی که به همین ایمیل می‌آید دوباره وارد حساب شوید.

@@ -7,7 +7,7 @@ import { handleApiError, ApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { seedDefaultCategoriesForUser } from "@/lib/defaults";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
-import { passwordSchema } from "@/lib/accountLookup";
+import { accountLabel, passwordSchema } from "@/lib/accountLookup";
 import { checkRateLimit, LIMITS } from "@/lib/rateLimit";
 import { logRateLimited, logRegisterFailed, logRegisterSuccess } from "@/lib/observability/server/authEvents";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
@@ -65,7 +65,7 @@ async function POST(req: NextRequest) {
     const token = await issueSession(user);
     logRegisterSuccess({ userId: user.id, ip: ipAddress });
 
-    return withCors(NextResponse.json({ id: user.id, name: user.name, email: user.email, token }));
+    return withCors(NextResponse.json({ id: user.id, name: user.name, email: accountLabel(user), token }));
   } catch (err) {
     return withCors(handleApiError(err));
   }

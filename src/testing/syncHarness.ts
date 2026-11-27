@@ -30,6 +30,7 @@ const ROUTE_DEFS: Array<{ pattern: string; load: Loader }> = [
   { pattern: "/api/auth/code/request", load: () => import("@/app/api/auth/code/request/route") },
   { pattern: "/api/auth/code/login", load: () => import("@/app/api/auth/code/login/route") },
   { pattern: "/api/auth/code/reset-password", load: () => import("@/app/api/auth/code/reset-password/route") },
+  { pattern: "/api/auth/code/register", load: () => import("@/app/api/auth/code/register/route") },
   { pattern: "/api/account", load: () => import("@/app/api/account/route") },
   { pattern: "/api/account/email/send-code", load: () => import("@/app/api/account/email/send-code/route") },
   { pattern: "/api/account/email/verify", load: () => import("@/app/api/account/email/verify/route") },

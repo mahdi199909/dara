@@ -17,7 +17,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!isAdminAccount(user)) notFound();
   return (
     <SWRProvider>
-      <DashboardShell ownerName={user!.name} ownerEmail={user!.email}>
+      <DashboardShell ownerName={user!.name} ownerEmail={user!.email ?? ""}>
         {children}
       </DashboardShell>
     </SWRProvider>

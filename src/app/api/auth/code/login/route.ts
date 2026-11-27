@@ -5,7 +5,7 @@ import { issueSession, accountDisabledError } from "@/lib/auth";
 import { handleApiError } from "@/lib/apiError";
 import { writeAuditLog, requestMeta } from "@/lib/audit";
 import { corsPreflight, withCors } from "@/lib/nativeCors";
-import { codeSchema } from "@/lib/accountLookup";
+import { accountLabel, codeSchema } from "@/lib/accountLookup";
 import { verifyPublicCode } from "@/lib/codeFlows";
 import { logAccountDisabled, logCodeLogin } from "@/lib/observability/server/authEvents";
 import { withApiLogging } from "@/lib/observability/server/withApiLogging";
@@ -40,7 +40,7 @@ async function POST(req: NextRequest) {
     await writeAuditLog({ userId: user.id, action: "LOGIN_OTP", entityType: "User", entityId: user.id, newValue: { channel: id.channel }, ipAddress, userAgent });
     logCodeLogin({ userId: user.id, channel: id.channel, ip: ipAddress });
 
-    return withCors(NextResponse.json({ id: user.id, name: user.name, email: user.email, token }));
+    return withCors(NextResponse.json({ id: user.id, name: user.name, email: accountLabel(user), token, mustChangePassword: user.mustChangePassword }));
   } catch (err) {
     return withCors(handleApiError(err));
   }

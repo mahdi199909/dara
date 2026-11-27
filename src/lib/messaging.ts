@@ -83,6 +83,7 @@ const PURPOSE_TEXT: Record<OtpPurpose, string> = {
   VERIFY_PHONE: "تأیید شماره موبایل",
   LOGIN_OTP: "ورود به حساب",
   RESET_PASSWORD: "بازیابی رمز عبور",
+  REGISTER: "ثبت‌نام",
 };
 
 // Rebuilt whenever the settings behind it change (the owner can edit them in the dashboard).

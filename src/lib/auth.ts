@@ -26,7 +26,7 @@ const LAST_SEEN_REFRESH_MS = 5 * 60_000;
 
 export interface SessionPayload {
   userId: string;
-  email: string;
+  email: string | null;
   /** The account's sessionVersion when the token was issued; tokens from before it existed have none (= 0). */
   sv?: number;
   [key: string]: unknown;
@@ -69,14 +69,14 @@ export async function clearSessionCookie() {
  * last-login stamp. Every way in (password, one-time code, password reset, registration) ends here.
  * The token is also returned for the Android app, which carries it as a bearer token.
  */
-export async function issueSession(user: { id: string; email: string; sessionVersion?: number | null }): Promise<string> {
+export async function issueSession(user: { id: string; email: string | null; sessionVersion?: number | null }): Promise<string> {
   const token = await createSessionToken({ userId: user.id, email: user.email, sv: user.sessionVersion ?? 0 });
   await setSessionCookie(token);
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastSeenAt: new Date() } }).catch(() => undefined);
   return token;
 }
 
-type SessionUser = { id: string; email: string; sessionVersion: number; disabledAt: Date | null; lastSeenAt: Date | null };
+type SessionUser = { id: string; email: string | null; sessionVersion: number; disabledAt: Date | null; lastSeenAt: Date | null };
 
 /** The account behind a verified token, or why it cannot be used. */
 async function resolveSession(payload: SessionPayload): Promise<{ user: SessionUser } | { refused: "invalid" | "disabled" }> {
@@ -149,7 +149,7 @@ export function accountDisabledError(): ApiError {
 }
 
 /** Ends every session of an account (including the caller's, unless a new one is issued right after). */
-export async function revokeAllSessions(userId: string): Promise<{ id: string; email: string; sessionVersion: number }> {
+export async function revokeAllSessions(userId: string): Promise<{ id: string; email: string | null; sessionVersion: number }> {
   return prisma.user.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } }, select: { id: true, email: true, sessionVersion: true } });
 }
 

@@ -15,7 +15,7 @@ interface Detail {
   user: {
     id: string;
     name: string;
-    email: string;
+    email: string | null;
     emailVerifiedAt: string | null;
     phone: string | null;
     phoneVerifiedAt: string | null;
@@ -49,6 +49,7 @@ const HISTORY_LABELS: Record<string, string> = {
   USER_ADMIN_ENABLED: "فعال شد",
   USER_ADMIN_SESSIONS_REVOKED: "خروج از همه‌ی دستگاه‌ها",
   USER_ADMIN_VERIFIED: "تأیید دستی ایمیل",
+  USER_ADMIN_PASSWORD_REPLACED: "ریست دستی رمز عبور",
 };
 
 const LOGIN_LABELS: Record<string, string> = {
@@ -79,6 +80,7 @@ export default function UserDrawer({ userId, onClose, onChanged }: { userId: str
   const [days, setDays] = useState("30");
   const [until, setUntil] = useState(() => new Date(Date.now() + 30 * 86_400_000));
   const [busy, setBusy] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -117,7 +119,7 @@ export default function UserDrawer({ userId, onClose, onChanged }: { userId: str
           <div className="min-w-0">
             <h2 className="text-lg font-bold truncate">{data?.user.name ?? "…"}</h2>
             <p className="text-sm text-muted truncate" dir="ltr">
-              {data?.user.email}
+              {data?.user.email ?? data?.user.phone ?? ""}
             </p>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 hover:bg-canvas" aria-label="بستن">
@@ -247,11 +249,27 @@ export default function UserDrawer({ userId, onClose, onChanged }: { userId: str
               <section className="space-y-2">
                 <h3 className="font-bold text-sm">حساب کاربری</h3>
                 <div className="flex flex-wrap gap-2">
-                  {!data.user.emailVerifiedAt && (
+                  {data.user.email && !data.user.emailVerifiedAt && (
                     <button disabled={busy} onClick={() => void run("تأیید ایمیل", () => accountAction(userId, "verify-email"), "ایمیل این کاربر بدون کد تأیید شود؟")} className="rounded-xl border border-line px-3 py-2 text-xs">
                       تأیید دستی ایمیل
                     </button>
                   )}
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void run(
+                        "ریست رمز عبور",
+                        async () => {
+                          const res = await accountAction(userId, "reset-password");
+                          setTempPassword(res.temporaryPassword ?? null);
+                        },
+                        "یک رمز موقت ساخته شود؟ رمز قبلی کاربر کار نمی‌کند، از همه‌ی دستگاه‌ها خارج می‌شود و در ورود بعدی باید رمز جدید انتخاب کند."
+                      )
+                    }
+                    className="rounded-xl border border-line px-3 py-2 text-xs"
+                  >
+                    ریست رمز عبور
+                  </button>
                   <button disabled={busy} onClick={() => void run("خروج از همه‌ی دستگاه‌ها", () => accountAction(userId, "signout"), "کاربر از همه‌ی دستگاه‌ها خارج شود؟ باید دوباره وارد شود.")} className="rounded-xl border border-line px-3 py-2 text-xs">
                     خروج از همه‌ی دستگاه‌ها
                   </button>
@@ -269,13 +287,22 @@ export default function UserDrawer({ userId, onClose, onChanged }: { userId: str
                     </button>
                   )}
                 </div>
+                {tempPassword && (
+                  <div className="rounded-xl border border-accent bg-accent-soft p-3 space-y-1">
+                    <p className="text-xs text-ink">رمز موقت (فقط همین یک‌بار نشان داده می‌شود؛ به کاربر بدهید، در ورود بعدی رمز جدید انتخاب می‌کند):</p>
+                    <p className="font-mono text-lg tracking-wider select-all" dir="ltr">{tempPassword}</p>
+                    <button type="button" onClick={() => setTempPassword(null)} className="text-xs text-muted underline">
+                      پنهان‌کردن
+                    </button>
+                  </div>
+                )}
               </section>
             )}
 
             {!data.user.isAdmin && (
               <DangerZone
                 userId={userId}
-                email={data.user.email}
+                email={data.user.email ?? data.user.phone ?? ""}
                 onErased={() => {
                   void mutate();
                   onChanged();

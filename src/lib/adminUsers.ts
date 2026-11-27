@@ -12,7 +12,7 @@ export type UserSort = "created" | "lastSeen" | "expiry" | "name";
 export interface AdminUserRow {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   emailVerified: boolean;
   phone: string | null;
   phoneVerified: boolean;

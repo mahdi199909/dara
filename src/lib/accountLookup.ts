@@ -18,12 +18,17 @@ export function parseIdentifier(raw: string): Identifier {
   return { channel: "SMS", target: phone };
 }
 
-const ACCOUNT_SELECT = { id: true, email: true, name: true, passwordHash: true, sessionVersion: true, disabledAt: true, emailVerifiedAt: true, phone: true, phoneVerifiedAt: true } as const;
+const ACCOUNT_SELECT = { id: true, email: true, name: true, passwordHash: true, sessionVersion: true, disabledAt: true, emailVerifiedAt: true, phone: true, phoneVerifiedAt: true, mustChangePassword: true } as const;
 
 /** The account an identifier points at. A phone number only counts once it was verified on that account. */
 export async function findAccount(id: Identifier) {
   if (id.channel === "EMAIL") return prisma.user.findUnique({ where: { email: id.target }, select: ACCOUNT_SELECT });
   return prisma.user.findFirst({ where: { phone: id.target, phoneVerifiedAt: { not: null } }, select: ACCOUNT_SELECT });
+}
+
+/** What to show (and send as the legacy `email` field) for an account: its email, else its phone. */
+export function accountLabel(u: { email: string | null; phone?: string | null }): string {
+  return u.email ?? u.phone ?? "";
 }
 
 // bcrypt only reads the first 72 bytes; a longer password would silently be cut there.

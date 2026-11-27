@@ -27,7 +27,7 @@ export function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 /** The full check, given the account row (requireAdmin and the dashboard layout run it). */
-export function isAdminAccount(user: { email: string; emailVerifiedAt: Date | null; createdAt: Date; disabledAt: Date | null } | null): boolean {
+export function isAdminAccount(user: { email: string | null; emailVerifiedAt: Date | null; createdAt: Date; disabledAt: Date | null } | null): boolean {
   if (!user || user.disabledAt || !isAdminEmail(user.email)) return false;
   // Development and the tests register throwaway admins with no mail server to verify them.
   if (process.env.NODE_ENV !== "production") return true;

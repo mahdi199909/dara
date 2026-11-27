@@ -16,6 +16,7 @@ async function POST(req: NextRequest) {
     const userId = await requireUserId(req);
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerifiedAt: true } });
     if (!user) throw new ApiError("حساب پیدا نشد.", 404);
+    if (!user.email) throw new ApiError("برای این حساب ایمیلی ثبت نشده است.", 422, "VAL-001");
     if (user.emailVerifiedAt) return withCors(NextResponse.json({ ok: true, alreadyVerified: true }));
     const answer = await requestContactCode({ userId, channel: "EMAIL", target: user.email, ip: requestMeta(req).ipAddress });
     return withCors(NextResponse.json(answer));

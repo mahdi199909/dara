@@ -23,6 +23,7 @@ async function POST(req: NextRequest) {
     const body = schema.parse(await req.json());
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerifiedAt: true } });
     if (!user) throw new ApiError("حساب پیدا نشد.", 404);
+    if (!user.email) throw new ApiError("برای این حساب ایمیلی ثبت نشده است.", 422, "VAL-001");
     if (!user.emailVerifiedAt) {
       await verifyContactCode({ userId, channel: "EMAIL", target: user.email, code: body.code, ip: ipAddress });
       await prisma.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });

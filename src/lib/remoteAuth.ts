@@ -42,6 +42,8 @@ export interface RemoteUser {
 export interface RemoteAuthResult {
   user: RemoteUser;
   token: string;
+  /** The owner reset this password by hand; a new one must be chosen before going on. */
+  mustChangePassword?: boolean;
 }
 
 // (Login, registration and the license check go through remoteFetch: the same request also carries this phone's
@@ -51,8 +53,8 @@ export function remoteLogin(email: string, password: string): Promise<RemoteAuth
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
-  }).then((res) => handle<{ id: string; name: string; email: string; token: string }>(res))
-    .then(({ token, ...user }) => ({ user, token }));
+  }).then((res) => handle<{ id: string; name: string; email: string; token: string; mustChangePassword?: boolean }>(res))
+    .then(({ token, mustChangePassword, ...user }) => ({ user, token, ...(mustChangePassword ? { mustChangePassword: true } : {}) }));
 }
 
 export function remoteRegister(name: string, email: string, password: string): Promise<RemoteAuthResult> {

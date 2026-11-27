@@ -99,7 +99,7 @@ export function logAccountDisabled(input: { userId: string }): void {
   log.warn("AUTH_ACCOUNT_DISABLED", { errorCode: "AUTH-007" });
 }
 
-export type CodePurposeLabel = "VERIFY_EMAIL" | "VERIFY_PHONE" | "LOGIN_OTP" | "RESET_PASSWORD";
+export type CodePurposeLabel = "VERIFY_EMAIL" | "VERIFY_PHONE" | "LOGIN_OTP" | "RESET_PASSWORD" | "REGISTER";
 
 /** A one-time code went out. The target is pseudonymised like an address; the code itself never appears. */
 export function logCodeSent(input: { purpose: CodePurposeLabel; channel: "EMAIL" | "SMS"; target: string; userId?: string | null; ip: string | null }): void {

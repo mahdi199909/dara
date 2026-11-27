@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiPost, ApiClientError } from "@/lib/apiClient";
 import CodeSignIn from "@/components/auth/CodeSignIn";
+import ForcedPasswordChange from "@/components/auth/ForcedPasswordChange";
 import { inputClass, primaryButtonClass } from "@/components/auth/CodeField";
 
 export default function LoginPage() {
@@ -28,6 +29,8 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Set after a sign-in with a password the owner reset by hand: a new one must be chosen first.
+  const [mustChange, setMustChange] = useState(false);
 
   function done() {
     router.push(safeNext(searchParams.get("next")));
@@ -39,13 +42,23 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      await apiPost("/api/auth/login", { identifier, password });
-      done();
+      const res = await apiPost<{ mustChangePassword?: boolean }>("/api/auth/login", { identifier, password });
+      if (res?.mustChangePassword) setMustChange(true);
+      else done();
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "خطا در ورود");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (mustChange) {
+    return (
+      <div className="bg-surface rounded-2xl shadow-sm border border-line p-6">
+        <h2 className="text-lg font-bold mb-4 text-ink">انتخاب رمز عبور جدید</h2>
+        <ForcedPasswordChange onDone={done} />
+      </div>
+    );
   }
 
   return (
@@ -92,7 +105,7 @@ function LoginForm() {
           </button>
         </form>
       ) : (
-        <CodeSignIn purpose="LOGIN_OTP" onAuthenticated={done} initialIdentifier={identifier} />
+        <CodeSignIn purpose="LOGIN_OTP" onAuthenticated={(r) => (r.mustChangePassword ? setMustChange(true) : done())} initialIdentifier={identifier} />
       )}
 
       <p className="text-center text-sm text-muted mt-4">

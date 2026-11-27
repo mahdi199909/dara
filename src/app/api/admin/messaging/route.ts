@@ -64,6 +64,7 @@ async function POST(req: NextRequest) {
     const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { email: true, phone: true, phoneVerifiedAt: true } });
     if (!admin) throw new ApiError("حساب پیدا نشد.", 404);
     if (channel === "EMAIL") {
+      if (!admin.email) throw new ApiError("برای حساب شما ایمیلی ثبت نشده است.", 422, "VAL-001");
       await sendTestMessage("EMAIL", admin.email);
       return NextResponse.json({ ok: true, sentTo: admin.email });
     }
